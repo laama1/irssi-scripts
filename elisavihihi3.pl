@@ -13,7 +13,7 @@ use Time::Piece;
 use KaaosRadioClass;		# LAama1 20.10.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20171109";
+$VERSION = "20171229";
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -23,7 +23,6 @@ $VERSION = "20171109";
 	url         => "#kaaosleffat",
 	changed     => $VERSION
 );
-#print "trying...\n";
 
 my $myname = "elisavihihi3.pl";
 my $DEBUG = 0;
@@ -47,6 +46,7 @@ if ($DEBUGT) {
 	Irssi::print("Timezone offset is: $tzoffset\n");
 }
 
+# debug print
 sub dp {
 	my ($printString, @rest) = @_;
 	return unless $DEBUG;
@@ -91,7 +91,7 @@ sub getChannels {
 sub fetch_elisaviihde_url {
 	my ($param1, $param2, @rest) = @_;
 	my $url = "http://api.elisaviihde.fi/etvrecorder/${param1}.sl?${param2}";
-	if ($DEBUG1) {Irssi::print("url1: $url");}
+	Irssi::print("url1: $url") if $DEBUG1;
 
 	my $response = KaaosRadioClass::fetchUrl($url, 0);
 	if ($response && $response eq "-1") {
@@ -123,7 +123,6 @@ sub getProgramInfo {
 	}
 	foreach my $movie (@allprograms) {			#look for all instances
 		if (@$movie[0] =~ /$searchword/i) {
-			# $pid = @$movie[1];
 			Irssi::print Dumper $movie if $DEBUGT;
 			push(@pids, @$movie[1]);
 		}
@@ -167,7 +166,8 @@ sub getProgramInfo {
 	}
 }
 
-sub getMovies {									# get all movies and programs!
+# get all movies and programs!
+sub getMovies {
 	#http://api.elisaviihde.fi/etvrecorder/ajaxprograminfo.sl?channels
 	dp("$myname: getting movies next");
 	
@@ -205,7 +205,7 @@ sub getMovies {									# get all movies and programs!
 					$moviestarthour = $1;
 				}
 				
-				my $moviestart = $c->{'start_time'};			# movie start date + hour
+				my $moviestart = $c->{'start_time'};	# movie start date + hour
 				my $moviestartday = 0;
 				if ($moviestart =~ /^(\d{1,2})\./) {
 					$moviestartday = $1;
@@ -336,7 +336,7 @@ sub search_word {
 	Irssi::print("$myname searching: $searchWord") if $DEBUG_decode;
 	$searchWord = KaaosRadioClass::replaceWeird($searchWord);
 	Irssi::print("searchword after: $searchWord") if $DEBUG_decode;
-	if ((time() - $lastupdated) > 60*60*2) {          #2 hours
+	if ((time() - $lastupdated) > 60*60*2) {          # 2 hours
 		Irssi::print("$myname: last update was more than 2 hours ago..");
 		@leffalinet = getMovies();
 	}
@@ -374,6 +374,7 @@ sub moviesNow {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   #self-test
+
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
@@ -441,6 +442,7 @@ sub sig_msg_pub {
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
 	return unless ($msg =~ /^[\!\.]leffat\b[^\:]/i);
+	
  	# Check we have an enabled channel
  	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
  	my @enabled = split(/ /, $enabled_raw);
