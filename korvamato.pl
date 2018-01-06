@@ -28,7 +28,7 @@ my $tiedosto = "/home/laama/public_html/korvamadot.txt";
 my $db = Irssi::get_irssi_dir(). "/scripts/korvamadot.db";
 my @channels = ('#salamolo2', '#kaaosradio');
 my $myname = "korvamato.pl";
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $helptext = "Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.";
 
@@ -58,7 +58,6 @@ sub msgit {
 }
 
 sub get_statistics {
-	#my ($server, $target) = @_;
 	my $query = "SELECT count(*) from quotes where DELETED = 0";
 	my $result = KaaosRadioClass::readLineFromDataBase($db, $query);
 	dp("Results:");
@@ -406,7 +405,7 @@ sub ifKorvamato {
 	return "";
 }
 
-#parse away other keywoards that our sloppy regexp caught
+# parse away other keywoards that our sloppy regexp caught
 sub parseAwayKeywords {
 	my ($parsa, @rest) = @_;
 	dp("parseAwayKeywords from: $parsa");
