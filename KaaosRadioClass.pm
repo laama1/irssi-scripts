@@ -1,4 +1,4 @@
-﻿package KaaosRadioClass;
+package KaaosRadioClass;
 use strict;
 use warnings;
 use lib '/home/laama/perl5/lib/perl5';
@@ -37,7 +37,7 @@ my $djlist = "$currentDir/dj_list.txt";
 my $database = "";
 
 #my $myname = $0;
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
 my $floodernick = "";
@@ -64,7 +64,7 @@ sub readLastLineFromFilename {
 
 sub readLinesFromDataBase {
 	my ($db, $string, @rest) = @_;
-	print("Reading lines from DB.") if $DEBUG;
+	dp("Reading lines from DB.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return DBI::errstr;
@@ -73,32 +73,32 @@ sub readLinesFromDataBase {
 	my @line;
 	my $index = 0;
 	while(@line = $sth->fetchrow_array) {
-		print("--fetched a line--") if $DEBUG;
-		print (Dumper @line) if $DEBUG;
+		dp("--fetched a line--");
+		dp(Dumper @line);
 		#ush @{ $returnArray[$index] }, @line;
 		#push @returnArray, \@line;
 		$returnArray[$index] = @line;
 		#push @{ $Hits[$i] }, $i;
-		print "Index: $index \n" if $DEBUG;
+		dp("Index: $index \n");
 		$index++;
 	}
-	print("return array:") if $DEBUG;
-	print Dumper(@returnArray) if $DEBUG;
+	dp("return array:");
+	dp(Dumper(@returnArray));
 	$dbh->disconnect();
 	return @returnArray;
 }
 
 sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
-	print("Reading lines from DB $db.") if $DEBUG;
+	dp("Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return DBI::errstr;
 	$sth->execute();
 
 	if(my $line = $sth->fetchrow_array) {
-		print("--fetched a result--") if $DEBUG;
-		print (Dumper $line) if $DEBUG;
+		dp("--fetched a result--");
+		dp(Dumper $line);
 		$sth->finish();
 		$dbh->disconnect();
 		return $line;
@@ -192,8 +192,9 @@ sub getNytsoi24h {
 # replace weird html characters
 sub replaceWeird {
 	my ($text, @rest) = @_;
-	print("Text before: $text") if $DEBUG;
-	#$text = Encode::decode('utf8', uri_unescape($text));
+	dp("Text before: $text");
+	$text = Encode::decode('utf8', uri_unescape($text));
+	dp("Text before2: $text");
 	# HTML encoded
 	return 0 unless ($text);
 
@@ -252,6 +253,7 @@ sub replaceWeird {
 	
 	#decode_entities($text);
 	#$text = Encode::decode('utf8', uri_unescape($text));
+	dp("Text after: $text");
 	return $text;
 }
 
@@ -281,7 +283,7 @@ sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
-		print "KaaosRadioClass.pm, DBI Error: ".DBI::errstr if $DEBUG;
+		dp("KaaosRadioClass.pm, DBI Error: ".DBI::errstr);
    		return DBI::errstr;
 	}
 	return 0;
@@ -294,7 +296,7 @@ sub writeToDB {
 
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
-		print "KaaosRadioClass.pm, DBI Error: ".DBI::errstr if $DEBUG;
+		dp("KaaosRadioClass.pm, DBI Error: ".DBI::errstr);
    		return DBI::errstr;
 	}
 	$dbh->disconnect();
@@ -363,5 +365,10 @@ sub fetchUrl {
 	}
 }
 
+sub dp {
+    return unless $DEBUG;
+    #Irssi::print("$myname-debug: @_");
+    print("debug: @_");
+}
 
 1;		# loaded OK
