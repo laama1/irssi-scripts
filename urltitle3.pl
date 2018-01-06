@@ -5,7 +5,7 @@
 # continued by LAama1.
 # Requirements:
 #  - LWP::UserAgent (libwww-perl)
-#  - Crypt::SSLeay (https)
+
 #  - HTML::Entities (decoding html characters)
 #
 # Settings:
