@@ -5,7 +5,6 @@
 # continued by LAama1.
 # Requirements:
 #  - LWP::UserAgent (libwww-perl)
-
 #  - HTML::Entities (decoding html characters)
 #
 # Settings:

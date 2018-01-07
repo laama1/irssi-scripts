@@ -13,7 +13,7 @@ use Time::Piece;
 use KaaosRadioClass;		# LAama1 20.10.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20171229";
+$VERSION = "20180107";
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -23,6 +23,7 @@ $VERSION = "20171229";
 	url         => "#kaaosleffat",
 	changed     => $VERSION
 );
+#print "trying...\n";
 
 my $myname = "elisavihihi3.pl";
 my $DEBUG = 0;
@@ -46,12 +47,16 @@ if ($DEBUGT) {
 	Irssi::print("Timezone offset is: $tzoffset\n");
 }
 
-# debug print
 sub dp {
 	my ($printString, @rest) = @_;
 	return unless $DEBUG;
 	print("$myname-debug: $printString");
 }
+
+sub dd {
+	print("$myname-decode: @_") if $DEBUG_decode;
+}
+
 
 sub print_help {
 	my ($server, $target) = @_;
@@ -91,7 +96,7 @@ sub getChannels {
 sub fetch_elisaviihde_url {
 	my ($param1, $param2, @rest) = @_;
 	my $url = "http://api.elisaviihde.fi/etvrecorder/${param1}.sl?${param2}";
-	Irssi::print("url1: $url") if $DEBUG1;
+	dp("fetch_elisaviihde_url: $url") if $DEBUGT;
 
 	my $response = KaaosRadioClass::fetchUrl($url, 0);
 	if ($response && $response eq "-1") {
@@ -123,13 +128,14 @@ sub getProgramInfo {
 	}
 	foreach my $movie (@allprograms) {			#look for all instances
 		if (@$movie[0] =~ /$searchword/i) {
-			Irssi::print Dumper $movie if $DEBUGT;
+			# $pid = @$movie[1];
+			Irssi::print Dumper $movie if $DEBUG;
 			push(@pids, @$movie[1]);
 		}
-		dp("movie: @$movie[0]");
+		dp("movie: @$movie[0]") if $DEBUGT;
 	}
-	Irssi::print("pids amount: ".$#pids) if $DEBUG1;
-	Irssi::print Dumper @pids if $DEBUG1;
+	dp("pids amount: ".$#pids);
+	Irssi::print Dumper @pids if $DEBUG;
 	if (@pids) {
 		my @descriptions;
 		#my $localjson = fetch_elisaviihde_url('ajaxprograminfo', "programid=$pid");
@@ -139,10 +145,15 @@ sub getProgramInfo {
 		my $localtime = time();
 		while($count < $#pids +1) {
 			my $localjson = fetch_elisaviihde_url('ajaxprograminfo', "programid=$pids[$count]");
+			dp("infoz: ");
+			dp(Dumper($localjson));
+			
 			next unless $localjson->{'name'};
 
 			my $startDate = $localjson->{'start_time'} || 0;
+			# 'start_time' => '7.1.2018 19:30:00'
 			if ($startDate =~ /^(\d{1,2}\.\d{1,2}\.)\d{4} (\d{1,2}\:\d{1,2})\:\d{1,2}/) {
+				# 7.1. 19:30
 				$startDate = "$1 $2";
 			}
 			my $simplestarttime = $localjson->{'simple_start_time'} || 0;
@@ -152,7 +163,7 @@ sub getProgramInfo {
 
 
 			push @descriptions, "\002($startDate $channel)\002 $name: $desci" if elisatimeToUnix($localjson->{'end_time'}) > $localtime;
-			
+			dp("start time: " . elisatimeToUnix($localjson->{'start_time'}));
 			dp("end time:". elisatimeToUnix($localjson->{'end_time'}));
 			dp("localtime: " .$localtime);
 			
@@ -166,8 +177,7 @@ sub getProgramInfo {
 	}
 }
 
-# get all movies and programs!
-sub getMovies {
+sub getMovies {									# get all movies and programs!
 	#http://api.elisaviihde.fi/etvrecorder/ajaxprograminfo.sl?channels
 	dp("$myname: getting movies next");
 	
@@ -182,7 +192,7 @@ sub getMovies {
 	
 	foreach my $current (@tvChannels) {
 		my $singlejson = fetch_elisaviihde_url('ajaxprograminfo', "24h=$current");
-		dp("getMovies: Current channel: $current");
+		dp("getMovies: Current channel: $current") if $DEBUGT;
 		next if ($singlejson < 0);
 		my @programs = @{ $singlejson->{'programs'} };
 		my $rimpsu = "";
@@ -205,11 +215,12 @@ sub getMovies {
 					$moviestarthour = $1;
 				}
 				
-				my $moviestart = $c->{'start_time'};	# movie start date + hour
+				my $moviestart = $c->{'start_time'};			# movie start date + hour
 				my $moviestartday = 0;
 				if ($moviestart =~ /^(\d{1,2})\./) {
 					$moviestartday = $1;
 				}
+
 				last if ($moviestartday > $day && $moviestarthour >= 5);
 				last if ($moviestarthour >= 5 && $moviestartday == 1 && $day >= 28);
 				
@@ -265,7 +276,7 @@ sub getMovies {
 
 		if ($rimpsu) {
 			$rimpsu = "\002${current}\002: " . $rimpsu;
-			if ($DEBUG) {Irssi::print("rimpsu: $rimpsu");}
+			dp("rimpsu: $rimpsu") if $DEBUGT;
 			$leffarimpsu .= $rimpsu;
 			#my $len = length($leffarimpsu);
 			if (length($leffarimpsu) > 150) {				# limit line length a little
@@ -287,16 +298,17 @@ sub getMovies {
 sub elisatimeToUnix {
 	my ($timeString, @rest) = @_;
 	# for example: 21.11.2015 19:40:00
+	# or 'start_time' => '7.1.2018 19:30:00'
 	Irssi::print("elisavihihi.pl-debug: Timestring: $timeString <<<") if $DEBUG1;
 	my $timePiece = "";
-	if ($timeString =~ /(\d{1,2}\.\d{1,2}\.\d{4} \d{1,2}\:\d{2}\:\d{2})/ && $DEBUG1) {
+	if ($timeString =~ /(\d{1,2}\.\d{1,2}\.\d{4} \d{1,2}\:\d{2}\:\d{2})/) {
 		$timePiece = Time::Piece->strptime($timeString, '%d.%m.%Y %H:%M:%S');
-		Irssi::print("timePiece next: ".$timePiece) if $DEBUGT;
+		dp("timePiece next: ".$timePiece) if $DEBUGT;
 	}
 	#Irssi::print Dumper $timePiece if $DEBUGT;
 	
 	return $timePiece->epoch if $timePiece;
-	Irssi::print("Error.") if $DEBUGT;
+	dp("elisatimeToUnix Error.");
 	return 0;
 }
 
@@ -333,10 +345,10 @@ sub msg_channel ($$@) {
 
 sub search_word {
 	my ($searchWord, @rest) = @_;
-	Irssi::print("$myname searching: $searchWord") if $DEBUG_decode;
+	dd("$myname searching: $searchWord");
 	$searchWord = KaaosRadioClass::replaceWeird($searchWord);
-	Irssi::print("searchword after: $searchWord") if $DEBUG_decode;
-	if ((time() - $lastupdated) > 60*60*2) {          # 2 hours
+	dd("searchword after: $searchWord");
+	if ((time() - $lastupdated) > 60*60*2) {          #2 hours
 		Irssi::print("$myname: last update was more than 2 hours ago..");
 		@leffalinet = getMovies();
 	}
@@ -374,7 +386,6 @@ sub moviesNow {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   #self-test
-
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
@@ -442,7 +453,6 @@ sub sig_msg_pub {
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
 	return unless ($msg =~ /^[\!\.]leffat\b[^\:]/i);
-	
  	# Check we have an enabled channel
  	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
  	my @enabled = split(/ /, $enabled_raw);
