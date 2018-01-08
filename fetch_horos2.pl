@@ -1,3 +1,4 @@
+#!/usr/bin/perl
 use strict;
 use warnings;
 use utf8;
@@ -20,7 +21,7 @@ $VERSION = "0.1";
 );
 =cut
 my $DEBUG = 0;
-
+my $DEBUG1 = 0;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
 
@@ -44,7 +45,7 @@ my @astrourls = (
 	'https://www.astro.fi/future/weeklyForecast/sign/pisces',
 );
 
-my $iltisUrl = "http://iltalehti.fi/horoskooppi";
+my $iltisUrl = "http://iltalehti.fi/horoskooppi/index.shtml";
 
 
 my $logfile = $mydir."/logs/fetch_horos2.log";
@@ -53,6 +54,19 @@ my $horofile = $mydir."/horos.txt";
 my $db = $mydir."/horos.db";
 my $dbh;
 #my $infofile = $mydir."/horos.txt";
+
+my @seasons = ("talvi", "kevät", "kesä", "syksy");
+my @seasonsak = ("talven", "kevään", "kesän", "syksyn");
+my @weekdaysak = ("maanantain", "tiistain", "keskiviikon", "torstain", "perjantain", "lauantain", "sunnuntain", "maanantain");
+my @months = ("tammikuu", "helmikuu", "maaliskuu", "huhtikuu", "toukokuu", "kesäkuu", "heinäkuu",
+"elokuu", "syyskuu", "lokakuu", "marraskuu", "joulukuu");
+
+chomp (my $tomorrowak = @weekdaysak[`date +%u`]);
+chomp (my $tomorrow = `LC_ALL=fi_FI.utf-8; date +%A --date="tomorrow" 2>>$logfile`);
+chomp (my $weekdak = @weekdaysak[`date +%u` -1]);
+chomp (my $curmonth = `LC_ALL=fi_FI.utf-8; date +%B 2>>$logfile`);
+chomp (my $nextmonth = `LC_ALL=fi_FI.utf-8; date +%B --date="next month" 2>>$logfile`);
+my $curseason = checkSeason($curmonth, 0);
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -88,24 +102,31 @@ sub grepAstro {
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	
 	foreach my $currentURl (@astrourls) {
-		dp("grepAstro index: ". $index);
+		dp("\n\ngrepAstro index: ". $index);
 		if ($index >= 1 && $DEBUG) {
-			return;
+			#return;
+			dp("\n premature return from foreach loop because debug enabled. \n");
+			last;
 		}
 		dp("grepAstro current url: $currentURl");
 		my $page = KaaosRadioClass::fetchUrl($currentURl, 0);
 		my $sign;
-		if ($page =~ /\<h2 class="center"\>Viikkovillitys(.*)/si) {
+		#if ($page =~ /\<h2 class="center"\>Viikkovillitys(.*?)sidebar/si) {
+		if ($page =~ /\<div id="entireWeek"(.*?)script/si) {
 			$page = $1;
+			$page =~ s/<img.*?>//gi;	# clean the debug a bit
+			dw("parse this div entireWeek: $page");
 			#dp("page: ".$page);
 		} else {
-			return;
+			#return;
+			dp("div entireWeek not found! ($index)");
+			next;
 		}
 		if ($index == 0) {
 			grepAstrosaa($page, $currentURl);
 		}
-		$index++;
 		grepAstroHoro($page, $currentURl);
+		$index++;
 	}
 }
 
@@ -140,10 +161,12 @@ sub grepAstrosaa {
 	
 	my $astrosaas = "";
 	#if ($data =~ /<p><strong>Astrosää:<\/strong>(.*?)<\/p>/gi) {
-	while ($data =~ m/<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi) {
+	my $index = 0;
+	while ($data =~ m/<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi && $index++) {
+	# <p><strong>Astrosää:</strong>Tammikuun t... </p>
 		my $horo = $1;
-		dp("grepAstrosaa positions: ". pos($data));
-		#dp("grepAstrosaa: ".$returnvalue);
+		dp("grepAstrosaa positions: ". pos($data)) if $DEBUG1;
+		dp("grepAstrosaa ($index): ".$horo);
 		
 		if (defined($horo) && $horo ne "") {
 			saveHoroToDB($horo, $url, "Astrosää");
@@ -151,7 +174,7 @@ sub grepAstrosaa {
 			$astrosaas .= $horo . "\n" if $horo;
 		}
 	}
-	dp("Astrosaas: " .$astrosaas);
+	dp("Astrosaas: " .$astrosaas) if $DEBUG1;
 	saveHoroToFile($astrosaas);
 	#return $returnvalue;
 }
@@ -166,7 +189,8 @@ sub grepIltis {
 		# open database connection
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		
-		while($parsethis =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
+		#while($parsethis =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
+		while($parsethis =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi) {
 			my $sign = $1;
 			my $datum = $2;
 			my $horo = $3;
@@ -182,6 +206,7 @@ sub grepIltis {
 		dp("grepIltis allhoros: ".$allHoros);
 		saveHoroToFile($allHoros);
 	} else {
+		dp("Can't parse $iltisUrl");
 		return;
 	}
 }
@@ -195,7 +220,7 @@ sub filterKeyword {
 	elsif	($msg =~ /\b(kevä[ti])/i)		{$infofile = $mydir . "/horos_kevat.txt"; }
 	elsif	($msg =~ /\b(talv[ie])/i)		{$infofile = $mydir . "/horos_talvi.txt"; }
 	#elsif	($msg =~ /\b(talve)/i)			{($infofile) = $mydir . "horoskooppeja_talvi.txt"; }
-	elsif	($msg =~ /(syksy)|(\bsyys)/i)	{$infofile = $mydir . "/horos_syksy.txt"; }
+	elsif	($msg =~ /(syksy)|(\bsyys[^t])/i)	{$infofile = $mydir . "/horos_syksy.txt"; }
 	elsif	($msg =~ /(viikonl|vkl)/i)		{$infofile = $mydir . "/horos_vkl.txt"; }
 	elsif	($msg =~ /(vappu)|(vapun)/i)	{$infofile = $mydir . "/horos_vappu.txt"; }
 	elsif	($msg =~ /\b(joulu)/i)			{$infofile = $mydir . "/horos_joulu.txt"; }
@@ -208,61 +233,89 @@ sub filterKeyword {
 	#elsif	($msg =~ /\b(test)\b/i)			{($infofile) = glob $mydir . "horoskooppeja_for_testing.txt"; }
 	elsif	($msg =~ /(rakkau[sd])/i)		{$infofile = $mydir . "/horos_rakkaus.txt";}
 	elsif	($msg =~ /(maanant)/i)			{$infofile = $mydir . "/horos_maanantai.txt";}
+	elsif	($msg =~ /(aloitat viikkosi)/i) {$infofile = $mydir . "/horos_maanantai.txt";}
 	elsif	($msg =~ /(pääsiä)/i)			{$infofile = $mydir . "/horos_pääsiäinen.txt";}
 	#else 									{$infofile = $mydir . "horoskooppeja.txt";}
 	
 	if ($infofile ne "" && $infofile ne $horofile) {
-		dp("fetch_horos2.pl: $& matched infofile: $infofile");
+		dp("fetch_horos2.pl: $& matched infofile: $infofile \n");
 		KaaosRadioClass::addLineToFile($infofile, $msg);
 		return;
 	} else {
-		dp("filterKeyword: no match!");
+		dp("filterKeyword: no match!\n") if $DEBUG1;
 	}
 	
 	return $msg;
 }
 
+# fix me, only works the other way around...
+# todo: move "date" commands to beginning of script to avoid multiple calls in a loop
+
+
 sub grepKeyword {
 	my ($rimpsu, $nick, @rest) = @_;
-	chomp (my $weekday = `LC_ALL=fi_FI.utf-8; date +%A 2>>$logfile`);
-	my @weekdays = ("maanantain", "tiistain", "keskiviikon", "torstain", "perjantain", "lauantain", "sunnuntain");
-	chomp (my $weekdak = @weekdays[`date +%u` -1]);		#genetiivi(?)muoto
-	chomp (my $tomorrow = `LC_ALL=fi_FI.utf-8; date +%A --date="tomorrow" 2>>$logfile`);
-	chomp (my $tomorrowak = @weekdays[`date +%u`]);
 
-	chomp (my $month = `LC_ALL=fi_FI.utf-8; date +%B 2>>$logfile`);
-	chomp (my $nextmonth = `LC_ALL=fi_FI.utf-8; date +%B --date="next month" 2>>$logfile`);
-	my $season = checkSeason($month, 0);
-	my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
-	my $seasonob = checkSeason($month, 2);				# objektiivimuoto?
-	my $moonphase = conway();
+	#my @wordlist = split(/\s/, $rimpsu);
+
+
+	#chomp (my $weekday = `LC_ALL=fi_FI.utf-8; date +%A 2>>$logfile`);
 	
-	$rimpsu =~ s/\$weekday/$weekday/g;
-	$rimpsu =~ s/\$weekdak/$weekdak/g;
-	$rimpsu =~ s/\$tomorrowak/$tomorrowak/g;
-	$rimpsu =~ s/\$month/$month/g;
-	$rimpsu =~ s/\$nextmonth/$nextmonth/g;
-	$rimpsu =~ s/\$nick/$nick/g;
-	$rimpsu =~ s/\$season/$season/g;
-	$rimpsu =~ s/\$seasongen/$seasongen/g;
-	$rimpsu =~ s/\$seasonob/$seasonob/g;
-	$rimpsu =~ s/\$moonphase/$moonphase/g;
-	$rimpsu =~ s/\$tomorrow/$tomorrow/g;
+	# fixme: "ensi maanantain"
+	foreach my $weekda (@weekdaysak) {
+		$rimpsu =~ s/$weekda/\$weekday/gi;
+	}
+
+	foreach my $monthlocal (@months) {
+		$rimpsu =~ s/$monthlocal/\$month/gi;
+	}
+
+	
+	
+	
+	
+	
+
+
+	#my $season = checkSeason($month, 0);
+	#my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
+	#my $seasonob = checkSeason($month, 2);				# objektiivimuoto?
+	#my $moonphase = conway();
+	
+
+	$rimpsu =~ s/$tomorrowak/\$tomorrowak/gi;
+	
+
+	$rimpsu =~ s/$tomorrow/\$tomorrow/gi;
+
+
+	$rimpsu =~ s/$weekdak/\$weekdak/gi;
+
+
+	$rimpsu =~ s/$nextmonth/\$nextmonth/gi;
+	
+	$rimpsu =~ s/$curmonth/\$month/gi;
+
+	$rimpsu =~ s/$curseason/\$season/gi;
+	#$rimpsu =~ s/\$seasongen/$seasongen/g;
+	#$rimpsu =~ s/\$seasonob/$seasonob/g;
+	#$rimpsu =~ s/\$moonphase/$moonphase/g;
+	$rimpsu =~ s/täysikuu\b/\$moonphase/gi;
+	
 	return $rimpsu;
 }
 
 
 sub checkSeason	{
-	my ($month, $number, @rest) = @_;
+	my ($monthp, $number, @rest) = @_;
 	# [perusmuoto, genetiivi, partitiivi/subjekti?]
 	my @result = ("vuodenaika", "vuodenajan", "vuodenaikaa");
-	if ($month ~~ ["joulukuu", "tammikuu", "helmikuu"])	{
+	if ($monthp ~~ ["joulukuu", "tammikuu", "helmikuu"])	{
 		@result = ("talvi", "talven", "talvea");
-	} elsif ($month ~~ ["maaliskuu", "huhtikuu", "toukokuu"])	{
+	} elsif ($monthp ~~ ["maaliskuu", "huhtikuu", "toukokuu"])	{
 		@result = ("kevät", "kevään", "kevättä");
-	} elsif ($month ~~ ["kesäkuu", "heinäkuu", "elokuu"])	{
+	} elsif ($monthp ~~ ["kesäkuu", "heinäkuu", "elokuu"])	{
 		@result = ("kesä", "kesän", "kesää");
-	} elsif ($month ~~ ["syyskuu", "lokakuu", "marraskuu"])	{
+	} elsif ($monthp ~~ ["syyskuu", "lokakuu", "marraskuu"])	{
 		@result = ("syksy", "syksyn", "syksyä");
 	}
 	
