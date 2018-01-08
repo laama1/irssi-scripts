@@ -65,7 +65,7 @@ my $debugfile = Irssi::get_irssi_dir()."/scripts/urlurldebug.txt";
 
 my $howManyDrunk = 0;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 1;
 my $myname = "urltitle3.pl";
@@ -218,7 +218,7 @@ sub fetch_title {
 # getTitle params. useragent response
 sub getTitle {
 	my ($response, $url, @rest) = @_;
-	dp("getTitle");
+	dp("getTitle") if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?:\/\/(www\.)?//g;		# strip https://www.
 	
@@ -324,8 +324,8 @@ sub checkAndEtu {
 sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
-	my $titlewordCount = countWords($title);
-	my $samewords = countSameWords($url, $title);
+	#my $titlewordCount = countWords($title);
+	my ($samewords, $titlewordCount) = countSameWords($url, $title);
 	dp("checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
 
 	if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
@@ -356,40 +356,45 @@ sub countWords {
 
 sub countSameWords {
 	my ($url, $title, @rest) = @_;
-	dd("countSameWords url: $url, title: $title");
+	dd("countSameWords url: $url, \ntitle: $title");
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-
+	dd("countSameWords titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
-		#dd("countSameWords: $item, count: $count1");
+		#dd("countSameWords: $item, count: $count1") if $DEBUG1;
 		if ($item ~~ @rows1) {
 		#if (grep /^$item/, @rows1 ) {
 			$count1++;
 			dd("countSameWords: $item, count: $count1");
 			if ($count1 == $titlewordCount) {
 				dd("countSameWords: bingo!");
-				return $count1;
+				return $count1, $titlewordCount;
 			}
 			
 		}
 	}
-	dd("   same words: $count1") if $DEBUG1;
-	return $count1;
+	dd("   same words: $count1");
+	return $count1, $titlewordCount;
 }
 
+# lowercase, remove weird chars. return formatted words
 sub split_row_to_array {
 	my ($row, @rest) = @_;
-	dd("split_row_to_array before: $row") if $DEBUG1;
+	dd("split_row_to_array before: $row");
 	print ("poks") if $row =~ /\”/;
 	print ("poks2") if $row =~ /\–/;
 	#$row =~ s/[”\|:\"\+\,\!\(\)\–]//g;
-	$row =~ s/[^\w\-]//;
-	$row = lc($row);
+
 	$row = replace_non_url_chars($row);
-	dd("split_row_to_array after: $row") if $DEBUG1;
-	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
+	$row =~ s/[^\w\s\-\.\/]//g;
+	$row =~ s/\s+/ /g;
+	$row = lc($row);
+	
+	dd("split_row_to_array after: $row");
+	#my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
+	my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	dd("split_row_to_array words: " . ($#returnArray+1));
 
 	return @returnArray;
@@ -400,17 +405,20 @@ sub replace_non_url_chars {
 	#dd("replace non url chars row: $row");
 
 	my $debugString = "";
-	foreach my $char (split //, $row) {
-		$debugString .= " " .ord($char) . Encode::encode_utf8(":$char") if $DEBUG1;
+	if ($DEBUG1 == 1) {
+		foreach my $char (split //, $row) {
+			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
+		}
+		dd("replace_non_url_chars debugstring: ".$debugString);
 	}
-	dd("replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
+	
 
 	#if ($row) {
-	$row =~ s/ä/a/gi;
-	$row =~ s/ö/o/gi;
-	$row =~ s/Ã¤/a/gi;
-	$row =~ s/Ã¶/o/gi;
-	$row =~ s/\s+/ /gi;
+	$row =~ s/ä/a/g;
+	$row =~ s/ö/o/g;
+	$row =~ s/Ã¤/a/g;
+	$row =~ s/Ã¶/o/g;
+	#$row =~ s/\s+/ /gi;
 	#$row =~ s/\’//g;
 	#}
 	dd("replace non url chars row after: $row") if $DEBUG1;
