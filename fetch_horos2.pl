@@ -8,7 +8,7 @@ use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
 
-$VERSION = "0.1";
+$VERSION = "0.2";
 =pod
 %INFO = (
     authors	=> 'LAama1',
@@ -20,8 +20,8 @@ $VERSION = "0.1";
     url		=> 'http://www.kaaosradio.fi'
 );
 =cut
-my $DEBUG = 0;
-my $DEBUG1 = 0;
+my $DEBUG = 1;
+my $DEBUG1 = 1;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
 
@@ -103,7 +103,7 @@ sub grepAstro {
 	
 	foreach my $currentURl (@astrourls) {
 		dp("\n\ngrepAstro index: ". $index);
-		if ($index >= 1 && $DEBUG) {
+		if ($index >= 1 && $DEBUG1) {
 			#return;
 			dp("\n premature return from foreach loop because debug enabled. \n");
 			last;
@@ -184,6 +184,7 @@ sub grepIltis {
 	if ($page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
 		my $parsethis = $1;
 		my $allHoros = "";
+		my $index = 0;
 		dw("parse this: ".$parsethis);
 		
 		# open database connection
@@ -201,6 +202,24 @@ sub grepIltis {
 				saveHoroToDB($horo, $iltisUrl, $sign);
 				$horo = filterKeyword($horo);
 				$allHoros .= $horo . "\n" if $horo;
+			}
+			$index++;
+		}
+		if ($index == 0 ) {
+			# iltis regex #2, if nothing found
+			while($parsethis =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
+				my $sign = $1;
+				my $datum = $2;
+				my $horo = $3;
+				dp("grepIltis sign: $sign");
+				dp("grepIltis datum: $datum");
+				dp("grepIltis horo: $horo");
+				if (defined($horo) && $horo ne "") {
+					saveHoroToDB($horo, $iltisUrl, $sign);
+					$horo = filterKeyword($horo);
+					$allHoros .= $horo . "\n" if $horo;
+				}
+				$index++;
 			}
 		}
 		dp("grepIltis allhoros: ".$allHoros);

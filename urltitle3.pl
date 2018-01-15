@@ -229,7 +229,7 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || "";
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || "";
-
+	dd("newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = $response->decoded_content;
@@ -320,7 +320,7 @@ sub checkAndEtu {
 	return $returnString;
 }
 
-### Check if title is allready found in URL. Params: $url, $title.
+### Check if title is allready found in URL. Params: $url, $title. Return 1/0
 sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
@@ -415,7 +415,9 @@ sub replace_non_url_chars {
 
 	#if ($row) {
 	$row =~ s/ä/a/g;
+	$row =~ s/Ä/a/g;
 	$row =~ s/ö/o/g;
+	$row =~ s/Ö/o/g;
 	$row =~ s/Ã¤/a/g;
 	$row =~ s/Ã¶/o/g;
 	#$row =~ s/\s+/ /gi;
@@ -711,7 +713,7 @@ sub findUrl {
 	dp("findUrl") if $DEBUG1;
 	my $returnstring;
 	my $temp = "";
-	if ($searchword =~ s/^id:? //gi) {
+	if ($searchword =~ s/^id:? ?//i) {
 		my @results;
 		if ($searchword =~ /(\d+)/) {
 			$searchword = $1;
@@ -724,13 +726,14 @@ sub findUrl {
 		da(@results);
 		#$temp = createAnswerFromResults(@results);
 		return createAnswerFromResults(@results);
-	} elsif ($searchword =~ s/^kaikki:? //gi || $searchword =~ s/^all:? //gi) {
+	} elsif ($searchword =~ s/^kaikki:? ?//i || $searchword =~ s/^all:? ?//i) {
 		# print all found entries
 		my @results = searchDB($searchword);
 		$returnstring .= "Loton oikeat numerot: ";
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
-			$returnstring .= createAnswerFromResults(@$line)
+			#$returnstring .= createAnswerFromResults(@$line)
+			$returnstring .= createShortAnswerFromResults(@$line) .", ";
 		}
 	} else {
 		# print 1st found item
@@ -806,6 +809,36 @@ sub searchIDfromDB {
 	dp("SEARCH ID Dump:");
 	da(@result);
 	return @result;
+}
+
+sub createShortAnswerFromResults {
+	my @resultarray = @_;
+	my $amount = @resultarray;
+	dp("create short answer fom results.. how many values: $amount");
+	if ($amount == 0) {
+		return "Ei tuloksia.";
+	}
+
+	my $returnstring = "";
+	my $rowid = $resultarray[0];
+	$returnstring = "ID: $rowid, ";
+	my $nick = $resultarray[1];					# who added
+	my $when = $resultarray[2];					# when added
+	my $url = $resultarray[3];					# url
+	$returnstring .= "url: $url";
+	my $title = $resultarray[4];				# title
+	my $desc = $resultarray[5];					# description
+	my $channel = $resultarray[6];				# channel
+
+	if ($rowid) {
+		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
+		#Irssi::print("$myname: return string: $returnstring");
+	}
+
+	dp("string: $returnstring");
+	#dp($string);
+	return $returnstring;
+
 }
 
 # Create one line from one result!
