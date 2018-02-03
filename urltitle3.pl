@@ -83,6 +83,7 @@ $newUrlData->{md5} = "";
 $newUrlData->{fetchurl} = "";
 $newUrlData->{shorturl} = "";
 
+my $shortModeEnabled = 0;
 =pod
 my @urlData;
 $urlData[0] = "";		# nick
@@ -150,11 +151,11 @@ sub fetch_title {
 	my $size = 0;						# content size
 	my $md5hex = "";					# md5 of the page
 
-	my $responsetime = Time::HiRes::time;
+	#my $responsetime = Time::HiRes::time();
 	my $response = $ua->get($url);
-	$responsetime = Time::HiRes::time - $responsetime;
-	my $responseString = sprintf("%.3f",$responsetime);
-	Irssi::print("$myname: Response time: ${responseString}s");
+	#$responsetime = Time::HiRes::time() - $responsetime;
+	#my $responseString = sprintf("%.3f",$responsetime);
+	#Irssi::print("$myname: Response time: ${responseString}s");
 	dd("fetch_title: content charset: " .($response->content_charset || "none"));		# utf8 or ISO-8859-1
 	#da($response);
 
@@ -203,11 +204,22 @@ sub fetch_title {
 
 	} else {
 		Irssi::print("$myname: Failure ($url): " . $response->code() . ", " . $response->message() . ", " . $response->status_line);
+		
+		# return nothing.
+		return 0, 0,0, $md5hex;
+
+		# return failure?
 		return $response->status_line, 0,0, $md5hex;
 	}
 	
 	if ($response->content_type !~ /(text)|(xml)/) {
-		return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
+		if ($shortModeEnabled == 1) {
+			dd("Short mode enabled??");
+			return "", 0 , 0, $md5hex;
+		} else {
+			return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
+		}
+		
 	}
 
 	my ($titteli, $description, $titleInUrl) = getTitle($response, $url);
@@ -233,13 +245,23 @@ sub getTitle {
 
 	# HACK:
 	my $temppage = $response->decoded_content;
-	$temppage =~ s/<script\s?.*?>(.*?)<\/script>//sgi;
-	$temppage =~ s/<style\s?.*?>(.*?)<\/style>//sgi;
+	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {	# g = all matches
+		dp("script filtered..") if $DEBUG1;
+	}
+	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
+		dp ("style filtered..") if $DEBUG1;
+	}
+	while ($temppage =~ s/<!--(.*?)-->//si) {
+		dp("comment filtered..") if $DEBUG1;
+	}
 	KaaosRadioClass::writeToFile($debugfile . "2", $temppage) if $DEBUG1;
 
 	#da($response);
-
-	if ($temppage =~ /charset="utf-8"/i) {
+	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
+		dd("iltis!");
+		$newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
+		$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
+	} elsif ($temppage =~ /charset="utf-8"/i) {
 		dd("getTitle utf-8 meta charset tag found manually from source!");
 		# LAama 29.12.2017 $newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
 		#$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
@@ -272,7 +294,7 @@ sub getTitle {
 		#$title = KaaosRadioClass::replaceWeird($title);
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
-	return $title, $newdescription, $titleInUrl;
+	return decode_entities($title), decode_entities($newdescription), $titleInUrl;
 }
 
 ### Encode to UTF8. Params. $string, $charset
@@ -324,7 +346,6 @@ sub checkAndEtu {
 sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
-	#my $titlewordCount = countWords($title);
 	my ($samewords, $titlewordCount) = countSameWords($url, $title);
 	dp("checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
 
@@ -385,10 +406,11 @@ sub split_row_to_array {
 	dd("split_row_to_array before: $row");
 	print ("poks") if $row =~ /\”/;
 	print ("poks2") if $row =~ /\–/;
+	print ("poks3") if $row =~ /\+/;
 	#$row =~ s/[”\|:\"\+\,\!\(\)\–]//g;
 
 	$row = replace_non_url_chars($row);
-	$row =~ s/[^\w\s\-\.\/]//g;
+	$row =~ s/[^\w\s\-\.\/\+\#]//g;
 	$row =~ s/\s+/ /g;
 	$row = lc($row);
 	
@@ -409,7 +431,7 @@ sub replace_non_url_chars {
 		foreach my $char (split //, $row) {
 			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
 		}
-		dd("replace_non_url_chars debugstring: ".$debugString);
+		dd("replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
 	}
 	
 
@@ -625,6 +647,12 @@ sub sig_msg_pub {
 		clearUrlData();
 		return;
 	}
+	my @short_raw = split(/ /, Irssi::settings_get_str('urltitle_shortmode_channels'));
+	if ($target ~~ @short_raw) {
+		$shortModeEnabled = 1;
+	} else {
+		$shortModeEnabled = 0;
+	}
 
 	# kuvaton conversion
 	if ($newUrlData->{fetchurl} =~ s/:\/\/kuvaton\.com\/browse\/[\d]{1,6}/:\/\/kuvaton.com\/kuvei/) {
@@ -636,7 +664,7 @@ sub sig_msg_pub {
 		
 	($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 	my $newtitle = "";
-	$newtitle = $newUrlData->{title};
+	$newtitle = $newUrlData->{title} if $newUrlData->{title};
 
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 	
@@ -644,7 +672,7 @@ sub sig_msg_pub {
 	print "$myname: NOT JEE" if ($newtitle eq "0");
 	$title = $newtitle;
 	
-	dp("sig_msg_pub: title: ".$newUrlData->{title}. " description: ".$newUrlData->{desc});
+	dp("sig_msg_pub: title: ".$newUrlData->{title}. ", description: ".$newUrlData->{desc});
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne "0" && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		print "Shortening description a bit..." if length($newUrlData->{desc}) > 220;
@@ -659,10 +687,10 @@ sub sig_msg_pub {
 		dp("sig_msg_pub new title.");
 	}
 
-	my $sayline = "Title: $title";
+	my $sayline = "Title: $title" if $title;
 	if (length($newUrlData->{url}) >= 70) {
-		my @short_raw = split(/ /, Irssi::settings_get_str('urltitle_shortmode_channels'));
-		if ($target ~~ @short_raw) {
+		# my @short_raw = split(/ /, Irssi::settings_get_str('urltitle_shortmode_channels'));
+		if ($shortModeEnabled == 0) {
 			dp("Short mode enabled: " .$1);
 			$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
 			$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne "");			
@@ -887,6 +915,13 @@ sub dontPrintThese {
 	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*aamulehti\.fi/i;
 	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*kuvaton\.com/i;
 	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*explosm\.net/i;
+	
+	return 0;
+}
+
+sub falseUtf8Pages {
+	my ($text, @rest) = @_;
+	return 1 if $text =~ /iltalehti\.fi/i;
 	
 	return 0;
 }

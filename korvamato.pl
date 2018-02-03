@@ -28,7 +28,7 @@ my $tiedosto = "/home/laama/public_html/korvamadot.txt";
 my $db = Irssi::get_irssi_dir(). "/scripts/korvamadot.db";
 my @channels = ('#salamolo2', '#kaaosradio');
 my $myname = "korvamato.pl";
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 my $helptext = "Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.";
 
@@ -225,7 +225,6 @@ sub parse_keyword_return_sql {
 sub check_if_exists {
 	my ($searchword, @rest) = @_;
 	my @results = searchFromDB($searchword);
-	#da(@results);
 	my $amount = @results;		# count
 	my $returnstring = "";
 	dp("Amount: $amount");
@@ -284,8 +283,6 @@ sub insert_into_db {
 
 }
 
-
-
 sub ifKorvamato {
 	my ($msg, $nick, $target, @rest) = @_;
 	
@@ -342,36 +339,36 @@ sub ifKorvamato {
 		if ($command =~ /(.*)/gi && $id == -1) {
 			my $newcommand = $1;
 			dp("Parse command: $newcommand \n");
-			if ($newcommand =~ /artisti?\:? (.*)/i) {
+			if ($newcommand =~ /\bartisti?\:? (.*)/i) {
 				$artist = parseAwayKeywords($1);
 				dp("Artist: $artist") if $artist;
 			}
-			if ($newcommand =~ /title\:? (.*)/i) {
+			if ($newcommand =~ /\btitle\:? (.*)/i) {
 				$title = parseAwayKeywords($1);
 				dp("Title: $title") if $title;
 			}
-			if ($newcommand =~ /url\:? (.*)/i) {
+			if ($newcommand =~ /\burl\:? (.*)/i) {
 				$url = parseAwayKeywords($1);
 				dp("Url: $url") if $url;
 			}
-			if ($newcommand =~ /info1\:? (.*)/i) {
+			if ($newcommand =~ /\binfo1\:? (.*)/i) {
 				$info1 = parseAwayKeywords($1);
 				dp("Info1: $info1") if $info1;
 			}
-			if ($newcommand =~ /info2\:? (.*)/i) {
+			if ($newcommand =~ /\binfo2\:? (.*)/i) {
 				$info2 = parseAwayKeywords($1);
 				dp("Info2: $info2") if $info2,
 			}
-			if ($newcommand =~ /link1\:? (.*)/i) {
+			if ($newcommand =~ /\blink1\:? (.*)/i) {
 				$link1 = parseAwayKeywords($1);
 				dp("Link1: $link1") if $link1;
 			}
-			if ($newcommand =~ /link2\:? (.*)/i) {
+			if ($newcommand =~ /\blink2\:? (.*)/i) {
 				$link2 = parseAwayKeywords($1);
 				dp("Link2: $link2") if $link2;
 			}
 
-			if ($newcommand =~ /lyrics\:? (.*)/i) {
+			if ($newcommand =~ /\blyrics\:? (.*)/i) {
 				$lyrics = parseAwayKeywords($1);
 				dp("Lyrics: $lyrics") if $lyrics;
 			}

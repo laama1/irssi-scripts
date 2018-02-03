@@ -1,6 +1,6 @@
 use Encode qw/encode decode/;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 use Irssi;
 use DBI qw(:sql_types);
 use warnings;
@@ -10,12 +10,12 @@ binmode(STDOUT, ":utf8");
 binmode(STDIN, ":utf8");
 use KaaosRadioClass;		# LAama1 30.12.2016
 my $myname = "addquote.pl";
-my $tiedosto = "/home/laama/public_html/quotes.txt";
+my $tiedosto = $ENV{HOME}."/public_html/quotes.txt";
 my $publicurl = "http://lamanzi.vhosti.fi/quotes.txt";
 my $db = Irssi::get_irssi_dir(). "/scripts/quotes.db";
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20180106";
+$VERSION = "20180119";
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -28,7 +28,7 @@ $VERSION = "20180106";
 
 
 unless (-e $db) {
-	unless(open FILE, '>'.$db) {
+	unless(open FILE, '>', $db) {
 		Irssi::print("$myname: Unable to create file: $db");
 		die;
 	}
@@ -39,7 +39,6 @@ unless (-e $db) {
 
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
-
 	my ($target, $text) = $msg =~ /^(\S*)\s:(.*)/;
 	return if ($nick eq $server->{nick});	#self-test
 	dp("priv, target: $target, msg: $msg");
@@ -48,7 +47,6 @@ sub event_privmsg {
 
 sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
-	#dp("parseQuote: $msg");
 	if($msg =~ /^!aq\s(.{1,470})/gi)
 	{
 		dp("parseQuote nick: $nick");
@@ -58,7 +56,7 @@ sub parseQuote {
 			return if KaaosRadioClass::floodCheck();
 			KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
 			saveToDB($nick, $uusiquote, $target);
-			Irssi::print("$myname: $msg request from $nick");
+			Irssi::print("$myname: $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
 		} else {
 			Irssi::print("$myname: $msg request from $nick (too long!)");
@@ -69,14 +67,13 @@ sub parseQuote {
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	dp("pub: nick: $nick, msg: $msg, target: $target");
 	parseQuote($msg, $nick, $target, $server);
 }
 
 sub createDB {
     my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $stmt = qq(CREATE TABLE QUOTES (NICK TEXT, PVM INT, QUOTE TEXT not null,CHANNEL TEXT));
-	#my $stmt = qq(CREATE TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL));
+	#my $stmt = qq(CREATE TABLE QUOTES (NICK TEXT, PVM INT, QUOTE TEXT not null,CHANNEL TEXT));
+	my $stmt = qq(CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL));
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
    		Irssi::print DBI::errstr;
@@ -110,5 +107,4 @@ sub dp {
 }
 
 Irssi::signal_add('message public', 'event_pubmsg');
-#Irssi::signal_add('event privmsg', 'event_privmsg');
 Irssi::signal_add('message private', 'event_privmsg');

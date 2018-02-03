@@ -2,6 +2,10 @@ package KaaosRadioClass;
 use strict;
 use warnings;
 use lib '/home/laama/perl5/lib/perl5';
+use utf8;
+binmode(STDOUT, ":utf8");
+binmode(STDIN, ":utf8");
+
 use Exporter;
 use DBI;
 use LWP::UserAgent;
@@ -9,9 +13,7 @@ use HTTP::Cookies;
 use HTML::Entities qw(decode_entities);
 use Encode;
 use URI::Escape;
-use utf8;
-binmode(STDOUT, ":utf8");
-binmode(STDIN, ":utf8");
+
 
 use Data::Dumper;
 
@@ -21,7 +23,7 @@ use Data::Dumper;
 # contact: LAama1 @ ircnet
 # date created: 17.9.2016
 # date changed: 17.9.2016, 21.9.2016, 29.7.2017, 9.10.2017, 21.10.2017
-# date changed: 6.11.2017, 17.12.2017, 18.12.2017
+# date changed: 6.11.2017, 17.12.2017, 18.12.2017, 3.2.2018
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 $VERSION = 1.00;
@@ -37,7 +39,7 @@ my $djlist = "$currentDir/dj_list.txt";
 my $database = "";
 
 #my $myname = $0;
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
 my $floodernick = "";
@@ -141,6 +143,7 @@ sub writeToFile {
 	};
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
+	dp("Write done.");
 	return 0;
 }
 
