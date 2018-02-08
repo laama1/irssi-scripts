@@ -65,7 +65,7 @@ my $debugfile = Irssi::get_irssi_dir()."/scripts/urlurldebug.txt";
 
 my $howManyDrunk = 0;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 1;
 my $myname = "urltitle3.pl";
