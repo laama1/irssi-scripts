@@ -53,7 +53,7 @@ my @ignores = (
 
 # react to these
 my @wordlist = (
-	'tietokone',
+	'tietokonei',
 	'paskat',
 	'moikka',
 	'tervehdys',
@@ -71,7 +71,7 @@ my $currentchan;
 my $currentnetwork;
 
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = "megahal2.pl";
 
 sub irssi_log {
@@ -264,10 +264,10 @@ sub public_responder {
 	populate_nicklist($target, $server);
 	foreach my $currentnick (@channelnicks) {
 		if ($data =~ $currentnick) {
-			Irssi::print("Bingo! $nick found from $data");
 			return if $currentnick ne $my_nick;
+			Irssi::print("Bingo! $nick found from $data");
 		}
-		dp("current nick: $currentnick");
+		#dp("current nick: $currentnick");
 	}
 
 	# Does the data contain my nick?
@@ -364,7 +364,7 @@ sub public_responder {
 			}
 		}
 
-		Irssi::print("$myname: Learned something.. nick: $nick, data: $data") if $DEBUG;
+		dp("Learned something.. nick: $nick, data: $data");
 		$data =~ s/^\S+[\:,]\s*//;
 		$megahal->learn($data, 0);
 		
@@ -373,9 +373,9 @@ sub public_responder {
 
 sub populate_nicklist {
 	my ($channel, $server, @rest) = @_;
-	dp ("SERVERI: ".$server->{chatnet});
+	#dp ("SERVERI: ".$server->{chatnet});
 	if ($channel ne $currentchan && $server->{chatnet} ne $currentnetwork) {
-		dp("Dingo! $currentchan -> $channel");
+		#dp("Dingo! $currentchan -> $channel");
 		$currentchan = $channel;
 		$currentnetwork = $server->{chatnet};
 		my @channels = Irssi::channels();
@@ -384,10 +384,10 @@ sub populate_nicklist {
 			next unless $item->{name} eq $channel;
 			
 			next unless $item->{names_got};
-			dp("we got correct window and have some nicks there. server:");
+			#dp("we got correct window and have some nicks there. server:");
 			dp($item->{server}->{chatnet});
 			next unless $item->{server}->{chatnet} eq $server->{chatnet};
-			dp ("CHANNELI: ".$item->{server}->{name});
+			dp ("CHANNELI: ".$item->{name});
 			#dp("channel:");
 			#da($item);
 			my @nicks = $item->nicks();
@@ -395,8 +395,8 @@ sub populate_nicklist {
 			foreach my $newnick (@nicks) {
 				push @channelnicks, $newnick->{nick};
 			}
-			dp("nicks:");
-			da(@channelnicks);
+			#dp("nicks:");
+			#da(@channelnicks);
 			return;
 				#@channelnicks = $window->nicks();
 				#dp("channel nicks: ");
@@ -405,7 +405,7 @@ sub populate_nicklist {
 			#dp("Channel: $channel");
 		}
 	} else {
-		Irssi::print("same channel as previous..");
+		dp("same channel as previous..");
 	}
 }
 

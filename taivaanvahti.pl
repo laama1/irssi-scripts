@@ -13,7 +13,7 @@ use DBI;
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "2017-07-31";
+$VERSION = "2018-02-18";
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -24,13 +24,14 @@ $VERSION = "2017-07-31";
 	changed     => $VERSION
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = "taivaanvahti.pl";
 my $db = Irssi::get_irssi_dir() . "/scripts/taivaanvahti.sqlite";
 
 my $dbh;		# database handle
 
 my $count = 0;
+my $resultarray = {};
 my $parser = new XML::RSS();
 #$parser->setHandlers(Char => \&char_handler,
 #					 Default => \&default_handler);
@@ -89,8 +90,9 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split(/ /, $enabled_raw);
 
-#msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
-	if (exist($desc) && length($desc) > 150) {
+	#msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
+	#if (exists($desc) && length($desc) > 150) {
+	if (defined($desc) && length($desc) > 150) {
 		$desc = substr($desc, 0, 150);
 		$desc .= "...";
 	} else {
@@ -112,7 +114,6 @@ sub msg_to_channel {
 			da($window);
 			#$window->command("$window kakka.", "msg");
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
-			#$window->print("kakka..", Irssi::MSGLEVEL_PUBLIC);
 			dp("");
 		}
 	}
@@ -162,6 +163,7 @@ sub createDB {
 
 	# Using FTS (full-text search)
 	my $stmt = "CREATE VIRTUAL TABLE taivaanvahti using fts4(PVM,TITLE,LINK,PUBDATE,DESCRIPTION,DELETED)";
+	#my $stmt = "CREATE VIRTUAL TABLE taivaanvahti using fts4(PVM,TITLE,LINK PRIMARY KEY,PUBDATE,DESCRIPTION,DELETED)";
 
 	my $rv = $dbh->do($stmt);		# return value
 	if($rv < 0) {
@@ -170,6 +172,33 @@ sub createDB {
    		Irssi::print "$myname: Table created successfully";
 	}
 	close_database_handle();
+}
+
+sub searchDB {
+	my $searchword = shift;
+	open_database_handle();
+	dp($searchword);
+	my $stmt = "SELECT rowid,title,description FROM taivaanvahti where TITLE like ? or DESCRIPTION like ?";
+	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
+	$sth->bind_param(1, "%$searchword%");
+	$sth->bind_param(2, "%$searchword%");
+	$sth->execute();
+	
+	my @line = ();
+	my $index = 1;
+	$resultarray = {};
+	
+	while(@line = $sth->fetchrow_array) {
+		#push @{ $resultarray[$index]}, @line;
+		#$resultarray->{$index} = "kakka";#@line;
+		$resultarray->{$index} = {'rowid' => @line[0], 'title' => @line[1], 'desc' => @line[3]};
+		$index++;
+		da(@line);
+	}
+	close_database_handle();
+	da($resultarray);
+	dp("index: $index");
+	
 }
 
 sub getXML {
@@ -186,8 +215,9 @@ sub getXML {
 		#dp("item link: ". $item->{'link'});
 		#dp("item pubDate: ". $item->{'pubDate'});
 		#dp("item description: ". $item->{'description'});
+		#dp("item guid: ". $item->{guid});
 		$index++;
-		if (read_from_DB($item->{link}) == 0) {
+		if (read_from_DB($item->{'link'}) == 0) {
 			dp("New item: $item->{title}");
 			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
 			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
@@ -201,7 +231,7 @@ sub timerfunc {
 	getXML();
 }
 
-
+Irssi::command_bind('taivaanvahtisearch', \&searchDB);
 Irssi::settings_add_str('taivaanvahti', 'taivaanvahti_enabled_channels', '');
 Irssi::signal_add('message public', 'sig_msg_pub');
 

@@ -65,9 +65,9 @@ my $debugfile = Irssi::get_irssi_dir()."/scripts/urlurldebug.txt";
 
 my $howManyDrunk = 0;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = "urltitle3.pl";
 
 # Data type
@@ -598,7 +598,7 @@ sub sig_msg_pub {
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
-	return unless grep(/$target/, @enabled);
+	#return unless grep(/$target/, @enabled);
 	
 	# TODO if searching for old link..
 	if ($msg =~ /\!url (.*)$/i) {
@@ -606,7 +606,7 @@ sub sig_msg_pub {
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
 		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
-		$server->command("msg -channel $target $sayline");
+		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
 		clearUrlData();
 		return;
 	}
@@ -675,14 +675,14 @@ sub sig_msg_pub {
 	dp("sig_msg_pub: title: ".$newUrlData->{title}. ", description: ".$newUrlData->{desc});
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne "0" && length($newUrlData->{desc}) > length($newUrlData->{title})) {
-		print "Shortening description a bit..." if length($newUrlData->{desc}) > 220;
+		Irssi::print "Shortening description a bit..." if length($newUrlData->{desc}) > 220;
 		if ($newUrlData->{desc} =~ /(.{220}).*/) {
 			$description = $1 . "...";
 		} else {
 			$description = $newUrlData->{desc};
 		}
 		$title = $description unless noDescForThese($newUrlData->{url});
-		print "Lenght of new title: ". length($title) if $DEBUG1;
+		Irssi::print "Lenght of new title: ". length($title) if $DEBUG1;
 		#dp("sig_msg_pub found description: $description");
 		dp("sig_msg_pub new title.");
 	}
@@ -698,17 +698,16 @@ sub sig_msg_pub {
 	}
 		
 	if ($drunk == 1 && $isTitleInUrl == 0 && $howManyDrunk < 2 && $title ne "" && $isTitleInUrl == 0) {
-		$server->command("msg -channel $target tldr;");
+		$server->command("msg -channel $target tldr;") if grep(/$target/, @enabled);;
 		$howManyDrunk++;
 	} elsif ($title ne "" && $isTitleInUrl == 0) {
-		$server->command("msg -channel $target $sayline");
+		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);;
 		$howManyDrunk = 0;
 	}
-
+	# save links from every channel
 	saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
 	clearUrlData();
 	return;
-
 }
 
 # wanha
@@ -758,6 +757,7 @@ sub findUrl {
 		# print all found entries
 		my @results = searchDB($searchword);
 		$returnstring .= "Loton oikeat numerot: ";
+		dp("Loton oikeat numerot");
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
 			#$returnstring .= createAnswerFromResults(@$line)
@@ -863,7 +863,7 @@ sub createShortAnswerFromResults {
 		#Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp("string: $returnstring");
+	dp("stringi: $returnstring");
 	#dp($string);
 	return $returnstring;
 
@@ -871,10 +871,12 @@ sub createShortAnswerFromResults {
 
 # Create one line from one result!
 sub createAnswerFromResults {
+	dp("createAnswerFromResults");
 	my @resultarray = @_;
 
 	my $amount = @resultarray;
-	dp("create answer fom results.. how many values: $amount");
+	dp(" #### create answer from results.. how many values: $amount");
+	da(@resultarray);
 	if ($amount == 0) {
 		return "Ei tuloksia.";
 	}
@@ -894,12 +896,13 @@ sub createAnswerFromResults {
 	my $channel = $resultarray[6];
 	#$returnstring .= "kanava: $channel"; }
 	my $md5hash = [7];
+	#my $md5hash = "";
 	#my $deleted = [8] || "";
 	
 	#if ($nick ne "") { $string .= "nick: $nick"; }
 
 	if ($rowid) {
-		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
+		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
 		Irssi::print("$myname: return string: $returnstring");
 	}
 

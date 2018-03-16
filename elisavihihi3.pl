@@ -397,6 +397,7 @@ sub sig_msg_pub {
 		return;
 	}
 	return unless ($msg =~ /[\.\!]leffat\b/i);
+	Irssi::print("$myname: $nick requested !leffat on channel $target");
 	dp("$myname nick: $nick, self: ".$server->{nick});
 	my @programinfos;
 
