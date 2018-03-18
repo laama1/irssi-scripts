@@ -51,7 +51,35 @@ sub sayit {
 
 sub getStats {
 	dp("jees");
-	da($publicvotes);
+	da(@$publicvotes);
+}
+
+sub ifUserFoundFromChannel {
+	my ($channel, $nick, @rest) = @_;
+	my @windows = Irssi::windows();
+	foreach my $window (@windows) {
+		next if $window->{name} eq "(status)";
+		next unless $window->{active}->{type} eq "CHANNEL";
+		dp("window name:");
+		dp($window->{active}->{name});
+		if($window->{active}->{name} eq $channel) {
+			dp("Found! $window->{active}->{name}");
+			dp("what if...");
+			#da($window);
+			my @nicks = $window->{active}->nicks();
+			da(@nicks);
+			foreach my $comparenick (@nicks) {
+				if ($comparenick->{nick} eq $nick) {
+					dp("found it! feel free to kick him");
+					# return 1 on first match
+					# operator status check.
+					#return 1 unless $comparenick->{op} == 1 or $comparenick->{halfop} == 1 or $comparenick->{voice} == 1;
+					return 1;
+				}
+			}
+		}
+	}
+	return 0;
 }
 
 sub kickPerson {
@@ -59,7 +87,7 @@ sub kickPerson {
 	dp("target: $channel, nick: $nick, reason: $reason");
 	$publicvotes->{$nick}->{$channel}->{'votecount'} += 1;
 	my $howmany = $publicvotes->{$nick}->{$channel}->{'votecount'};
-	$publicvotes->{$nick}->{'when'} = time();
+	$publicvotes->{$nick}->{'when'} = localtime(time());
 	dp("count: ".$howmany. ", modulo: ".($howmany % $votelimit));
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
 		dp("KICK-KING!");
@@ -74,7 +102,10 @@ sub event_privmsg {
 		my $kickchannel = $1;
 		my $kicknick = $2;
 		my $kickreason = $3 || "";
-		kickPerson($server, $kickchannel, $kicknick, $kickreason);
+		if (ifUserFoundFromChannel($kickchannel, $kicknick)) {
+			kickPerson($server, $kickchannel, $kicknick, $kickreason);
+		}
+		
 	}
 }
 
@@ -91,13 +122,12 @@ sub event_pubmsg {
 		print_help($server, $target);
 		return;
 	}
-	#dp("enabled channel!! msg: ".$msg);
-	#dp ("Hello, target: $target channels: $channels msg: $msg");
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{
 		my $kicknick = $1;		# nick to kick
 		my $reason = $2;
-		#dp("Kicki who: $kicknick, reason: $reason, channel: $target");
-		kickPerson($server, $target, $kicknick, $reason);
+		if (ifUserFoundFromChannel($target, $kicknick) == 1) {
+			kickPerson($server, $target, $kicknick, $reason);
+		}
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
 		dp("msg: ".$msg);
 	}

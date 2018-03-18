@@ -33,8 +33,6 @@ my $dbh;		# database handle
 my $count = 0;
 my $resultarray = {};
 my $parser = new XML::RSS();
-#$parser->setHandlers(Char => \&char_handler,
-#					 Default => \&default_handler);
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
@@ -96,23 +94,20 @@ sub msg_to_channel {
 		$desc = substr($desc, 0, 150);
 		$desc .= "...";
 	} else {
-		$desc = "";
+		#$desc = "";
 	}
 	my $sayline = "$title: ($date) $link $desc";
 
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
-		#dp("window:");
-		#da($window);
 		next if $window->{name} eq "(status)";
 		next unless $window->{active}->{type} eq "CHANNEL";
-		dp("window name:");
-		dp($window->{active}->{name});
+		#dp("window name:");
+		#dp($window->{active}->{name});
 		if($window->{active}->{name} ~~ @enabled) {
 			dp("Found! $window->{active}->{name}");
 			dp("what if...");
 			da($window);
-			#$window->command("$window kakka.", "msg");
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
 			dp("");
 		}
@@ -129,7 +124,7 @@ sub close_database_handle {
 
 sub read_from_DB {
 	my ($link, @rest) = @_;
-	my $sth = $dbh->prepare("SELECT * from taivaanvahti where LINK = ?");
+	my $sth = $dbh->prepare("SELECT * from taivaanvahti2 where LINK = ?");
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
@@ -143,15 +138,16 @@ sub read_from_DB {
 
 # Save new item to sqlite DB
 sub saveToDB {
-	my ($title, $link, $date, $desc, @rest) = @_;
+	my ($title, $link, $date, $desc, $havaintoid, @rest) = @_;
 	my $pvm = time();
 
-	my $sth = $dbh->prepare("INSERT INTO taivaanvahti VALUES(?,?,?,?,?,0)") or die DBI::errstr;
+	my $sth = $dbh->prepare("INSERT INTO taivaanvahti2 VALUES(?,?,?,?,?,?,0)") or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
 	$sth->bind_param(4, $date);
 	$sth->bind_param(5, $desc);
+	$sth->bind_param(6, $havaintoid);
 	$sth->execute;
 	$sth->finish();
 
@@ -162,7 +158,7 @@ sub createDB {
 	open_database_handle();
 
 	# Using FTS (full-text search)
-	my $stmt = "CREATE VIRTUAL TABLE taivaanvahti using fts4(PVM,TITLE,LINK,PUBDATE,DESCRIPTION,DELETED)";
+	my $stmt = "CREATE VIRTUAL TABLE taivaanvahti2 using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, HAVAINTOID int, HAVAINTODATE, DELETED int default 0)";
 	#my $stmt = "CREATE VIRTUAL TABLE taivaanvahti using fts4(PVM,TITLE,LINK PRIMARY KEY,PUBDATE,DESCRIPTION,DELETED)";
 
 	my $rv = $dbh->do($stmt);		# return value
@@ -178,7 +174,7 @@ sub searchDB {
 	my $searchword = shift;
 	open_database_handle();
 	dp($searchword);
-	my $stmt = "SELECT rowid,title,description FROM taivaanvahti where TITLE like ? or DESCRIPTION like ?";
+	my $stmt = "SELECT rowid,title,description FROM taivaanvahti2 where TITLE like ? or DESCRIPTION like ?";
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -191,7 +187,7 @@ sub searchDB {
 	while(@line = $sth->fetchrow_array) {
 		#push @{ $resultarray[$index]}, @line;
 		#$resultarray->{$index} = "kakka";#@line;
-		$resultarray->{$index} = {'rowid' => @line[0], 'title' => @line[1], 'desc' => @line[3]};
+		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[3]};
 		$index++;
 		da(@line);
 	}
@@ -201,6 +197,20 @@ sub searchDB {
 	
 }
 
+sub parseIDfromLink {
+	my $link = shift;
+	if ($link =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
+		return $1;
+	}
+	return 0;
+}
+
+sub parseExtraInfoFromLink {
+	my $url = shift;
+	my $text = KaaosRadioClass::fetchUrl($url);
+
+}
+
 sub getXML {
 	my $xmlFile = get("https://www.taivaanvahti.fi/observations/rss");
 	$parser->parse($xmlFile);
@@ -208,9 +218,9 @@ sub getXML {
 	my $index = 0;
 	open_database_handle();
 	foreach my $item (@{$parser->{items}}) {
-		#dp("item $index:");
-		#da($item);
-		
+		dp("item $index:");
+		da($item);
+		my $havaintoid = parseIDfromLink($item->{'link'});
 		#dp("item title: ". $item->{'title'});
 		#dp("item link: ". $item->{'link'});
 		#dp("item pubDate: ". $item->{'pubDate'});
@@ -219,14 +229,15 @@ sub getXML {
 		$index++;
 		if (read_from_DB($item->{'link'}) == 0) {
 			dp("New item: $item->{title}");
-			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
-			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'});
+			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid);
+			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid);
 		}
 	}
 	close_database_handle();
 
 }
 
+# get all from RSS-feed
 sub timerfunc {
 	getXML();
 }

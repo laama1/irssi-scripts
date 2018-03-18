@@ -11,7 +11,7 @@ use Data::Dumper;
 
 require KaaosRadioClass;
 
-$VERSION = '0.44';
+$VERSION = '0.45';
 %IRSSI = (
 'authors' => 'LAama1',
 'contact' => 'LAama1@ircnet',
@@ -22,7 +22,7 @@ $VERSION = '0.44';
 'changed' => '2017-11-01',
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 #my $auroraurl = "http://www.aurora-service.eu/aurora-forecast/";
 my $db = Irssi::get_irssi_dir() . '/scripts/auroras.db';
@@ -32,8 +32,6 @@ sub getHelp {
 	return "!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.
 	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.
 	!kuu, tulostaa kuun vaiheen, esim. 'täysikuu'.";
-
-
 }
 
 sub pubmsg {
@@ -92,10 +90,13 @@ sub conway {
 	$r = (($r * 11) % 30) + $m + $d;
 	if ($m < 3) { $r += 2; }
 	$r -= 8.3;                                              # year > 2000
-	$r = ($r + 0.5) % 30;
+	#test321 $r = ($r + 0.5) % 30;
+	$r = ($r + 0.5) % 29;	#test321
 	Irssi::print("auroras.pl Jäännös: $r") if $DEBUG;
+	#test123 
 	my $age = $r;
 	$r = 7/30 * $r + 1;
+	#my $age = $r;	# test123
 	Irssi::print("auroras.pl Jäännös2: $r") if $DEBUG;
 =pod
       0: "New Moon",
