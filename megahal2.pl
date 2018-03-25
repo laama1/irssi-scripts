@@ -20,8 +20,9 @@ use vars qw($VERSION %IRSSI);
 # LAama1
 use Data::Dumper;
 use KaaosRadioClass;      # LAama1 8.11.2017
+use utf8;
 
-$VERSION = '0.23';
+$VERSION = '0.24';
 %IRSSI = (
 	'authors' => 'Craig Andrews, LAama1',
 	'contact' => 'craig@simplyspiffing.com',
@@ -70,9 +71,9 @@ my @channelnicks = ();               # value of nicks from the current channel
 my $currentchan;
 my $currentnetwork;
 
-
 my $DEBUG = 0;
 my $myname = "megahal2.pl";
+
 
 sub irssi_log {
 	my $msg = shift;
@@ -85,7 +86,7 @@ sub irssi_log {
 ##
 sub populate_brain {
 	my $brain = shift;
-	dp($brain);
+	dp("Brain: ".$brain);
 	unless (length $brain && -d $brain) {
 		$megahal = undef;
 	}
@@ -101,7 +102,9 @@ sub populate_brain {
 		# $megahal = AI::MegaHAL->new('Path' => './', 'Banner' => 0, 'Prompt' => 0, 'Wrap' => 0, 'AutoSave' => 0);
 		$megahal = new AI::MegaHAL(
 			'Path' => $brain,
-			'AutoSave' => 1);
+			'AutoSave' => 1,
+			'Banner' => 1
+		);
 	}
 	Irssi::print("$myname: Brain populated..");      # LAama1
 
@@ -243,22 +246,25 @@ sub public_responder {
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
 	return unless defined $megahal;
-	#@channelnicks = 
+
 	# replace weird characters from user input
 	$data = KaaosRadioClass::replaceWeird($data);
 	
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
-		if (KaaosRadioClass::floodCheck(5) > 0) {
-			Irssi::print("$myname: Haiku flood detected ($nick)");
+		if (KaaosRadioClass::floodCheck(3) > 0) {
+			irssi_log("Haiku flood detected ($nick)");
 			return;
 		}
 		$data =~ s/\!haiku *//;
-		Irssi::print("$myname: !haiku search word: $data");
+		irssi_log("!haiku search word: $data");
 		give_me_a_haiku($megahal, $server, $data, $nick, $mask, $target);
 		return;
 	}
-	return if $data =~ /^!/;    # if !command
+	if ($data =~ /^!/) {    # if !command
+		irssi_log("Some !command found, return");
+		return;
+	}
 
 	# check nicks from the channel
 	populate_nicklist($target, $server);

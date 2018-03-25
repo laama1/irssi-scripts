@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+﻿#!/usr/bin/perl
 use strict;
 use warnings;
 use utf8;
@@ -9,17 +9,7 @@ use KaaosRadioClass;		# LAama1 16.2.2017
 use vars qw($VERSION);
 
 $VERSION = "0.2";
-=pod
-%INFO = (
-    authors	=> 'LAama1',
-    contact	=> '#kaaosradio ircnet',
-    name	=> 'horos2.pl',
-    description	=> 'Skripti kertoo horoskoopin.',
-    license	=> 'BSD',
-    changed	=> '22.11.2017',
-    url		=> 'http://www.kaaosradio.fi'
-);
-=cut
+
 my $DEBUG = 0;
 my $DEBUG1 = 0;
 #my %args;

@@ -8,6 +8,7 @@ use LWP::Simple;
 #use XML::RSS::Parser;
 use Data::Dumper;
 use DBI;
+use HTTP::Date;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
@@ -106,8 +107,8 @@ sub msg_to_channel {
 		#dp($window->{active}->{name});
 		if($window->{active}->{name} ~~ @enabled) {
 			dp("Found! $window->{active}->{name}");
-			dp("what if...");
-			da($window);
+			#dp("what if...");
+			#da($window);
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
 			dp("");
 		}
@@ -128,7 +129,7 @@ sub read_from_DB {
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
-		da(@line);
+		#da(@line);
 		$sth->finish();
 		return 1;			# item allready found
 	}
@@ -138,16 +139,17 @@ sub read_from_DB {
 
 # Save new item to sqlite DB
 sub saveToDB {
-	my ($title, $link, $date, $desc, $havaintoid, @rest) = @_;
+	my ($title, $link, $date, $desc, $havaintoid, $havaintodate, @rest) = @_;
 	my $pvm = time();
 
-	my $sth = $dbh->prepare("INSERT INTO taivaanvahti2 VALUES(?,?,?,?,?,?,0)") or die DBI::errstr;
+	my $sth = $dbh->prepare("INSERT INTO taivaanvahti2 VALUES(?,?,?,?,?,?,?,0)") or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
 	$sth->bind_param(4, $date);
 	$sth->bind_param(5, $desc);
 	$sth->bind_param(6, $havaintoid);
+	$sth->bind_param(7, $havaintodate);
 	$sth->execute;
 	$sth->finish();
 
@@ -208,6 +210,31 @@ sub parseIDfromLink {
 sub parseExtraInfoFromLink {
 	my $url = shift;
 	my $text = KaaosRadioClass::fetchUrl($url);
+	my $date = "";
+	if ($text =~ /<div class="main-heading">(.*?)<\/div>/gis) {
+		my $heading = $1;
+		$heading = KaaosRadioClass::replaceWeird($heading);
+		if ($heading =~ /<h1>(.*?)<\/h1>/gis) {
+			my $innerdata = $1;
+			#dp("GOT DEPER: ".$innerdata);
+			if ($innerdata =~ /(\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2})/gis) {
+				my $pday = $1;
+				my $pmonth = $2;
+				my $pyear = $3;
+				my $phour = $4;
+				my $pminute = $5;
+				dp("datedata: ".$1);
+				dp("clocdata: ". $2);
+				my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
+				dp("isotime: ".$isotime);
+				my $unixtime = str2time($isotime);
+				dp("unixtime: $unixtime");
+				return $unixtime;
+			}
+		}
+	} else {
+		dp("NOT FOUND :(");
+	}
 
 }
 
@@ -219,18 +246,19 @@ sub getXML {
 	open_database_handle();
 	foreach my $item (@{$parser->{items}}) {
 		dp("item $index:");
-		da($item);
+		#da($item);
 		my $havaintoid = parseIDfromLink($item->{'link'});
 		#dp("item title: ". $item->{'title'});
 		#dp("item link: ". $item->{'link'});
 		#dp("item pubDate: ". $item->{'pubDate'});
 		#dp("item description: ". $item->{'description'});
 		#dp("item guid: ". $item->{guid});
+		my $extrainfo = parseExtraInfoFromLink($item->{'link'});
 		$index++;
 		if (read_from_DB($item->{'link'}) == 0) {
-			dp("New item: $item->{title}");
-			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid);
-			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid);
+			Irssi::print("$myname New item: $item->{title}");
+			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
+			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
 		}
 	}
 	close_database_handle();
@@ -241,8 +269,8 @@ sub getXML {
 sub timerfunc {
 	getXML();
 }
-
-Irssi::command_bind('taivaanvahtisearch', \&searchDB);
+Irssi::command_bind('taivaanvahti_update', \&timerfunc);
+Irssi::command_bind('taivaanvahti_search', \&searchDB);
 Irssi::settings_add_str('taivaanvahti', 'taivaanvahti_enabled_channels', '');
 Irssi::signal_add('message public', 'sig_msg_pub');
 
@@ -250,3 +278,4 @@ Irssi::timeout_add(1800000, 'timerfunc', undef);		# 30 minutes
 #Irssi::timeout_add(5000, 'timerfunc', undef);			# 5 aseconds
 
 Irssi::print("$myname v. $VERSION Loaded!");
+Irssi::print("$myname new commands: /taivaanvahti_update, /taivaanvahti_search");
