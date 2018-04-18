@@ -67,7 +67,7 @@ my $howManyDrunk = 0;
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+my $DEBUG_decode = 1;
 my $myname = "urltitle3.pl";
 
 # Data type
@@ -84,18 +84,6 @@ $newUrlData->{fetchurl} = "";
 $newUrlData->{shorturl} = "";
 
 my $shortModeEnabled = 0;
-=pod
-my @urlData;
-$urlData[0] = "";		# nick
-$urlData[1] = 0;		# date
-$urlData[2] = "";		# url
-$urlData[3] = "";		# title
-$urlData[4] = "";		# description from the HTML to save to DB
-$urlData[5] = "";		# channel
-$urlData[6] = "";		# md5hash, hex
-$urlData[7] = "";		# url to fetch from internet after conversions
-$urlData[8] = "";		# shortened URL
-=cut
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -245,7 +233,7 @@ sub getTitle {
 
 	# HACK:
 	my $temppage = $response->decoded_content;
-	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {	# g = all matches
+	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
 		dp("script filtered..") if $DEBUG1;
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
@@ -279,13 +267,13 @@ sub getTitle {
 	if ($newtitle eq "") {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
 			# TODO chomp linefeeds ?
-			$title = $1;
+			$title = decode_entities($1);
 			dp("getTitle backup titlematch: ". $title);
 		}
 
 	} elsif ($newtitle) {
 		dd("getTitle: title = newtitle! $newtitle");
-		$title = $newtitle;
+		$title = decode_entities($newtitle);
 	}
 
 	my $titleInUrl = 0;
@@ -294,7 +282,7 @@ sub getTitle {
 		#$title = KaaosRadioClass::replaceWeird($title);
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
-	return decode_entities($title), decode_entities($newdescription), $titleInUrl;
+	return $title, decode_entities($newdescription), $titleInUrl;
 }
 
 ### Encode to UTF8. Params. $string, $charset
@@ -314,13 +302,12 @@ sub checkAndEtu {
 	dp("checkAndEtu, charset: $charset, string: $string");
 	my $returnString = "";
 	if ($charset !~ /utf-8/i && $charset !~ /utf8/i) {
-		dd("charset reported as different from utf8");
+		dd("charset is reported different from utf8");
 		if ($string =~ /Ã/) {
 			dd("most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
 			$returnString = etu($string, $charset);
 		} elsif ($string =~ /[ÄäÖöÅå]/) {
 			dd("UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
-			#$returnString = etu($string, $charset);
 			$returnString = $string;
 		} else {
 			dd("Didn't found any special characters. Converting..'");
@@ -328,7 +315,7 @@ sub checkAndEtu {
 		}
 	} elsif ($charset =~ /UTF8/i || $charset =~ /UTF-8/i) {
 		dd("charset reported as utf8");
-		if ($string =~ /[Ã]/) {
+		if ($string =~ /Ã/) {
 			dd("ISO CHARS FOUND, INCORRECT! (reported as $charset)");
 			$returnString = etu($string, $charset) || "";		
 		} elsif ($string =~ /[ÄäÖöÅå]/) {
@@ -758,10 +745,12 @@ sub findUrl {
 		my @results = searchDB($searchword);
 		$returnstring .= "Loton oikeat numerot: ";
 		dp("Loton oikeat numerot");
+		my $in = 0;
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
 			#$returnstring .= createAnswerFromResults(@$line)
 			$returnstring .= createShortAnswerFromResults(@$line) .", ";
+			$in++;
 		}
 	} else {
 		# print 1st found item
@@ -776,6 +765,7 @@ sub findUrl {
 			foreach my $id (@results) {
 				$returnstring .= $results[$i][0].", ";	# collect ID's from results
 				$i++;
+				last if ($i > 13);						# max 13 items..
 			}
 		} elsif ($amount == 1) {
 			$returnstring .= "Löytyi 1, ";
@@ -783,9 +773,6 @@ sub findUrl {
 			$returnstring .= "url: $results[0][3], ";
 			$returnstring .= "title: $results[0][4], ";
 			$returnstring .= "desc: $results[0][5]";
-			#$temp = createAnswerFromResults(@{$results[0]});
-			#dp("temp: ". $temp);
-			#$returnstring .= $temp;
 		} elsif ($amount == 0) {
 			$returnstring = "Ei tuloksia.";
 		}
@@ -895,9 +882,9 @@ sub createAnswerFromResults {
 	$returnstring .= "desc: $desc, ";
 	my $channel = $resultarray[6];
 	#$returnstring .= "kanava: $channel"; }
-	my $md5hash = [7];
+	my $md5hash = $resultarray[7];
 	#my $md5hash = "";
-	#my $deleted = [8] || "";
+	#my $deleted = $resultarray[8] || "";
 	
 	#if ($nick ne "") { $string .= "nick: $nick"; }
 

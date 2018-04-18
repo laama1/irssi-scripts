@@ -19,7 +19,10 @@ my $DEBUG1 = 0;
 #dp("Arg1: ". $args{arg1});
 
 my $mydir = $ENV{HOME}."/.irssi/scripts/newhoro2";
-
+my ($seconds, $minutes, $hours, $mday, $month, $year, $weekday, $yearday, $isdst) = localtime(time);
+$year += 1900;
+$month += 1;
+#print( "Seconds: $seconds, Minutes: $minutes, Hours $hours, Monthday: $mday, Month: $month, Year: $year, Weekday: $weekday, Yearday: $yearday, ISDST: $isdst \n");
 my @astrourls = (
 	'https://www.astro.fi/future/weeklyForecast/sign/aries',
 	'https://www.astro.fi/future/weeklyForecast/sign/taurus',
@@ -36,6 +39,9 @@ my @astrourls = (
 );
 
 my $iltisUrl = "http://iltalehti.fi/horoskooppi/index.shtml";
+my $menaisetUrl = "https://www.menaiset.fi/artikkeli/ajankohtaista/paivan-horoskooppi/paivan-horoskooppi-";
+$menaisetUrl .= $mday.$month. "-0";
+#print $menaisetUrl . "\n";
 
 
 my $logfile = $mydir."/logs/fetch_horos2.log";
@@ -81,11 +87,13 @@ if (!defined($ARGV[0])) {
 	grepIltis();
 } elsif ($ARGV[0] eq "astro") {
 	grepAstro();
+} elsif ($ARGV[0] eq "menaiset") {
+	grepMenaiset();
 }
 
 sub print_help {
 	my ($server, $target) = @_;
-	my $helpmessage = "Fetch horoscopes from internet. Give parameter iltis or astro.\n";
+	my $helpmessage = "Fetch horoscopes from internet. Give parameter iltis or astro or menaiset.\n";
 	print("$helpmessage");
 }
 
@@ -246,7 +254,55 @@ sub grepIltis {
 	logmsg($logtext);
 }
 
-# save to different file if keyword found.
+sub grepMenaiset {
+	my ($data, $url, @rest) = @_;
+	my $horos = "";
+	my $index = 0;
+	$dbh = KaaosRadioClass::connectSqlite($db);
+
+	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
+	my $allHoros = "";
+	my $logtext = "";
+
+	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
+		my $newdata = $1;
+		# clean data a bit
+		$newdata =~ s/<!--(.*?)-->//sgi;
+		$newdata =~ s/<div .*?>//sgi;
+		my $localsign = "";
+		#my $horoscope = "";
+		print "BLOBK FOUND! index: $index\n";
+		#print "data: $newdata \n";
+		while ($newdata =~ /<h3>(.*?)<\/p>/sgi) {
+			my $horodata = $1;
+			my $localdata = "";
+			#print "\n\nHORO DATA: >$horodata<H \n";
+			if ($horodata =~ /(.*?)<\/h/sgi) {
+				$localsign = $1;
+				#print "SIGN FOUND: >$localsign<S\n";
+			}
+			if ($horodata =~ /p>(.*)/sgi) {
+				$localdata = $1;
+				$localdata = filterKeyword($localdata);
+				$allHoros .= $localdata . "\n" if $localdata;
+				#print "DATA FOUND: >$localdata<D";
+			}
+			saveHoroToDB($localdata, $url, $localsign);
+		}
+		#return;
+		$index++;
+	}
+
+	if ($index == 0) {
+		$logtext = "grepMenaiset regex failed!";
+	} else {
+		saveHoroToFile($allHoros);
+		$logtext = "grepMenaiset regex success!";
+	}
+	logmsg($logtext);
+}
+
+# save to a different file if certain keyword found.
 sub filterKeyword {
 	my ($msg, @rest) = @_;
 	my $infofile = "";
@@ -353,16 +409,16 @@ sub checkSeason	{
 sub conway {
 	# John Conway method
 	#my ($y,$m,$d);
-	chomp(my $y = `date +%Y`);
-	chomp(my $m = `date +%m`);
-	chomp(my $d = `date +%d`);
+	#chomp(my $y = `date +%Y`);
+	#chomp(my $m = `date +%m`);
+	#chomp(my $d = `date +%d`);
 	
-	my $r = $y % 100;
+	my $r = $year % 100;
 	$r %= 19;
 
 	if ($r > 9) { $r-= 19; }
-	$r = (($r * 11) % 30) + $m + $d;
-	if ($m < 3) { $r += 2; }
+	$r = (($r * 11) % 30) + $month + $mday;
+	if ($month < 3) { $r += 2; }
 
 	$r -= 8.3;						# year > 2000
 	$r = ($r + 0.5) % 30;
