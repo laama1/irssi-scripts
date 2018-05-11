@@ -306,9 +306,9 @@ sub grepMenaiset {
 sub filterKeyword {
 	my ($msg, @rest) = @_;
 	my $infofile = "";
-	if	($msg =~ /(\bjussi.*)|(juhannus)/i)	{$infofile = $mydir . "/horos_juhannus.txt"; }
+	if	($msg =~ /(\bjussi.*)|(juhannu[sk])/i)	{$infofile = $mydir . "/horos_juhannus.txt"; }
 	elsif	($msg =~ /\b(kesä)/i)			{$infofile = $mydir . "/horos_kesa.txt"; }
-	elsif	($msg =~ /\b(kevä[ti])/i)		{$infofile = $mydir . "/horos_kevat.txt"; }
+	elsif	($msg =~ /\b(kevä[ti])|(\bkevään)/i)		{$infofile = $mydir . "/horos_kevat.txt"; }
 	elsif	($msg =~ /\b(talv[ie])/i)		{$infofile = $mydir . "/horos_talvi.txt"; }
 	#elsif	($msg =~ /\b(talve)/i)			{($infofile) = $mydir . "horoskooppeja_talvi.txt"; }
 	elsif	($msg =~ /(syksy)|(\bsyys[^t])/i)	{$infofile = $mydir . "/horos_syksy.txt"; }
@@ -323,7 +323,7 @@ sub filterKeyword {
 	elsif	($msg =~ /(\bvuosi alkaa\b)/i)	{$infofile = $mydir . "/horos_uv.txt"; }
 	#elsif	($msg =~ /\b(test)\b/i)			{($infofile) = glob $mydir . "horoskooppeja_for_testing.txt"; }
 	elsif	($msg =~ /(rakkau[sd])/i)		{$infofile = $mydir . "/horos_rakkaus.txt";}
-	elsif	($msg =~ /(maanant)/i)			{$infofile = $mydir . "/horos_maanantai.txt";}
+	elsif	($msg =~ /(maananta)/i)			{$infofile = $mydir . "/horos_maanantai.txt";}
 	elsif	($msg =~ /(aloitat viikkosi)/i) {$infofile = $mydir . "/horos_maanantai.txt";}
 	elsif	($msg =~ /(viikko alkaa)/i)		{$infofile = $mydir . "/horos_maanantai.txt";}
 	elsif	($msg =~ /(pääsiä)/i)			{$infofile = $mydir . "/horos_pääsiäinen.txt";}
