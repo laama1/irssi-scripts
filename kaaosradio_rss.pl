@@ -84,7 +84,7 @@ sub sig_msg_pub {
 
 sub msg_to_channel {
 	#my ($title, $link, $date, $desc, $forumlink, @rest) = @_;
-	my ($title, $link, $forumlink, @rest) = @_;
+	my ($title, $link, @rest) = @_;
     my $enabled_raw = Irssi::settings_get_str('kaaosradio_aikataulu_enabled_channels');
     my @enabled = split(/ /, $enabled_raw);
 
@@ -133,16 +133,15 @@ sub read_from_DB {
 
 # Save new item to sqlite DB
 sub saveToDB {
-	my ($title, $link, $date, $desc, $forumlink, $guid, @rest) = @_;
+	my ($title, $link, $date, $desc, $guid, @rest) = @_;
 	my $pvm = time();
-	my $sth = $dbh->prepare("INSERT INTO kaaosradio_aikataulu VALUES(?,?,?,?,?,?,?,0)") or die DBI::errstr;
+	my $sth = $dbh->prepare("INSERT INTO kaaosradio_aikataulu VALUES(?,?,?,?,?,?,0)") or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
 	$sth->bind_param(4, $date);
 	$sth->bind_param(5, $desc);
-	$sth->bind_param(6, $forumlink);
-	$sth->bind_param(7, $guid);
+	$sth->bind_param(6, $guid);
 	$sth->execute;
 	$sth->finish();
 
@@ -153,7 +152,7 @@ sub createDB {
 	open_database_handle();
 
 	# Using FTS (full-text search)
-	my $stmt = "CREATE VIRTUAL TABLE kaaosradio_aikataulu using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, FORUMLINK, GUID int, DELETED int default 0)";
+	my $stmt = "CREATE VIRTUAL TABLE kaaosradio_aikataulu using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, GUID int, DELETED int default 0)";
 
 	my $rv = $dbh->do($stmt);		# return value
 	if($rv < 0) {
@@ -198,18 +197,8 @@ sub parseIDfromGuid {
 	}
 }
 
-sub parseForumLinkFromDescription {
-	my ($desc, @rest) = @_;
-	if ($desc =~ /(http\:\/\/forum\.killahoe\.fi\/.*)/gi) {
-		my $forumlink = $1;
-		dp("Forumlink: $forumlink");
-		return $forumlink;
-	}
-	return 0;
-}
-
 sub getXML {
-	my $xmlFile = KaaosRadioClass::fetchUrl($rssurl);
+	my ($xmlFile, @rest) = KaaosRadioClass::fetchUrl($rssurl);
 	$parser->parse($xmlFile);
 	#da($parser->{'items'});
 	my $index = 0;
@@ -225,8 +214,6 @@ sub getXML {
 		#dp("item guid: ". $item->{guid});
 		my $id = parseIDfromGuid($item->{guid});
 		dp("item guid: ". $id);
-		my $forumlink = parseForumLinkFromDescription($item->{'description'});
-		dp("item forum link: ".$forumlink);
 		my $desc = decode_entities($item->{'description'});
 		$desc =~ s/Lisää(.*)$//i;
 		dp("item description: ".$desc);
@@ -237,9 +224,9 @@ sub getXML {
 		if (read_from_DB($id) == 0) {
 			dp("^new item $index");
 			#Irssi::print("$myname New item: $item->{title}");
-			saveToDB(decode_entities($item->{'title'}), $item->{'link'}, $item->{'pubDate'}, $desc, $forumlink, $id);
+			saveToDB(decode_entities($item->{'title'}), $item->{'link'}, $item->{'pubDate'}, $desc, $id);
 			#msg_to_channel(decode_entities($item->{'title'}), $item->{'link'}, $item->{'pubDate'}, $desc, $forumlink);
-			msg_to_channel(decode_entities($item->{'title'}), $item->{'link'}, $forumlink);
+			msg_to_channel(decode_entities($item->{'title'}), $item->{'link'});
 		}
 	}
 	close_database_handle();

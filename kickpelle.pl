@@ -10,7 +10,7 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "2018-04-06";
+$VERSION = "2018-06-20";
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -30,7 +30,7 @@ my $publicvotes = {};
 # 
 #
 #
-
+my @badwords = ('____','russiancup');
 
 my $DEBUG = 1;
 
@@ -108,11 +108,17 @@ sub kickPerson {
 	dp("count: ".$howmany. ", modulo: ".($howmany % $votelimit));
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
 		dp("KICK-KING!");
-		$server->send_raw("kick $channel $nick :*BOOT ".$publicvotes->{$nick}->{$channel}->{'reason'}." *");
+		##$server->send_raw("kick $channel $nick :*BOOT ".$publicvotes->{$nick}->{$channel}->{'reason'}." *");
+		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{'reason'});
 		$publicvotes->{$nick}->{'bootcount'} += 1;
 	} else {
 		sayit($server, $channel, "($nick) votes: ".($howmany % $votelimit));
 	}
+}
+
+sub doKick {
+	my ($server, $channel, $nick, $reason) = @_;
+	$server->send_raw("kick $channel $nick :*BOOT ".$reason."*");
 }
 
 sub event_privmsg {
@@ -125,6 +131,14 @@ sub event_privmsg {
 			kickPerson($server, $kickchannel, $kicknick, $kickreason);
 		}
 	}
+}
+
+sub badWordFilter {
+	my ($msg, @rest) = @_;
+	foreach my $badword (@badwords) {
+		return 1 if $msg =~ m/$badword/;
+	}
+	return 0;
 }
 
 sub event_pubmsg {
@@ -152,6 +166,12 @@ sub event_pubmsg {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	}
+
+	if (badWordFilter($msg)) {
+		dp("badword found!");
+		#kickPerson($server, $target, $nick, "Bad words!", $server->{nick});
+		doKick($server, $target, $nick, "Bad words!");
+	}
 }
 
 sub da {
@@ -164,6 +184,7 @@ sub dp {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname-debug: @_");
 }
+
 Irssi::command_bind('kickpellestats', \&getStats);
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 Irssi::signal_add_last('message public', 'event_pubmsg');

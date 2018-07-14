@@ -25,7 +25,7 @@ $VERSION = "2018-02-18";
 	changed     => $VERSION
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = "taivaanvahti.pl";
 my $db = Irssi::get_irssi_dir() . "/scripts/taivaanvahti.sqlite";
 
@@ -125,7 +125,7 @@ sub close_database_handle {
 
 sub read_from_DB {
 	my ($link, @rest) = @_;
-	my $sth = $dbh->prepare("SELECT * from taivaanvahti2 where LINK = ?");
+	my $sth = $dbh->prepare("SELECT * from taivaanvahti3 where LINK = ?");
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
@@ -142,7 +142,7 @@ sub saveToDB {
 	my ($title, $link, $date, $desc, $havaintoid, $havaintodate, @rest) = @_;
 	my $pvm = time();
 
-	my $sth = $dbh->prepare("INSERT INTO taivaanvahti2 VALUES(?,?,?,?,?,?,?,0)") or die DBI::errstr;
+	my $sth = $dbh->prepare("INSERT INTO taivaanvahti3 VALUES(?,?,?,?,?,?,?,0)") or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
@@ -160,7 +160,7 @@ sub createDB {
 	open_database_handle();
 
 	# Using FTS (full-text search)
-	my $stmt = "CREATE VIRTUAL TABLE taivaanvahti2 using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, HAVAINTOID int, HAVAINTODATE, DELETED int default 0)";
+	my $stmt = "CREATE VIRTUAL TABLE taivaanvahti3 using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, HAVAINTOID int, HAVAINTODATE, DELETED int default 0)";
 	#my $stmt = "CREATE VIRTUAL TABLE taivaanvahti using fts4(PVM,TITLE,LINK PRIMARY KEY,PUBDATE,DESCRIPTION,DELETED)";
 
 	my $rv = $dbh->do($stmt);		# return value
@@ -224,7 +224,7 @@ sub parseExtraInfoFromLink {
 				my $phour = $4;
 				my $pminute = $5;
 				dp("datedata: ".$1);
-				dp("clocdata: ". $2);
+				dp("monthdata: ". $2);
 				my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
 				dp("isotime: ".$isotime);
 				my $unixtime = str2time($isotime);

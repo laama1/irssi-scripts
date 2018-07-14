@@ -67,7 +67,7 @@ my $howManyDrunk = 0;
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = "urltitle3.pl";
 
 # Data type
@@ -592,6 +592,8 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
+		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1.../);
+	
 		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
 		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
 		clearUrlData();
@@ -924,6 +926,7 @@ sub noDescForThese {
 	return 1 if $url =~ /dropbox\.com/i;
 	return 1 if $url =~ /mixcloud\.com/i;
 	return 1 if $url =~ /flightradar24\.com/i;
+	return 1 if $url =~ /github\.com/i;
 	#return 1 if $url =~ /bandcamp\.com/i;
 
 	return 0;

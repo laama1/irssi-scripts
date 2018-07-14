@@ -194,14 +194,16 @@ sub get_haiku_line {
 		$i--;
 		$line .= shift @{$words};
 		$line .= " ";
+		irssi_log("add space!");
 		#my @s = $line=~/([aeiouy]+)/gi;
-		my @s = $line=~/([aeiouyöäå]+)/gi;
+		my @s = $line=~/([aeiouyöäå])/gi;
 		$syllables = scalar(@s);
 	}
 	return $line;
 }
 
 sub give_me_a_haiku {
+	#return;
 	my ($megahal, $server, $data, $nick, $mask, $target) = @_;
 
 	my $string = $megahal->do_reply($data, 0);
@@ -265,7 +267,7 @@ sub public_responder {
 		irssi_log("Some !command found, return");
 		return;
 	}
-
+	dp("data: $data");
 	# check nicks from the channel
 	populate_nicklist($target, $server);
 	foreach my $currentnick (@channelnicks) {
@@ -358,14 +360,14 @@ sub public_responder {
 		#$output = KaaosRadioClass::replaceWeird($output);
 		#$output = "$nick: $output" if $referencesme;
 		
-		$server->command("msg $target $nick, $output");
+		$server->command("msg $target $nick, $output") if $output;
 
 	} else {
 		$data =~ s/^$my_nick\S?//;
 		foreach my $line (@wordlist) {
 			if ($data =~ /$line/ && $skip_oraakkeli_but_learn == 0) {
 				my $output = return_reply($data);
-				$server->command("msg $target $nick, $output");		
+				$server->command("msg $target $nick, $output") if $output;
 				last;
 			}
 		}
@@ -416,6 +418,7 @@ sub populate_nicklist {
 }
 
 sub return_reply {
+	return;
 	my ($data, @rest) = @_;
 	my $output = $megahal->do_reply($data, 0);
 	$output =~ s/  */ /g;		# replace multiple spaces
