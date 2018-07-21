@@ -19,6 +19,7 @@ use strict;
 use Irssi;
 use LWP::UserAgent;
 use HTTP::Cookies;
+use HTTP::Response;
 #use Time::HiRes qw(time);
 use HTML::Entities qw(decode_entities);
 use utf8;
@@ -67,8 +68,8 @@ my $howManyDrunk = 0;
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
-my $myname = "urltitle3.pl";
+my $DEBUG_decode = 1;
+my $myname = 'urltitle3.pl';
 
 # Data type
 
@@ -104,7 +105,7 @@ my $cookie_jar = HTTP::Cookies->new(
 
 my $max_size = 262144;		# bytes
 my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
-#my $useragent = "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0";
+my $useragent2 = "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0";
 my @headers = (
 	'agent' => $useragent,
 	'max_redirect' => 6,							# default 7
@@ -128,7 +129,14 @@ eval {
 } or do {
 };
 
-
+sub setHeaders {
+	my ($choice, @rest) = @_;
+	if ($choice == 1) {
+		@headers['agent'] = $useragent;
+	} elsif ($choice == 2) {
+		@headers['agent'] = $useragent2;
+	}
+}
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
 	# TODO: add soundcloud etc. parsers here.
@@ -202,7 +210,7 @@ sub fetch_title {
 	
 	if ($response->content_type !~ /(text)|(xml)/) {
 		if ($shortModeEnabled == 1) {
-			dd("Short mode enabled??");
+			dd('Short mode enabled = 1');
 			return "", 0 , 0, $md5hex;
 		} else {
 			return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
@@ -229,6 +237,10 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || "";
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || "";
+	dd('x-meta-description: '.$response->header('x-meta-description'));
+	dd('Description: '. $response->header('Description'));
+	dp('HEADER: ');
+	#da($response->header());
 	dd("newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
@@ -283,6 +295,21 @@ sub getTitle {
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
 	return $title, decode_entities($newdescription), $titleInUrl;
+}
+
+sub getChannelTitle {
+	my ($channel, @rest) = @_;
+	my @windows = Irssi::windows();
+	foreach my $window (@windows) {
+		next if $window->{name} eq "(status)";
+		next unless $window->{active}->{type} eq "CHANNEL";
+		if($window->{active}->{name} eq $channel) {
+			return $window->{active}->{topic};
+		}
+	}
+
+
+
 }
 
 ### Encode to UTF8. Params. $string, $charset
@@ -364,7 +391,7 @@ sub countWords {
 
 sub countSameWords {
 	my ($url, $title, @rest) = @_;
-	dd("countSameWords url: $url, \ntitle: $title");
+	dd("countSameWords url: $url, \n\t title: $title");
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
@@ -375,9 +402,9 @@ sub countSameWords {
 		if ($item ~~ @rows1) {
 		#if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dd("countSameWords: $item, count: $count1");
+			dd("countSameWords: $item, count: $count1") if $DEBUG1;
 			if ($count1 == $titlewordCount) {
-				dd("countSameWords: bingo!");
+				dd("countSameWords: bingo!") if $DEBUG1;
 				return $count1, $titlewordCount;
 			}
 			
@@ -390,7 +417,7 @@ sub countSameWords {
 # lowercase, remove weird chars. return formatted words
 sub split_row_to_array {
 	my ($row, @rest) = @_;
-	dd("split_row_to_array before: $row");
+	dd("split_row_to_array before: $row") if $DEBUG1;
 	print ("poks") if $row =~ /\”/;
 	print ("poks2") if $row =~ /\–/;
 	print ("poks3") if $row =~ /\+/;
@@ -401,10 +428,10 @@ sub split_row_to_array {
 	$row =~ s/\s+/ /g;
 	$row = lc($row);
 	
-	dd("split_row_to_array after: $row");
+	dd("split_row_to_array after: $row") if $DEBUG1;
 	#my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
-	dd("split_row_to_array words: " . ($#returnArray+1));
+	dd("split_row_to_array words: " . ($#returnArray+1)) if $DEBUG1;
 
 	return @returnArray;
 }
@@ -581,7 +608,7 @@ sub apiConversion {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
-	
+	return if ($nick eq 'kaaosradio');
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
@@ -623,6 +650,12 @@ sub sig_msg_pub {
 	
 	# check if flooding too many times in a row
 	my $drunk = KaaosRadioClass::Drunk($nick);
+	my $disablebit = 0;		# disable url printing for reasons x,y,z
+	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
+		if (getChannelTitle($target) =~ /^np\:/i) {
+			$disablebit = 1;
+		}
+	}
 
 	my $title = "";			# url title to print to channel
 	my $description = "";	# url description to print to channel
@@ -686,10 +719,10 @@ sub sig_msg_pub {
 		}
 	}
 		
-	if ($drunk == 1 && $isTitleInUrl == 0 && $howManyDrunk < 2 && $title ne "" && $isTitleInUrl == 0) {
+	if ($title ne '' && $drunk == 1 && $isTitleInUrl == 0 && $howManyDrunk < 2 && $disablebit == 0) {
 		$server->command("msg -channel $target tldr;") if grep(/$target/, @enabled);;
 		$howManyDrunk++;
-	} elsif ($title ne "" && $isTitleInUrl == 0) {
+	} elsif ($title ne '' && $isTitleInUrl == 0 && $disablebit == 0) {
 		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);;
 		$howManyDrunk = 0;
 	}
@@ -948,7 +981,7 @@ sub clearUrlData {
 # debug print
 sub dp {
 	my ($string, @rest) = @_;
-	if ($DEBUG == 1) {
+	if ($DEBUG == 1 || $DEBUG_decode == 1) {
 		print("\n$myname debug: ".$string);
 	}
 }

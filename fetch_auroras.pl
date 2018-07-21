@@ -16,11 +16,11 @@ use KaaosRadioClass;
 use strict;
 use DBI qw(:sql_types);
 
-my $DEBUG = 1;
-my $myname = "fetch_auroras.pl";
+my $DEBUG = 0;
+my $myname = 'fetch_auroras.pl';
 my $auroraurl = 'http://www.aurora-service.eu/aurora-forecast/';
 
-my $db = "/home/laama/public_html/auroras.db";
+my $db = '/home/laama/public_html/auroras.db';
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
@@ -32,7 +32,6 @@ unless (-e $db) {
 	KaaosRadioClass::writeToDB($db, "CREATE TABLE AURORAS (kpnow TEXT, kp1hforecast TEXT, PVM INT)");
 	print("$myname: Database file created.\n") if $DEBUG;
 }
-
 
 grepData();
 #saveAuroras():

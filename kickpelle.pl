@@ -10,36 +10,39 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
+my $DEBUG = 1;
 $VERSION = "2018-06-20";
 %IRSSI = (
-	authors     => "LAama1",
-	contact     => "ircnet: LAama1",
-	name        => "KickPelle",
-	description => "Kickaa Pelle ulos kanavalta anomuumisti.",
-	license     => "Public Domain",
-	url         => "#salamolo2",
+	authors     => 'LAama1',
+	contact     => 'ircnet: LAama1',
+	name        => 'KickPelle',
+	description => 'Kickaa Pelle ulos kanavalta anomuumisti.',
+	license     => 'Public Domain',
+	url         => '#salamolo2',
 	changed     => $VERSION
 );
 
 
 my $channels = '#kaaosradio';
-my $myname = "kickpelle.pl";
+my $myname = 'kickpelle.pl';
+my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
 my $votelimit = 3;		# how many votes needed to kick someone
 my $publicvotes = {};
 # publicvotes->{nick}->{channel}->votecount
 # 
 #
 #
-my @badwords = ('____','russiancup');
+my @badwords = ();
+GETBADWORDLIST();
 
-my $DEBUG = 1;
 
-my $helptext = "Kickaa pelle ulos kanavalta kirjoittamalla minulle kanavalla !kick <nick> [kickmessage]";
+
+my $helptext = 'Kickaa pelle ulos kanavalta kirjoittamalla minulle kanavalla !kick <nick> [kickmessage]';
 
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp("Printing help..");
+	dp('Printing help..');
 	sayit($server, $target, $helptext);
 	return 0;
 }
@@ -70,7 +73,7 @@ sub ifUserFoundFromChannel {
 		next unless $window->{active}->{type} eq "CHANNEL";
 		if($window->{active}->{name} eq $channel) {
 			dp("Found! $window->{active}->{name}");
-			dp("what if...");
+			dp('what if...');
 			#da($window);
 			my @nicks = $window->{active}->nicks();
 			#da(@nicks);
@@ -78,7 +81,7 @@ sub ifUserFoundFromChannel {
 				if ($comparenick->{nick} eq $nick) {
 					dp("found it! feel free to kick $nick");
 					# return 1 on first match
-					# operator status check.
+					# TODO: operator status check.
 					#return 1 unless $comparenick->{op} == 1 or $comparenick->{halfop} == 1 or $comparenick->{voice} == 1;
 					return 1;
 				}
@@ -86,6 +89,52 @@ sub ifUserFoundFromChannel {
 		}
 	}
 	return 0;
+}
+
+sub ADDBADWORD {
+	my ($badsword, @rest) = @_;
+	# TODO: Check that badsword does not allready exist
+	if ($badsword ~~ @badwords) {
+		return -1;
+	}
+	KaaosRadioClass::addLineToFile($badwordfile, $badsword);
+	return 0;
+}
+
+sub SAVEBADWORDLIST {
+	my @rest = @_;
+	KaaosRadioClass::writeArrayToFile(@badwords);
+}
+
+sub DELBADWORD {
+	my ($badword, @rest) = @_;
+	my $index = 0;
+	my $found = 0;
+	foreach my $word (@badwords) {
+		if ($badword == $word) {
+			splice(@badwords, $index, 1);
+			$found = 1;
+			last;
+		}
+		$index++;
+	}
+
+	if ($found == 1) {
+		KaaosRadioClass::writeArrayToFile(@badwords);
+	}
+	return;
+}
+
+sub GETBADWORDLIST {
+	my (@stuff) = @_;
+	@badwords = KaaosRadioClass::readTextFile($badwordfile);
+	da(@badwords);
+	if ($badwords[0] == -1) {
+		dp("no bad words!");
+		@badwords = ('____', 'russiancup');
+		SAVEBADWORDLIST();
+	}
+	return;
 }
 
 sub kickPerson {
@@ -118,7 +167,8 @@ sub kickPerson {
 
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
-	$server->send_raw("kick $channel $nick :*BOOT ".$reason."*");
+	$server->send_raw("kick $channel $nick :*BOOT ".$reason.'*');
+	return;
 }
 
 sub event_privmsg {
@@ -143,7 +193,7 @@ sub badWordFilter {
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	
+
     my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
     my @enabled = split(/ /, $enabled_raw);
     return unless grep(/$target/, @enabled);
@@ -159,18 +209,30 @@ sub event_pubmsg {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
-		dp("msg: ".$msg);
+		dp("msg: $msg");
 		my $kicknick = $1;
 		my $reason = "";
 		if (ifUserFoundFromChannel($target, $kicknick) == 1) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
+	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
+		if (ADDBADWORD($1) == 0) {
+			sayit($server, $target, "Added $1 to list.");
+		} else {
+			sayit($server, $target, "Allready found or error.");
+		}
+	} elsif ($msg =~ /^!badword/gi) {
+		my $string = 'Bad words: ';
+		foreach my $badword (@badwords) {
+			$string .= "$badword, ";
+		}
+		sayit($server, $target, $string);
 	}
 
 	if (badWordFilter($msg)) {
-		dp("badword found!");
+		dp('badword found!');
 		#kickPerson($server, $target, $nick, "Bad words!", $server->{nick});
-		doKick($server, $target, $nick, "Bad words!");
+		doKick($server, $target, $nick, 'Bad words!');
 	}
 }
 
@@ -189,4 +251,4 @@ Irssi::command_bind('kickpellestats', \&getStats);
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-Irssi::print("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #1 #2");
+Irssi::print("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2");

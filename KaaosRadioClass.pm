@@ -23,10 +23,10 @@ use Data::Dumper;
 # contact: LAama1 @ ircnet
 # date created: 17.9.2016
 # date changed: 17.9.2016, 21.9.2016, 29.7.2017, 9.10.2017, 21.10.2017
-# date changed: 6.11.2017, 17.12.2017, 18.12.2017, 3.2.2018
+# date changed: 6.11.2017, 17.12.2017, 18.12.2017, 3.2.2018, 20.7.2018
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.00;
+$VERSION = 1.01;
 @ISA = qw(Exporter);
 @EXPORT = ();
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
@@ -143,7 +143,20 @@ sub writeToFile {
 	};
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
-	dp("Write done.");
+	dp('Write done.');
+	return 0;
+}
+    
+sub writeArrayToFile {
+	my ($filename, @array) = @_;
+	open (OUTPUT, '>:utf8', $filename) || do {
+		return -1;
+	};
+	foreach my $line (@array) {
+		print OUTPUT $line . "\n";
+	}
+	close OUTPUT || return -2;
+	dp('write array done');
 	return 0;
 }
 
@@ -326,7 +339,7 @@ sub readDjList {
 sub fetchUrl {
 	my ($url, $getsize);
 	($url, $getsize) = @_;
-	$url = decode_entities($url);
+	#$url = decode_entities($url);
 	my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
@@ -369,9 +382,16 @@ sub fetchUrl {
 }
 
 sub dp {
-    return unless $DEBUG;
+    return unless $DEBUG == 1;
     #Irssi::print("$myname-debug: @_");
     print("debug: @_");
+}
+
+
+sub da {
+	return unless $DEBUG == 1;
+	print("$myname-debug array:");
+	print Dumper (@_);
 }
 
 1;		# loaded OK

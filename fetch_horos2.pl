@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/perl
 use strict;
-use warnings;
+#use warnings;
 use utf8;
 use Data::Dumper;
 use lib '/home/laama/.irssi/scripts';
@@ -8,7 +8,7 @@ use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
 
-$VERSION = "0.2";
+$VERSION = 0.2;
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
@@ -18,7 +18,7 @@ my $DEBUG1 = 0;
 #dp("Param0: ".$0);
 #dp("Arg1: ". $args{arg1});
 
-my $mydir = $ENV{HOME}."/.irssi/scripts/newhoro2";
+my $mydir = $ENV{HOME}.'/.irssi/scripts/newhoro2';
 my ($seconds, $minutes, $hours, $mday, $month, $year, $weekday, $yearday, $isdst) = localtime(time);
 $year += 1900;
 $month += 1;
@@ -38,22 +38,23 @@ my @astrourls = (
 	'https://www.astro.fi/future/weeklyForecast/sign/pisces',
 );
 
-my $iltisUrl = "http://iltalehti.fi/horoskooppi/index.shtml";
-my $menaisetUrl = "https://www.menaiset.fi/artikkeli/ajankohtaista/paivan-horoskooppi/paivan-horoskooppi-";
-$menaisetUrl .= $mday.$month. "-0";
+my $iltisUrl = 'http://iltalehti.fi/horoskooppi/index.shtml';
+my $menaisetUrl = 'https://www.menaiset.fi/artikkeli/ajankohtaista/paivan-horoskooppi/paivan-horoskooppi-';
+$menaisetUrl .= $mday.$month. '-0';
 #print $menaisetUrl . "\n";
 
 
 my $logfile = $mydir."/logs/fetch_horos2.log";
 open(STDERR, ">>:utf8", $logfile) or do {
-	print("failed to open STDERR ($!)\n");
+	print 'failed to open STDERR ($!)\n';
 	die;
 };
-warn("testing warning redirect") if $DEBUG;
-my $debuglog = $mydir."/logs/fetch_horos2_debug.log";
-my $horofile = $mydir."/horos.txt";
-my $db = $mydir."/horos.db";
+warn 'testing warning redirect' if $DEBUG;
+my $debuglog = $mydir.'/logs/fetch_horos2_debug.log';
+my $horofile = $mydir.'/horos.txt';
+my $db = $mydir.'/horos.db';
 my $dbh;
+my $howManySaved = 0;
 #my $infofile = $mydir."/horos.txt";
 
 my @seasons = ("talvi", "kevät", "kesä", "syksy");
@@ -83,11 +84,11 @@ if (!defined($ARGV[0])) {
 	print("No parameters given. Quit.\n");
 	&print_help;
 	exit(0);
-} elsif ($ARGV[0] eq "iltis") {
+} elsif ($ARGV[0] eq 'iltis') {
 	grepIltis();
-} elsif ($ARGV[0] eq "astro") {
+} elsif ($ARGV[0] eq 'astro') {
 	grepAstro();
-} elsif ($ARGV[0] eq "menaiset") {
+} elsif ($ARGV[0] eq 'menaiset') {
 	grepMenaiset();
 }
 
@@ -131,7 +132,7 @@ sub grepAstro {
 		grepAstroHoro($page, $currentURl);
 		$index++;
 	}
-	$logtext = "grep astro horo done.";
+	$logtext = 'grep astro horo done.';
 	logmsg($logtext);
 }
 
@@ -143,10 +144,6 @@ sub grepAstroHoro {
 	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)\n<\/em>/sgi) {
 		my $sign = $1;
 		my $horo = $2;
-		#dp("grepAstroHoro positions: ". pos($page));
-		#dp(@-);
-		#dp(@+);
-
 		dp("grepAstroHoro sign: ".$sign);
 		dp("grepAstroHoro horo: ".$horo);
 		
@@ -155,12 +152,12 @@ sub grepAstroHoro {
 			$horo = filterKeyword($horo);
 			$skoopit .= $horo . "\n" if $horo;
 		} else {
-			dp("grepAstroHoro: no horo found!");
+			dp('grepAstroHoro: no horo found!');
 		}
 		$index++;
 	}
 	if ($index == 0) {
-		dp("grepAstroHoro regex failed!");
+		dp('grepAstroHoro regex failed!');
 	}
 	#dp("grepAstroHoro Skoopit: ". $skoopit);
 	saveHoroToFile($skoopit);
@@ -169,9 +166,9 @@ sub grepAstroHoro {
 sub grepAstrosaa {
 	my ($data, $url, @rest) = @_;
 	
-	my $astrosaas = "";
+	my $astrosaas = '';
 	if ($data =~ /<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi) {
-		dp ("astrosaa found!");
+		dp ('astrosaa found!');
 	}
 	my $index = 0;
 	#dp("grepAstrosaa page: $data");
@@ -184,15 +181,15 @@ sub grepAstrosaa {
 		#dp("grepAstrosaa positions: ". pos($data)) if $DEBUG1;
 		dp("grepAstrosaa ($index): ".$horo);
 		
-		if (defined($horo) && $horo ne "") {
-			saveHoroToDB($horo, $url, "Astrosää");
+		if (defined($horo) && $horo ne '') {
+			saveHoroToDB($horo, $url, 'Astrosää');
 			$horo = filterKeyword($horo);
 			$astrosaas .= $horo . "\n" if $horo;
 		}
 	}
 
 	if ($index == 0) {
-		dp("grepAstrosaa regex failed!");
+		dp('grepAstrosaa regex failed!');
 	}
 	#dp("Astrosaas: " .$astrosaas) if $DEBUG1;
 	saveHoroToFile($astrosaas);
@@ -201,10 +198,10 @@ sub grepAstrosaa {
 
 sub grepIltis {
 	my $page = KaaosRadioClass::fetchUrl($iltisUrl, 0);
-	my $logtext = "";
+	my $logtext = '';
 	if ($page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
 		my $parsethis = $1;
-		my $allHoros = "";
+		my $allHoros = '';
 		my $index = 0;
 		dw("parse this: ".$parsethis);
 		
@@ -235,7 +232,7 @@ sub grepIltis {
 				dp("grepIltis sign: $sign");
 				dp("grepIltis datum: $datum");
 				dp("grepIltis horo: $horo");
-				if (defined($horo) && $horo ne "") {
+				if (defined($horo) && $horo ne '') {
 					saveHoroToDB($horo, $iltisUrl, $sign);
 					$horo = filterKeyword($horo);
 					$allHoros .= $horo . "\n" if $horo;
@@ -244,7 +241,7 @@ sub grepIltis {
 			}
 		}
 		dp("grepIltis allhoros: ".$allHoros);
-		$logtext = "iltis horo done.";
+		$logtext = 'iltis horo done.';
 		saveHoroToFile($allHoros);
 	} else {
 		warn("Can't parse $iltisUrl");
@@ -256,13 +253,13 @@ sub grepIltis {
 
 sub grepMenaiset {
 	my ($data, $url, @rest) = @_;
-	my $horos = "";
+	my $horos = '';
 	my $index = 0;
 	$dbh = KaaosRadioClass::connectSqlite($db);
 
 	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
-	my $allHoros = "";
-	my $logtext = "";
+	my $allHoros = '';
+	my $logtext = '';
 
 	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
 		my $newdata = $1;
@@ -294,10 +291,10 @@ sub grepMenaiset {
 	}
 
 	if ($index == 0) {
-		$logtext = "grepMenaiset regex failed!";
+		$logtext = 'grepMenaiset regex failed!';
 	} else {
 		saveHoroToFile($allHoros);
-		$logtext = "grepMenaiset regex success!";
+		$logtext = 'grepMenaiset regex success!';
 	}
 	logmsg($logtext);
 }
@@ -329,7 +326,7 @@ sub filterKeyword {
 	elsif	($msg =~ /(pääsiä)/i)			{$infofile = $mydir . "/horos_pääsiäinen.txt";}
 	#else 									{$infofile = $mydir . "horoskooppeja.txt";}
 	
-	if ($infofile ne "" && $infofile ne $horofile) {
+	if ($infofile ne '' && $infofile ne $horofile) {
 		dp("fetch_horos2.pl: $& matched infofile: $infofile \n");
 		KaaosRadioClass::addLineToFile($infofile, $msg);
 		return;
@@ -362,19 +359,19 @@ sub grepKeyword {
 	}
 
 	#my $season = checkSeason($month, 0);
-	#my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
+	#my $seasongen = checkSeason($month, 1);			# genetiivi muoto?
 	#my $seasonob = checkSeason($month, 2);				# objektiivimuoto?
 	#my $moonphase = conway();
-	
+
 
 	$rimpsu =~ s/$tomorrowak/\$tomorrowak/gi;
-	
+
 	$rimpsu =~ s/$tomorrow/\$tomorrow/gi;
 
 	$rimpsu =~ s/$weekdak/\$weekdak/gi;
 
 	$rimpsu =~ s/$nextmonth/\$nextmonth/gi;
-	
+
 	$rimpsu =~ s/$curmonth/\$month/gi;
 
 	$rimpsu =~ s/$curseason/\$season/gi;
@@ -382,15 +379,15 @@ sub grepKeyword {
 	#$rimpsu =~ s/\$seasonob/$seasonob/g;
 	#$rimpsu =~ s/\$moonphase/$moonphase/g;
 	$rimpsu =~ s/täysikuu\b/\$moonphase/gi;
-	
+
 	return $rimpsu;
 }
 
 
-sub checkSeason	{
+sub checkSeason {
 	my ($monthp, $number, @rest) = @_;
 	# [perusmuoto, genetiivi, partitiivi/subjekti?]
-	my @result = ("vuodenaika", "vuodenajan", "vuodenaikaa");
+	my @result = ('vuodenaika', 'vuodenajan', 'vuodenaikaa');
 	if ($monthp ~~ ["joulukuu", "tammikuu", "helmikuu"])	{
 		@result = ("talvi", "talven", "talvea");
 	} elsif ($monthp ~~ ["maaliskuu", "huhtikuu", "toukokuu"])	{
@@ -446,40 +443,42 @@ sub conway {
 sub createHoroDB {
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	# Using FTS (full-text search)
-	my $stmt = qq(CREATE VIRTUAL TABLE HOROS
-			    using fts4(PVM,	URL, HORO, SIGN));
+	my $stmt = qq(CREATE VIRTUAL TABLE HOROS using fts4(PVM, URL, HORO, SIGN));
 
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
-   		warn("DBI Error: ". DBI::errstr. "\n");
+   		warn('DBI Error: '. DBI::errstr. "\n");
 	} else {
-   		print("Table $db created successfully.\n");
+   		print "Table $db created successfully.\n";
 	}
+	return;
 }
 
 # Save one horo to database. Params: $horo, $url, $sign
 sub saveHoroToDB {
 	my ($horo, $url, $sign, @rest) = @_;
-	dp("saveHoroToDB");
-	my $pvm = time();
+	dp('saveHoroToDB');
+	my $pvm = time;
 	my $sqlString = "Insert into horos values ('$pvm', '$url', '$horo', '$sign')";
+	$howManySaved++;
 	return KaaosRadioClass::writeToOpenDB($dbh, $sqlString);
 }
 
 sub saveHoroToFile {
 	my ($data, @rest) = @_;
-	return if $data eq "";
-	# parse lasta linefeed
-	$data = substr($data,0,length($data) -1);
+	return if $data eq '';
+	# parse last linefeed
+	$data = substr $data,0,length $data -1;
 	return KaaosRadioClass::addLineToFile($horofile, grepKeyword($data));
 }
 
 sub logmsg {
 	my ($logdata,@rest) = @_;
-	return KaaosRadioClass::addLineToFile($logfile, localtime . "; ".$logdata);
+	return KaaosRadioClass::addLineToFile($logfile, localtime . '; '.$logdata);
 }
 
 sub dw {
+	my ($data, @rest) = @_;
 	return KaaosRadioClass::writeToFile($debuglog, @_);
 }
 
@@ -490,3 +489,4 @@ sub dp {
 }
 
 $dbh->disconnect();
+print "how many saved: $howManySaved";
