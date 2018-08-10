@@ -138,24 +138,23 @@ sub addLineToFile {
 # add content to new file
 sub writeToFile {
 	my ($filename, $textToWrite, @rest) = @_;
-	open (OUTPUT, '>:utf8', $filename) || do {
-		return -1;
-	};
+	open (OUTPUT, '>:utf8', $filename) || return -1;
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
 	dp('Write done.');
 	return 0;
 }
-    
+
+# overwrite
 sub writeArrayToFile {
 	my ($filename, @array) = @_;
-	open (OUTPUT, '>:utf8', $filename) || do {
+	open my $OUTPUT, '>:utf8', $filename || do {
 		return -1;
 	};
 	foreach my $line (@array) {
-		print OUTPUT $line . "\n";
+		print $OUTPUT $line . "\n";
 	}
-	close OUTPUT || return -2;
+	close $OUTPUT || return -2;
 	dp('write array done');
 	return 0;
 }
@@ -169,8 +168,9 @@ sub floodCheck {
 	$last = readLastLineFromFilename($tsfile);
 
 	if ($cur - $last < $timedifference) {
+		writeToFile($tsfile, $cur);
 		return 1;									# return 1, means "flooding"
-	} elsif (writeToFile($tsfile, $cur) == 0) {		# no flood, and write to file only then!
+	} elsif (writeToFile($tsfile, $cur) == 0) {
 		return 0;
 	}
 

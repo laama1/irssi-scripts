@@ -10,7 +10,7 @@ use vars qw($VERSION);
 
 $VERSION = 0.2;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
@@ -18,7 +18,7 @@ my $DEBUG1 = 0;
 #dp("Param0: ".$0);
 #dp("Arg1: ". $args{arg1});
 
-my $mydir = $ENV{HOME}.'/.irssi/scripts/newhoro2';
+my $mydir = $ENV{HOME}.'/.irssi/scripts/newhoro2';	# output dir
 my ($seconds, $minutes, $hours, $mday, $month, $year, $weekday, $yearday, $isdst) = localtime(time);
 $year += 1900;
 $month += 1;
@@ -38,13 +38,15 @@ my @astrourls = (
 	'https://www.astro.fi/future/weeklyForecast/sign/pisces',
 );
 
-my $iltisUrl = 'http://iltalehti.fi/horoskooppi/index.shtml';
-my $menaisetUrl = 'https://www.menaiset.fi/artikkeli/ajankohtaista/paivan-horoskooppi/paivan-horoskooppi-';
-$menaisetUrl .= $mday.$month. '-0';
+#my $iltisUrl = 'http://iltalehti.fi/horoskooppi/index.shtml';
+my $iltisUrl = 'https://www.iltalehti.fi/horoskooppi';
+my $menaisetUrl = 'https://www.menaiset.fi/artikkeli/horoskooppi/paivan-horoskooppi/paivan-horoskooppi-';
+$menaisetUrl .= $mday.$month;
+#dp("menaiset url: $menaisetUrl");
 #print $menaisetUrl . "\n";
 
 
-my $logfile = $mydir."/logs/fetch_horos2.log";
+my $logfile = $mydir.'/logs/fetch_horos2.log';
 open(STDERR, ">>:utf8", $logfile) or do {
 	print 'failed to open STDERR ($!)\n';
 	die;
@@ -97,7 +99,6 @@ sub print_help {
 	my $helpmessage = "Fetch horoscopes from internet. Give parameter iltis or astro or menaiset.\n";
 	print("$helpmessage");
 }
-
 
 sub grepAstro {
 	my $index = 0;
@@ -198,18 +199,21 @@ sub grepAstrosaa {
 
 sub grepIltis {
 	my $page = KaaosRadioClass::fetchUrl($iltisUrl, 0);
-	my $logtext = '';
-	if ($page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
+	$page = parseComments($page);
+	my $logtext;
+	
+	#if ($page != -1 && $page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
+	if ($page != -1 && $page =~ /itemProp="articleBody"/si) {
+		#logmsg($page);
 		my $parsethis = $1;
 		my $allHoros = '';
 		my $index = 0;
-		dw("parse this: ".$parsethis);
+		dw("parse this: ".$page);
 		
 		# open database connection
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		
-		#while($parsethis =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
-		while($parsethis =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi) {
+		while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi) {
 			my $sign = $1;
 			my $datum = $2;
 			my $horo = $3;
@@ -225,13 +229,13 @@ sub grepIltis {
 		}
 		if ($index == 0 ) {
 			# iltis regex #2, if nothing found
-			while($parsethis =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
+			while($page =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
 				my $sign = $1;
 				my $datum = $2;
 				my $horo = $3;
-				dp("grepIltis sign: $sign");
-				dp("grepIltis datum: $datum");
-				dp("grepIltis horo: $horo");
+				dp("grepIltis2 sign: $sign");
+				dp("grepIltis2 datum: $datum");
+				dp("grepIltis2 horo: $horo");
 				if (defined($horo) && $horo ne '') {
 					saveHoroToDB($horo, $iltisUrl, $sign);
 					$horo = filterKeyword($horo);
@@ -244,7 +248,7 @@ sub grepIltis {
 		$logtext = 'iltis horo done.';
 		saveHoroToFile($allHoros);
 	} else {
-		warn("Can't parse $iltisUrl");
+		#warn("Can't parse $iltisUrl");
 		$logtext = "Can't parse $iltisUrl";
 		#return;
 	}
@@ -260,29 +264,33 @@ sub grepMenaiset {
 	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
 	my $allHoros = '';
 	my $logtext = '';
-
-	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
+	
+#	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
+	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi) {
 		my $newdata = $1;
+		$newdata = parseComments($newdata);
+		logmsg($newdata);
 		# clean data a bit
-		$newdata =~ s/<!--(.*?)-->//sgi;
-		$newdata =~ s/<div .*?>//sgi;
-		my $localsign = "";
+		#$newdata =~ s/<!--(.*?)-->//sgi;
+		#$newdata =~ s/<div .*?>//sgi;
+		
+		my $localsign = '';
 		#my $horoscope = "";
-		print "BLOBK FOUND! index: $index\n";
+		dp("menaiset BLOB FOUND! index: $index\n");
 		#print "data: $newdata \n";
 		while ($newdata =~ /<h3>(.*?)<\/p>/sgi) {
 			my $horodata = $1;
-			my $localdata = "";
-			#print "\n\nHORO DATA: >$horodata<H \n";
+			my $localdata = '';
+			dp("\n\nHORO DATA: ->$horodata<-H \n");
 			if ($horodata =~ /(.*?)<\/h/sgi) {
 				$localsign = $1;
-				#print "SIGN FOUND: >$localsign<S\n";
+				dp("SIGN FOUND: ->$localsign<-S\n");
 			}
 			if ($horodata =~ /p>(.*)/sgi) {
-				$localdata = $1;
+				$localdata = trim($1);
 				$localdata = filterKeyword($localdata);
 				$allHoros .= $localdata . "\n" if $localdata;
-				#print "DATA FOUND: >$localdata<D";
+				dp("DATA FOUND: ->$localdata<-D");
 			}
 			saveHoroToDB($localdata, $url, $localsign);
 		}
@@ -294,6 +302,7 @@ sub grepMenaiset {
 		$logtext = 'grepMenaiset regex failed!';
 	} else {
 		saveHoroToFile($allHoros);
+		logmsg("allhoros: $allHoros");
 		$logtext = 'grepMenaiset regex success!';
 	}
 	logmsg($logtext);
@@ -303,7 +312,7 @@ sub grepMenaiset {
 sub filterKeyword {
 	my ($msg, @rest) = @_;
 	my $infofile = "";
-	if	($msg =~ /(\bjussi.*)|(juhannu[sk])/i)	{$infofile = $mydir . "/horos_juhannus.txt"; }
+	if	($msg =~ /(\bjussi.*)|(juhannu[sk])/i)	{$infofile = $mydir . '/horos_juhannus.txt'; }
 	elsif	($msg =~ /\b(kesä)/i)			{$infofile = $mydir . "/horos_kesa.txt"; }
 	elsif	($msg =~ /\b(kevä[ti])|(\bkevään)/i)		{$infofile = $mydir . "/horos_kevat.txt"; }
 	elsif	($msg =~ /\b(talv[ie])/i)		{$infofile = $mydir . "/horos_talvi.txt"; }
@@ -457,7 +466,7 @@ sub createHoroDB {
 # Save one horo to database. Params: $horo, $url, $sign
 sub saveHoroToDB {
 	my ($horo, $url, $sign, @rest) = @_;
-	dp('saveHoroToDB');
+	dp("saveHoroToDB: $horo");
 	my $pvm = time;
 	my $sqlString = "Insert into horos values ('$pvm', '$url', '$horo', '$sign')";
 	$howManySaved++;
@@ -468,12 +477,37 @@ sub saveHoroToFile {
 	my ($data, @rest) = @_;
 	return if $data eq '';
 	# parse last linefeed
-	$data = substr $data,0,length $data -1;
+	#$data = substr $data,0,length $data -1;
 	return KaaosRadioClass::addLineToFile($horofile, grepKeyword($data));
+}
+
+sub trim {
+	my $s = shift;
+	$s =~ s/^\s+|\s+$//g;
+	return $s
+};
+
+# parse away comments, head, script and style tags
+sub parseComments {
+	my ($data, @rest) = @_;
+	my $i = 0;
+	while($data =~ s/<\!\-\-(.*?)\-\->//si) {
+		$i++;
+	}
+	while ($data =~ s/<script.*?>(.*?)<\/script>//si) {
+		$i++;
+	}
+	while ($data =~ s/<style.*?>(.*?)<\/style>//si) {
+		$i++;
+	}
+	$data =~ s/<head>(.*?)<\/head>//si;
+	print "Elements parsed: $i\n" if $DEBUG;
+	return $data;
 }
 
 sub logmsg {
 	my ($logdata,@rest) = @_;
+	print "logdata: $logdata\n" if $DEBUG;
 	return KaaosRadioClass::addLineToFile($logfile, localtime . '; '.$logdata);
 }
 
@@ -484,8 +518,8 @@ sub dw {
 
 # debug print
 sub dp {
-    return unless $DEBUG;
-    print("debug: @_ \n");
+    return unless $DEBUG == 1;
+    print "debug: @_ \n";
 }
 
 $dbh->disconnect();

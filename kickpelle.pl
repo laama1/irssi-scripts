@@ -97,13 +97,15 @@ sub ADDBADWORD {
 	if ($badsword ~~ @badwords) {
 		return -1;
 	}
+	dp('adding badword to list');
 	KaaosRadioClass::addLineToFile($badwordfile, $badsword);
+	push @badwords, $badsword;
 	return 0;
 }
 
 sub SAVEBADWORDLIST {
 	my @rest = @_;
-	KaaosRadioClass::writeArrayToFile(@badwords);
+	KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
 }
 
 sub DELBADWORD {
@@ -127,7 +129,9 @@ sub DELBADWORD {
 
 sub GETBADWORDLIST {
 	my (@stuff) = @_;
+	dp("bad word file: $badwordfile");
 	@badwords = KaaosRadioClass::readTextFile($badwordfile);
+	dp('bad words loaded:');
 	da(@badwords);
 	if ($badwords[0] == -1) {
 		dp("no bad words!");
@@ -161,13 +165,14 @@ sub kickPerson {
 		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{'reason'});
 		$publicvotes->{$nick}->{'bootcount'} += 1;
 	} else {
-		sayit($server, $channel, "($nick) votes: ".($howmany % $votelimit));
+		sayit($server, $channel, "($nick) votes: ".($howmany % $votelimit). '/3');
 	}
 }
 
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
 	$server->send_raw("kick $channel $nick :*BOOT ".$reason.'*');
+	Irssi::signal_stop();
 	return;
 }
 
@@ -216,12 +221,14 @@ sub event_pubmsg {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
+		dp('adding bad word');
 		if (ADDBADWORD($1) == 0) {
 			sayit($server, $target, "Added $1 to list.");
 		} else {
 			sayit($server, $target, "Allready found or error.");
 		}
 	} elsif ($msg =~ /^!badword/gi) {
+		dp('listing bad words');
 		my $string = 'Bad words: ';
 		foreach my $badword (@badwords) {
 			$string .= "$badword, ";

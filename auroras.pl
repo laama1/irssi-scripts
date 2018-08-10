@@ -25,18 +25,17 @@ $VERSION = '0.45';
 my $DEBUG = 1;
 
 #my $auroraurl = "http://www.aurora-service.eu/aurora-forecast/";
-my $db = Irssi::get_irssi_dir() . '/scripts/auroras.db';
-my @channels = ('#salamolo2');
+#my $db = Irssi::get_irssi_dir() . '/scripts/auroras.db';
+my $db = "/home/laama/public_html/auroras.db";
+my @channels = ('#salamolo2', '#botti');
 
 sub getHelp {
-	return "!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.
-	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.
-	!kuu, tulostaa kuun vaiheen, esim. 'täysikuu'.";
+	return "!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.	!kuu, tulostaa kuun vaiheen, esim. 'täysikuu'.";
 }
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return unless ($msg =~ /kaaos/i);
+	return unless ($msg =~ /$serverrec->{nick}/i);
 	return unless ($target ~~ @channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(!help)/gi) {
@@ -61,7 +60,7 @@ sub pubmsg {
 sub fetchAuroraData {
 	my $searchdate = time() - (60*60);			# max 1 hour ago
 	Irssi::print("search date: " . $searchdate) if $DEBUG;
-	my $fetchString = "select * from AURORADATA where pvm > $searchdate ORDER BY PVM desc limit 1;";
+	my $fetchString = "select * from AURORAS where pvm > $searchdate ORDER BY PVM desc limit 1;";
 	my (@line) = KaaosRadioClass::readLinesFromDataBase($db, $fetchString);
 	Irssi::print ("Dump:") if $DEBUG;
 	print Dumper(@line) if $DEBUG;

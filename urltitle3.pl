@@ -142,23 +142,23 @@ sub fetch_title {
 	# TODO: add soundcloud etc. parsers here.
 	my ($url, @rest) = @_;
 
-	my $page = "";						# page source
-	my $diffpage = "";
+	my $page = '';						# page source decoded to utf8
+	my $diffpage = '';					# page source decoded
 	my $size = 0;						# content size
-	my $md5hex = "";					# md5 of the page
+	my $md5hex = '';					# md5 of the page
 
 	#my $responsetime = Time::HiRes::time();
 	my $response = $ua->get($url);
 	#$responsetime = Time::HiRes::time() - $responsetime;
 	#my $responseString = sprintf("%.3f",$responsetime);
 	#Irssi::print("$myname: Response time: ${responseString}s");
-	dd("fetch_title: content charset: " .($response->content_charset || "none"));		# utf8 or ISO-8859-1
+	dd('fetch_title: content charset: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
 	#da($response);
 
 	if ($response->is_success) {
 		Irssi::print("$myname: Successfully fetched $url, ".$response->content_type.", ".$response->status_line.", size: ".$size.", redirects: ".$response->redirects);
-		my $finalURI = $response->request()->uri() || "";
-		if ($finalURI ne "" && $finalURI ne $url) {
+		my $finalURI = $response->request()->uri() || '';
+		if ($finalURI ne '' && $finalURI ne $url) {
 			$url = $finalURI;
 		}
 
@@ -166,17 +166,17 @@ sub fetch_title {
 		#$diffpage = $response->decoded_content(charset => 'none');
 		#$page = $response->decoded_content(charset => 'none');
 		$page = $response->decoded_content(charset => 'UTF-8');
-		my $datasize = length($page);
+		my $datasize = length $page;
 		if ($page ne $diffpage) {
-			dd("fetch_title: Different charsets presumably not UTF-8!");
+			dd('fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			dd("fetch_title: Same charset / content!");
+			dd('fetch_title: Same charset / content!');
 		}
 
 		if ($datasize > $max_size) {
 			dp("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size");
-			$page = substr($page, 0, $max_size);
-			$datasize = length($page);
+			$page = substr $page, 0, $max_size;
+			$datasize = length $page;
 			dp("fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
 		}
 
@@ -195,19 +195,19 @@ sub fetch_title {
 		} elsif ($size > 0) {
 			$size = "size: ".$size."B";
 		} elsif ($size == 0) {
-			$size = "";
+			$size = '';
 		}
 
 	} else {
 		Irssi::print("$myname: Failure ($url): " . $response->code() . ", " . $response->message() . ", " . $response->status_line);
-		
+
 		# return nothing.
 		return 0, 0,0, $md5hex;
 
 		# return failure?
 		return $response->status_line, 0,0, $md5hex;
 	}
-	
+
 	if ($response->content_type !~ /(text)|(xml)/) {
 		if ($shortModeEnabled == 1) {
 			dd('Short mode enabled = 1');
@@ -215,11 +215,10 @@ sub fetch_title {
 		} else {
 			return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
 		}
-		
 	}
 
 	my ($titteli, $description, $titleInUrl) = getTitle($response, $url);
-	
+
 	return $titteli, $description, $titleInUrl, $md5hex;
 }
 
@@ -228,7 +227,7 @@ sub getTitle {
 	my ($response, $url, @rest) = @_;
 	dp("getTitle") if $DEBUG1;
 	my $countWordsUrl = $url;
-	$countWordsUrl =~ s/^http(s)?:\/\/(www\.)?//g;		# strip https://www.
+	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
 	
 	# get Charset
 	my $testcharset = $response->header('charset') || $response->content_charset || "";
@@ -239,8 +238,7 @@ sub getTitle {
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || "";
 	dd('x-meta-description: '.$response->header('x-meta-description'));
 	dd('Description: '. $response->header('Description'));
-	dp('HEADER: ');
-	#da($response->header());
+	#dp('HEADER: ');
 	dd("newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
@@ -251,7 +249,7 @@ sub getTitle {
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
 		dp ("style filtered..") if $DEBUG1;
 	}
-	while ($temppage =~ s/<!--(.*?)-->//si) {
+	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
 		dp("comment filtered..") if $DEBUG1;
 	}
 	KaaosRadioClass::writeToFile($debugfile . "2", $temppage) if $DEBUG1;
@@ -387,7 +385,6 @@ sub countWords {
 	}
 	return $#array +1;
 }
-
 
 sub countSameWords {
 	my ($url, $title, @rest) = @_;
@@ -633,11 +630,10 @@ sub sig_msg_pub {
 	} elsif ($msg =~ /(www\.\S+)/i) {
 		$newUrlData->{url} = "http://" . $1;
 	} else { 
-		clearUrlData();
+		# clearUrlData();
 		return;
 	}
 	
-	$newUrlData->{fetchurl} = $newUrlData->{url};
 	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
@@ -645,6 +641,7 @@ sub sig_msg_pub {
 		return;
 	}
 	
+	$newUrlData->{fetchurl} = $newUrlData->{url};
 	$newUrlData->{nick} = $nick;
 	$newUrlData->{chan} = $target;
 	
@@ -652,15 +649,18 @@ sub sig_msg_pub {
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	my $disablebit = 0;		# disable url printing for reasons x,y,z
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
-		if (getChannelTitle($target) =~ /^np\:/i) {
+		if (getChannelTitle($target) =~ /np\:/i) {
+			dp('NP FOUND');
 			$disablebit = 1;
+		} else {
+			dp ('np NOT found');
 		}
 	}
 
-	my $title = "";			# url title to print to channel
-	my $description = "";	# url description to print to channel
-	my $isTitleInUrl = 0;		# title or file
-	my $md5hex = "";		# MD5 of requested page
+	my $title = '';			# url title to print to channel
+	my $description = '';	# url description to print to channel
+	my $isTitleInUrl = 0;	# title or file
+	my $md5hex = '';		# MD5 of requested page
 
 
 	if (dontPrintThese($newUrlData->{url}) == 1) {
@@ -960,21 +960,24 @@ sub noDescForThese {
 	return 1 if $url =~ /mixcloud\.com/i;
 	return 1 if $url =~ /flightradar24\.com/i;
 	return 1 if $url =~ /github\.com/i;
+	return 1 if $url =~ /gurushots\.com/i;
+	return 1 if $url =~ /streamable\.com/i;
 	#return 1 if $url =~ /bandcamp\.com/i;
 
 	return 0;
 }
 
 sub clearUrlData {
-	$newUrlData->{nick} = "";		# nick
+	$newUrlData->{nick} = '';		# nick
 	$newUrlData->{date} = 0;		# date
-	$newUrlData->{url} = "";		# url
-	$newUrlData->{title} = "";		# title
-	$newUrlData->{desc} = "";		# desc
-	$newUrlData->{chan} = "";		# channel
-	$newUrlData->{md5} = "";		# md5hash
-	$newUrlData->{fetchurl} = "";	# url to fetch
-	$newUrlData->{shorturl} = "";	# short url
+	$newUrlData->{url} = '';		# url
+	$newUrlData->{title} = '';		# title
+	$newUrlData->{desc} = '';		# desc
+	$newUrlData->{chan} = '';		# channel
+	$newUrlData->{md5} = '';		# md5hash
+	$newUrlData->{fetchurl} = '';	# url to fetch
+	$newUrlData->{shorturl} = '';	# short url
+	KaaosRadioClass::floodCheck();	# write to file
 }
 
 
