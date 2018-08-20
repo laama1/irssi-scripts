@@ -8,9 +8,9 @@ use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
 
-$VERSION = 0.2;
+$VERSION = 0.3;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
@@ -59,11 +59,11 @@ my $dbh;
 my $howManySaved = 0;
 #my $infofile = $mydir."/horos.txt";
 
-my @seasons = ("talvi", "kevät", "kesä", "syksy");
-my @seasonsak = ("talven", "kevään", "kesän", "syksyn");
-my @weekdaysak = ("maanantain", "tiistain", "keskiviikon", "torstain", "perjantain", "lauantain", "sunnuntain", "maanantain");
-my @months = ("tammikuu", "helmikuu", "maaliskuu", "huhtikuu", "toukokuu", "kesäkuu", "heinäkuu",
-"elokuu", "syyskuu", "lokakuu", "marraskuu", "joulukuu");
+my @seasons = ('talvi', 'kevät', 'kesä', 'syksy');
+my @seasonsak = ('talven', 'kevään', 'kesän', 'syksyn');
+my @weekdaysak = ('maanantain', 'tiistain', 'keskiviikon', 'torstain', 'perjantain', 'lauantain', 'sunnuntain', 'maanantain');
+my @months = ('tammikuu', 'helmikuu', 'maaliskuu', 'huhtikuu', 'toukokuu', 'kesäkuu', 'heinäkuu',
+'elokuu', 'syyskuu', 'lokakuu', 'marraskuu', 'joulukuu');
 
 chomp (my $tomorrowak = @weekdaysak[`date +%u`]);
 chomp (my $tomorrow = `LC_ALL=fi_FI.utf-8; date +%A --date="tomorrow" 2>>$logfile`);
@@ -142,7 +142,7 @@ sub grepAstroHoro {
 	#dw($page);
 	my $skoopit = "";
 	my $index = 0;
-	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)\n<\/em>/sgi) {
+	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)<\/em>/sgi) {
 		my $sign = $1;
 		my $horo = $2;
 		dp("grepAstroHoro sign: ".$sign);
@@ -168,9 +168,9 @@ sub grepAstrosaa {
 	my ($data, $url, @rest) = @_;
 	
 	my $astrosaas = '';
-	if ($data =~ /<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi) {
-		dp ('astrosaa found!');
-	}
+	#if ($data =~ /<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi) {
+	#	dp('astrosaa found!');
+	#}
 	my $index = 0;
 	#dp("grepAstrosaa page: $data");
 	#<strong>Astrosää:</strong>Halmikuun aloittava viikko on .... eniten.</p>
@@ -201,14 +201,14 @@ sub grepIltis {
 	my $page = KaaosRadioClass::fetchUrl($iltisUrl, 0);
 	$page = parseComments($page);
 	my $logtext;
-	
+	#logmsg($page);
 	#if ($page != -1 && $page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
 	if ($page != -1 && $page =~ /itemProp="articleBody"/si) {
-		#logmsg($page);
-		my $parsethis = $1;
+		
+		#my $parsethis = $1;
 		my $allHoros = '';
 		my $index = 0;
-		dw("parse this: ".$page);
+		#dw("parse this: ".$page);
 		
 		# open database connection
 		$dbh = KaaosRadioClass::connectSqlite($db);
@@ -244,7 +244,24 @@ sub grepIltis {
 				$index++;
 			}
 		}
-		dp("grepIltis allhoros: ".$allHoros);
+		if ($index == 0 ) {
+			# iltis regex #3, if nothing found
+			while($page =~ m/<p><em>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/em> (.*?)<\/p>/sgi) {
+				my $sign = $1;
+				my $datum = $2;
+				my $horo = $3;
+				dp("grepIltis3 sign: $sign");
+				dp("grepIltis3 datum: $datum");
+				dp("grepIltis3 horo: $horo");
+				if (defined($horo) && $horo ne '') {
+					saveHoroToDB($horo, $iltisUrl, $sign);
+					$horo = filterKeyword($horo);
+					$allHoros .= $horo . "\n" if $horo;
+				}
+				$index++;
+			}
+		}
+		dp("grepIltis allhoros ($index): ".$allHoros);
 		$logtext = 'iltis horo done.';
 		saveHoroToFile($allHoros);
 	} else {
@@ -262,35 +279,33 @@ sub grepMenaiset {
 	$dbh = KaaosRadioClass::connectSqlite($db);
 
 	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
-	my $allHoros = '';
-	my $logtext = '';
+	my ($allHoros, $logtext) = '';
+	logmsg($page);
 	
 #	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
 	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi) {
 		my $newdata = $1;
 		$newdata = parseComments($newdata);
 		logmsg($newdata);
-		# clean data a bit
-		#$newdata =~ s/<!--(.*?)-->//sgi;
-		#$newdata =~ s/<div .*?>//sgi;
+
 		
 		my $localsign = '';
 		#my $horoscope = "";
 		dp("menaiset BLOB FOUND! index: $index\n");
-		#print "data: $newdata \n";
+
 		while ($newdata =~ /<h3>(.*?)<\/p>/sgi) {
 			my $horodata = $1;
 			my $localdata = '';
-			dp("\n\nHORO DATA: ->$horodata<-H \n");
+			#dp("\n\nHORO DATA: ->$horodata<-H \n");
 			if ($horodata =~ /(.*?)<\/h/sgi) {
-				$localsign = $1;
+				$localsign = trim($1);
 				dp("SIGN FOUND: ->$localsign<-S\n");
 			}
 			if ($horodata =~ /p>(.*)/sgi) {
 				$localdata = trim($1);
 				$localdata = filterKeyword($localdata);
 				$allHoros .= $localdata . "\n" if $localdata;
-				dp("DATA FOUND: ->$localdata<-D");
+				#dp("DATA FOUND: ->$localdata<-D");
 			}
 			saveHoroToDB($localdata, $url, $localsign);
 		}
@@ -311,28 +326,28 @@ sub grepMenaiset {
 # save to a different file if certain keyword found.
 sub filterKeyword {
 	my ($msg, @rest) = @_;
-	my $infofile = "";
+	my $infofile = '';
 	if	($msg =~ /(\bjussi.*)|(juhannu[sk])/i)	{$infofile = $mydir . '/horos_juhannus.txt'; }
-	elsif	($msg =~ /\b(kesä)/i)			{$infofile = $mydir . "/horos_kesa.txt"; }
-	elsif	($msg =~ /\b(kevä[ti])|(\bkevään)/i)		{$infofile = $mydir . "/horos_kevat.txt"; }
-	elsif	($msg =~ /\b(talv[ie])/i)		{$infofile = $mydir . "/horos_talvi.txt"; }
+	elsif	($msg =~ /\b(kesä)/i)			{$infofile = $mydir . '/horos_kesa.txt'; }
+	elsif	($msg =~ /\b(kevä[ti])|(\bkevään)/i)		{$infofile = $mydir . '/horos_kevat.txt'; }
+	elsif	($msg =~ /\b(talv[ie])/i)		{$infofile = $mydir . '/horos_talvi.txt'; }
 	#elsif	($msg =~ /\b(talve)/i)			{($infofile) = $mydir . "horoskooppeja_talvi.txt"; }
-	elsif	($msg =~ /(syksy)|(\bsyys[^t])/i)	{$infofile = $mydir . "/horos_syksy.txt"; }
-	elsif	($msg =~ /(viikonl|vkl)/i)		{$infofile = $mydir . "/horos_vkl.txt"; }
-	elsif	($msg =~ /(vappu)|(vapun)/i)	{$infofile = $mydir . "/horos_vappu.txt"; }
-	elsif	($msg =~ /\b(joulu)/i)			{$infofile = $mydir . "/horos_joulu.txt"; }
-	elsif	($msg =~ /(pikkujoulu)/i)		{$infofile = $mydir . "/horos_pikkujoulu.txt"; }
-	elsif	($msg =~ /(loppiai)/i)			{$infofile = $mydir . "/horos_loppiainen.txt"; }
-	elsif	($msg =~ /(\buv\b)|(uus[i]?vuos[i]?)/i)	{$infofile = $mydir . "/horos_uv.txt"; }
-	elsif	($msg =~ /(\buuteen vuoteen\b)/i)		{$infofile = $mydir . "/horos_uv.txt"; }
-	elsif	($msg =~ /(\buudenvuo)/i)		{$infofile = $mydir . "/horos_uv.txt"; }
-	elsif	($msg =~ /(\bvuosi alkaa\b)/i)	{$infofile = $mydir . "/horos_uv.txt"; }
+	elsif	($msg =~ /(syksy)|(\bsyys[^t])/i)	{$infofile = $mydir . '/horos_syksy.txt'; }
+	elsif	($msg =~ /(viikonl|vkl)/i)		{$infofile = $mydir . '/horos_vkl.txt'; }
+	elsif	($msg =~ /(vappu)|(vapun)/i)	{$infofile = $mydir . '/horos_vappu.txt'; }
+	elsif	($msg =~ /\b(joulu)/i)			{$infofile = $mydir . '/horos_joulu.txt'; }
+	elsif	($msg =~ /(pikkujoulu)/i)		{$infofile = $mydir . '/horos_pikkujoulu.txt'; }
+	elsif	($msg =~ /(loppiai)/i)			{$infofile = $mydir . '/horos_loppiainen.txt'; }
+	elsif	($msg =~ /(\buv\b)|(uus[i]?vuos[i]?)/i)	{$infofile = $mydir . '/horos_uv.txt'; }
+	elsif	($msg =~ /(\buuteen vuoteen\b)/i)		{$infofile = $mydir . '/horos_uv.txt'; }
+	elsif	($msg =~ /(\buudenvuo)/i)		{$infofile = $mydir . '/horos_uv.txt'; }
+	elsif	($msg =~ /(\bvuosi alkaa\b)/i)	{$infofile = $mydir . '/horos_uv.txt'; }
 	#elsif	($msg =~ /\b(test)\b/i)			{($infofile) = glob $mydir . "horoskooppeja_for_testing.txt"; }
-	elsif	($msg =~ /(rakkau[sd])/i)		{$infofile = $mydir . "/horos_rakkaus.txt";}
-	elsif	($msg =~ /(maananta)/i)			{$infofile = $mydir . "/horos_maanantai.txt";}
-	elsif	($msg =~ /(aloitat viikkosi)/i) {$infofile = $mydir . "/horos_maanantai.txt";}
-	elsif	($msg =~ /(viikko alkaa)/i)		{$infofile = $mydir . "/horos_maanantai.txt";}
-	elsif	($msg =~ /(pääsiä)/i)			{$infofile = $mydir . "/horos_pääsiäinen.txt";}
+	elsif	($msg =~ /(rakkau[sd])/i)		{$infofile = $mydir . '/horos_rakkaus.txt';}
+	elsif	($msg =~ /(maananta)/i)			{$infofile = $mydir . '/horos_maanantai.txt';}
+	elsif	($msg =~ /(aloitat viikkosi)/i) {$infofile = $mydir . '/horos_maanantai.txt';}
+	elsif	($msg =~ /(viikko alkaa)/i)		{$infofile = $mydir . '/horos_maanantai.txt';}
+	elsif	($msg =~ /(pääsiä)/i)			{$infofile = $mydir . '/horos_pääsiäinen.txt';}
 	#else 									{$infofile = $mydir . "horoskooppeja.txt";}
 	
 	if ($infofile ne '' && $infofile ne $horofile) {
@@ -345,10 +360,6 @@ sub filterKeyword {
 	
 	return $msg;
 }
-
-# fix me, only works the other way around...
-# todo: move "date" commands to beginning of script to avoid multiple calls in a loop
-
 
 sub grepKeyword {
 	my ($rimpsu, $nick, @rest) = @_;
@@ -397,14 +408,14 @@ sub checkSeason {
 	my ($monthp, $number, @rest) = @_;
 	# [perusmuoto, genetiivi, partitiivi/subjekti?]
 	my @result = ('vuodenaika', 'vuodenajan', 'vuodenaikaa');
-	if ($monthp ~~ ["joulukuu", "tammikuu", "helmikuu"])	{
-		@result = ("talvi", "talven", "talvea");
-	} elsif ($monthp ~~ ["maaliskuu", "huhtikuu", "toukokuu"])	{
-		@result = ("kevät", "kevään", "kevättä");
-	} elsif ($monthp ~~ ["kesäkuu", "heinäkuu", "elokuu"])	{
-		@result = ("kesä", "kesän", "kesää");
-	} elsif ($monthp ~~ ["syyskuu", "lokakuu", "marraskuu"])	{
-		@result = ("syksy", "syksyn", "syksyä");
+	if ($monthp ~~ ['joulukuu', 'tammikuu', 'helmikuu'])	{
+		@result = ('talvi', 'talven', 'talvea');
+	} elsif ($monthp ~~ ['maaliskuu', 'huhtikuu', 'toukokuu'])	{
+		@result = ('kevät', 'kevään', 'kevättä');
+	} elsif ($monthp ~~ ['kesäkuu', 'heinäkuu', 'elokuu'])	{
+		@result = ('kesä', 'kesän', 'kesää');
+	} elsif ($monthp ~~ ['syyskuu', 'lokakuu', 'marraskuu'])	{
+		@result = ('syksy', 'syksyn', 'syksyä');
 	}
 	
 	return $result[$number];
@@ -443,7 +454,7 @@ sub conway {
       7: "Waning Crescent"
 =cut
 	
-	my @moonarray = ("uusikuu", "kuun kasvava sirppi", "kuun ensimmäinen neljännes", "kasvava kuperakuu", "täysikuu", "laskeva kuperakuu", "kuun viimeinen neljännes", "kuun vähenevä sirppi");
+	my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
 	#Irssi::print $moonarray[$r] if $debug;
 	return $moonarray[$r];
 }
@@ -475,7 +486,7 @@ sub saveHoroToDB {
 
 sub saveHoroToFile {
 	my ($data, @rest) = @_;
-	return if $data eq '';
+	return -1 if $data eq '';
 	# parse last linefeed
 	#$data = substr $data,0,length $data -1;
 	return KaaosRadioClass::addLineToFile($horofile, grepKeyword($data));
@@ -484,8 +495,8 @@ sub saveHoroToFile {
 sub trim {
 	my $s = shift;
 	$s =~ s/^\s+|\s+$//g;
-	return $s
-};
+	return $s;
+}
 
 # parse away comments, head, script and style tags
 sub parseComments {
@@ -501,13 +512,13 @@ sub parseComments {
 		$i++;
 	}
 	$data =~ s/<head>(.*?)<\/head>//si;
-	print "Elements parsed: $i\n" if $DEBUG;
+	dp("Elements parsed: $i");
 	return $data;
 }
 
 sub logmsg {
 	my ($logdata,@rest) = @_;
-	print "logdata: $logdata\n" if $DEBUG;
+	dp("logdata: $logdata");
 	return KaaosRadioClass::addLineToFile($logfile, localtime . '; '.$logdata);
 }
 

@@ -17,11 +17,13 @@
 use warnings;
 use strict;
 use Irssi;
+#use Irssi::Signals;
 use LWP::UserAgent;
 use HTTP::Cookies;
 use HTTP::Response;
 #use Time::HiRes qw(time);
 use HTML::Entities qw(decode_entities);
+#use RDF::RDFa::Parser;
 use utf8;
 #use open ':std', ':encoding(UTF-8)';
 binmode(STDIN,  ':utf8');
@@ -47,7 +49,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20171226";
+$VERSION = '2018-08-10';
 %IRSSI = (
 	authors     => "Will Storey, LAama1",
 	contact     => "LAama1",
@@ -74,15 +76,15 @@ my $myname = 'urltitle3.pl';
 # Data type
 
 my $newUrlData = {};
-$newUrlData->{nick} = "";
-$newUrlData->{date} = "";
-$newUrlData->{url} = "";
-$newUrlData->{title} = "";
-$newUrlData->{desc} = "";
-$newUrlData->{chan} = "";
-$newUrlData->{md5} = "";
-$newUrlData->{fetchurl} = "";
-$newUrlData->{shorturl} = "";
+$newUrlData->{nick} = '';			# who posted url
+$newUrlData->{date} = '';			# when
+$newUrlData->{url} = '';			# what was the original url
+$newUrlData->{title} = '';			# what is the title of the final url
+$newUrlData->{desc} = '';			# what is the description
+$newUrlData->{chan} = '';			# on which channel
+$newUrlData->{md5} = '';			# hash of the page that was fetched
+$newUrlData->{fetchurl} = '';		# which url to actually fetch
+$newUrlData->{shorturl} = '';		# shortened url for the link
 
 my $shortModeEnabled = 0;
 
@@ -104,16 +106,16 @@ my $cookie_jar = HTTP::Cookies->new(
 );
 
 my $max_size = 262144;		# bytes
-my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
-my $useragent2 = "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0";
+my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0';
 my @headers = (
-	'agent' => $useragent,
+	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
 	'max_size' => $max_size,
 	#'ssl_opts' =>
 	'protocols_allowed' => ['http', 'https', 'ftp'],
 	'protocols_forbidden' => [ 'file', 'mailto'],
-	'timeout' => 5,									# default 180 seconds
+	'timeout' => 3,									# default 180 seconds
 	'cookie_jar' => $cookie_jar,
 	'requests_redirectable' => ['GET', 'HEAD'],		# defaults GET HEAD
 );
@@ -129,14 +131,16 @@ eval {
 } or do {
 };
 
+# new headers for youtube and mixcloud etc.
 sub setHeaders {
 	my ($choice, @rest) = @_;
 	if ($choice == 1) {
-		@headers['agent'] = $useragent;
+		$headers['agent'] = $useragentOld;
 	} elsif ($choice == 2) {
-		@headers['agent'] = $useragent2;
+		$headers['agent'] = $useragentNew;
 	}
 }
+
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
 	# TODO: add soundcloud etc. parsers here.
@@ -189,20 +193,20 @@ sub fetch_title {
 		}
 		
 		if ($size / (1024*1024) > 1) {
-			$size = "size: " .sprintf("%.2f", $size / (1024*1024))."MiB";
+			$size = 'size: ' .sprintf("%.2f", $size / (1024*1024)) . 'MiB';
 		} elsif ($size / 1024 > 1) {
-			$size = "size: " .sprintf("%.2f", $size / 1024) . "KiB";
+			$size = 'size: ' .sprintf("%.2f", $size / 1024) . 'KiB';
 		} elsif ($size > 0) {
-			$size = "size: ".$size."B";
+			$size = "size: ${size}B";
 		} elsif ($size == 0) {
 			$size = '';
 		}
 
 	} else {
-		Irssi::print("$myname: Failure ($url): " . $response->code() . ", " . $response->message() . ", " . $response->status_line);
+		Irssi::print("$myname: Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 
 		# return nothing.
-		return 0, 0,0, $md5hex;
+		#return 0, 0,0, $md5hex;
 
 		# return failure?
 		return $response->status_line, 0,0, $md5hex;
@@ -211,7 +215,7 @@ sub fetch_title {
 	if ($response->content_type !~ /(text)|(xml)/) {
 		if ($shortModeEnabled == 1) {
 			dd('Short mode enabled = 1');
-			return "", 0 , 0, $md5hex;
+			return '', 0 , 0, $md5hex;
 		} else {
 			return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
 		}
@@ -230,55 +234,61 @@ sub getTitle {
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
 	
 	# get Charset
-	my $testcharset = $response->header('charset') || $response->content_charset || "";
-	dd("getTitle response header charset: $testcharset");
+	my $headercharset = $response->header('charset') || '';
+	my $contentcharset = $response->content_charset || '';
+	da('header OG: ',$response->header('property'));
+	my $ogtitle = "";#$response->header('og:title') || '';		# open graph
 	
+	my $testcharset = $response->header('charset') || $response->content_charset || '';
+	dd("\ngetTitle response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
+	dd('og:title: '.$ogtitle);
+
 	# get Title and Description
-	my $newtitle = $response->header('title') || "";
-	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || "";
-	dd('x-meta-description: '.$response->header('x-meta-description'));
-	dd('Description: '. $response->header('Description'));
+	my $newtitle = $response->header('title') || '';
+	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
+	dd('geTitle Header x-meta-description: '.$response->header('x-meta-description'));
+	dd('geTitle Header description: '. $response->header('Description'));
 	#dp('HEADER: ');
-	dd("newtitle: $newtitle, newdescription: $newdescription");
+	dd("geTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = $response->decoded_content;
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
-		dp("script filtered..") if $DEBUG1;
+		dp('geTitle script filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
-		dp ("style filtered..") if $DEBUG1;
+		dp ('geTitle style filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
-		dp("comment filtered..") if $DEBUG1;
+		dp('geTitle comment filtered..') if $DEBUG1;
 	}
-	KaaosRadioClass::writeToFile($debugfile . "2", $temppage) if $DEBUG1;
+	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
 
 	#da($response);
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
-		dd("iltis!");
+		dd('iltis!');
 		$newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
 		$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
 	} elsif ($temppage =~ /charset="utf-8"/i) {
-		dd("getTitle utf-8 meta charset tag found manually from source!");
+		dd('getTitle utf-8 meta charset tag found manually from source!');
 		# LAama 29.12.2017 $newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
 		#$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
 		
-		dd("getTitle testcharset not UTF-8: ". $testcharset);
-		dd("getTitle newtitle again: ". $newtitle);
+		dd('getTitle testcharset not UTF-8: '. $testcharset);
+		dd('getTitle newtitle again: '. $newtitle);
 		$newtitle = checkAndEtu($newtitle, $testcharset);
 		$newdescription = checkAndEtu($newdescription, $testcharset);
 	}
 
-	my $title = "";
+	my $title = '';
 	
-	if ($newtitle eq "") {
+	if ($newtitle eq '') {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
 			# TODO chomp linefeeds ?
 			$title = decode_entities($1);
-			dp("getTitle backup titlematch: ". $title);
+			dp('getTitle backup titlematch: '. $title);
 		}
 
 	} elsif ($newtitle) {
@@ -287,7 +297,7 @@ sub getTitle {
 	}
 
 	my $titleInUrl = 0;
-	if ($title ne "") {
+	if ($title ne '') {
 		dd("getTitle undecoded title: $title") if $DEBUG1;
 		#$title = KaaosRadioClass::replaceWeird($title);
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
@@ -299,15 +309,12 @@ sub getChannelTitle {
 	my ($channel, @rest) = @_;
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
-		next if $window->{name} eq "(status)";
-		next unless $window->{active}->{type} eq "CHANNEL";
+		next if $window->{name} eq '(status)';
+		next unless $window->{active}->{type} eq 'CHANNEL';
 		if($window->{active}->{name} eq $channel) {
 			return $window->{active}->{topic};
 		}
 	}
-
-
-
 }
 
 ### Encode to UTF8. Params. $string, $charset
@@ -388,12 +395,12 @@ sub countWords {
 
 sub countSameWords {
 	my ($url, $title, @rest) = @_;
-	dd("countSameWords url: $url, \n\t title: $title");
+	dd("countSameWords url: $url, \n\t title: $title") if $DEBUG1;
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-	dd("countSameWords titlewordCount: $titlewordCount");
+	dd("countSameWords titlewordCount: $titlewordCount") if $DEBUG1;
 	foreach my $item (@rows2) {
 		#dd("countSameWords: $item, count: $count1") if $DEBUG1;
 		if ($item ~~ @rows1) {
@@ -407,7 +414,7 @@ sub countSameWords {
 			
 		}
 	}
-	dd("   same words: $count1");
+	dd("   same words: $count1") if $DEBUG1;
 	return $count1, $titlewordCount;
 }
 
@@ -463,7 +470,7 @@ sub replace_non_url_chars {
 sub shortenURL {
 	my ($url, @rest) = @_;
     my $ua2 = new LWP::UserAgent;
-    $ua2->agent($useragent . $ua->agent);
+    $ua2->agent($useragentOld);
 	$ua2->max_size(32768);
 	$ua2->timeout(3);
     my $request = new HTTP::Request GET => "http://42.pl/url/?auto=1&url=$url";
@@ -474,8 +481,9 @@ sub shortenURL {
 		dp("shortenurl: $url, short: $1");
 		return $1;
 	}
-	return "";
+	return '';
 }
+
 # Create FTS4 table (full text search)
 sub createFstDB {
     #my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
@@ -580,7 +588,7 @@ sub checkForPrevEntry {
 }
 
 sub apiConversion {
-	my ($param, @rest) = @_;
+	my ($param, $server, $target, @rest) = @_;
 	dp("apiConversion") if $DEBUG1;
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
@@ -591,12 +599,19 @@ sub apiConversion {
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
 	
-	# imgur conversion
+	# TODO: imgur conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
-		#$title .= "$url, ";
-		# TODO: imgur-api
 		my $image = $1;
 		Irssi::print("imgur-klick! img: $image");
+	}
+	# set newer headers if mixcloud
+	if ($param =~ /mixcloud\.com/) {
+		setHeaders(2);
+	}
+	# taivaanvahti id
+	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
+		Irssi::signal_emit('taivaanvahti_search_id', [$server, 'HAVAINTOID',  $target, $1]);
+		Irssi::print("signal emited!! $1");
 	}
 	return $param;
 
@@ -616,7 +631,7 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
-		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1.../);
+		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1 .../);
 	
 		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
 		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
@@ -633,7 +648,7 @@ sub sig_msg_pub {
 		# clearUrlData();
 		return;
 	}
-	
+	setHeaders(1);			# set default user agent
 	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
@@ -650,10 +665,10 @@ sub sig_msg_pub {
 	my $disablebit = 0;		# disable url printing for reasons x,y,z
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (getChannelTitle($target) =~ /np\:/i) {
-			dp('NP FOUND');
+			dp('np FOUND from channel title');
 			$disablebit = 1;
 		} else {
-			dp ('np NOT found');
+			dp ('np NOT found from channel title');
 		}
 	}
 
@@ -682,15 +697,15 @@ sub sig_msg_pub {
 		dp("kuvaton-klik!");
 	}
 
-	$newUrlData->{fetchurl} = apiConversion($newUrlData->{url});	#
+	$newUrlData->{fetchurl} = apiConversion($newUrlData->{url}, $server, $target);	#
 		
 	($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
-	my $newtitle = "";
+	my $newtitle = '';
 	$newtitle = $newUrlData->{title} if $newUrlData->{title};
 
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 	
-	print "$myname: Shortening url a bit..." if ($newtitle =~ s/(.{220})(.*)/$1.../);
+	print "$myname: Shortening url a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
 	print "$myname: NOT JEE" if ($newtitle eq "0");
 	$title = $newtitle;
 	
@@ -698,7 +713,7 @@ sub sig_msg_pub {
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne "0" && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		Irssi::print "Shortening description a bit..." if length($newUrlData->{desc}) > 220;
-		if ($newUrlData->{desc} =~ /(.{220}).*/) {
+		if ($newUrlData->{desc} =~ /(.{240}).*/) {
 			$description = $1 . "...";
 		} else {
 			$description = $newUrlData->{desc};
@@ -706,7 +721,7 @@ sub sig_msg_pub {
 		$title = $description unless noDescForThese($newUrlData->{url});
 		Irssi::print "Lenght of new title: ". length($title) if $DEBUG1;
 		#dp("sig_msg_pub found description: $description");
-		dp("sig_msg_pub new title.");
+		dp('sig_msg_pub new title.');
 	}
 
 	my $sayline = "Title: $title" if $title;
@@ -715,15 +730,15 @@ sub sig_msg_pub {
 		if ($shortModeEnabled == 0) {
 			dp("Short mode enabled: " .$1);
 			$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
-			$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne "");			
+			$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');			
 		}
 	}
 		
 	if ($title ne '' && $drunk == 1 && $isTitleInUrl == 0 && $howManyDrunk < 2 && $disablebit == 0) {
-		$server->command("msg -channel $target tldr;") if grep(/$target/, @enabled);;
+		$server->command("msg -channel $target tldr;") if grep(/$target/, @enabled);
 		$howManyDrunk++;
 	} elsif ($title ne '' && $isTitleInUrl == 0 && $disablebit == 0) {
-		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);;
+		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
 		$howManyDrunk = 0;
 	}
 	# save links from every channel
@@ -984,7 +999,7 @@ sub clearUrlData {
 # debug print
 sub dp {
 	my ($string, @rest) = @_;
-	if ($DEBUG == 1 || $DEBUG_decode == 1) {
+	if ($DEBUG == 1) {
 		print("\n$myname debug: ".$string);
 	}
 }
@@ -1014,6 +1029,9 @@ Irssi::settings_add_str('urltitle', 'urltitle_wanha_disabled', '0');
 Irssi::settings_add_str('urltitle', 'urltitle_shortmode_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_dont_save_urls_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
+
+my $signal_config_hash = { 'taivaanvahti_search_id' => [ qw/array string string string/ ] };
+Irssi::signal_register($signal_config_hash);
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');

@@ -5,9 +5,6 @@
 # KP-arvo tallennetaan tietokantaan myöhempää käyttöä varten.
 # LAama1 1.10.2016, 7.9.2017 (minor), 14.3.2018 (copy to kiva.vhosti.fi)
 
-#use HTML::Entities;
-#use LWP::UserAgent;
-#use LWP::Simple;
 use Data::Dumper;
 
 use lib '/home/laama/.irssi/scripts';
@@ -16,9 +13,10 @@ use KaaosRadioClass;
 use strict;
 use DBI qw(:sql_types);
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'fetch_auroras.pl';
-my $auroraurl = 'http://www.aurora-service.eu/aurora-forecast/';
+#my $auroraurl = 'http://www.aurora-service.eu/aurora-forecast/';
+my $auroraurl = 'http://www.aurora-service.org/aurora-forecast/';
 
 my $db = '/home/laama/public_html/auroras.db';
 

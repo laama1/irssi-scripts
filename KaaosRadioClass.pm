@@ -163,18 +163,14 @@ sub writeArrayToFile {
 sub floodCheck {
 	my ($timedifference,@rest) = @_ || 3;
 	my $last = 0;
-	my $cur = time();
+	my $cur = time;
 
 	$last = readLastLineFromFilename($tsfile);
-
+	writeToFile($tsfile, $cur);
 	if ($cur - $last < $timedifference) {
-		writeToFile($tsfile, $cur);
 		return 1;									# return 1, means "flooding"
-	} elsif (writeToFile($tsfile, $cur) == 0) {
-		return 0;
 	}
-
-	return -1;										# return "error"
+	return 0;
 }
 
 # Return true if flooding too many (urls) in a row
@@ -182,17 +178,17 @@ sub Drunk {
 	my ($nick, @rest) = @_;
 	if ($nick eq $floodernick) {
 		$floodertimes++;
-		if ($floodertimes > 5 && (time() - $flooderdate <= 600)) {
+		if ($floodertimes > 5 && (time - $flooderdate <= 600)) {
 			return 1;
 		} elsif ($floodertimes > 5 && (time - $flooderdate > 600)) {	#10min
-			$flooderdate = time();
+			$flooderdate = time;
 			$floodertimes = 0;
 		} else {
 		}
 	} else {
 		$floodernick = $nick;
 		$floodertimes = 0;
-		$flooderdate = time();
+		$flooderdate = time;
 	}
 	return 0;
 }
@@ -298,7 +294,7 @@ sub connectSqlite {
 sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
-	if ($rv < 0){
+	if ($rv < 0) {
 		dp("KaaosRadioClass.pm, DBI Error: ".DBI::errstr);
    		return DBI::errstr;
 	}
@@ -390,7 +386,7 @@ sub dp {
 
 sub da {
 	return unless $DEBUG == 1;
-	print("$myname-debug array:");
+	print('debug array:');
 	print Dumper (@_);
 }
 
