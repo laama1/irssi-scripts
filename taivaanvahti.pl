@@ -95,7 +95,7 @@ sub sig_msg_pub {
 	if($msg =~ /^!taivaanvahti/gi)
 	{
 		getXML();
-		processXML();
+		parseXML();
 	}
 
 }
@@ -237,57 +237,75 @@ sub owntrim {
 	return $text;
 }
 
+sub parseMini {
+	my ($type, $day, $month, $year, $hour, $minute, $city, @rest) = @_;
+	dp("CITY: $city, TYPE: $type");
+	my $isotime = $year."/".$month."/".$day. " ".$hour.":".$minute;
+	my $unixtime = str2time($isotime);
+	dp("isotime: $isotime, unixtime: $unixtime\n");
+	my $returnitem;
+	$returnitem->{'unixtime'} = $unixtime;
+	$returnitem->{'city'} = $city;
+	$returnitem->{'type'} = $type;
+	return $returnitem;
+}
+
 sub parseExtraInfoFromLink {
 	my $url = shift;
-	dp('parseExtraInfoFromLink url: '. $url);
+	#dp('parseExtraInfoFromLink url: '. $url);
 	my $text = KaaosRadioClass::fetchUrl($url);
 	
 	my $date = '';
 	if ($text =~ /<div class="main-heading">(.*?)<\/div>/gis) {
 		my $heading = $1;
-		dp('heading: '. $heading);
+		#dp('heading: '. $heading);
 		#$heading = KaaosRadioClass::replaceWeird($heading);
 		#my $innerdata = KaaosRadioClass::replaceWeird($heading);
 		if ($heading =~ /<h1>(.*?)<\/h1>/is) {
 			my $innerdata = owntrim($1);
-			dp('innerdata: '. $innerdata);
+			#dp('innerdata: '. $innerdata);
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
+				my $type = $1;
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
 				my $phour = $5;
 				my $pminute = $6;
 				my $city = $12;
-				dp("CITY: $city");
-				dp("datedata: ".$2);
-				dp("monthdata: ". $3);
-				my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
-				dp("isotime: ".$isotime);
-				my $unixtime = str2time($isotime);
-				dp("unixtime: $unixtime");
-				my $returnitem;
-				$returnitem->{'unixtime'} = $unixtime;
-				$returnitem->{'city'} = $city;
-				return $returnitem;
+				return parseMini($1, $2, $3, $3, $4, $6, $12);
+				#dp("CITY: $city, TYPE: $type");
+				#dp("datedata: ".$2);
+				#dp("monthdata: ". $3);
+				#my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
+				#my $unixtime = str2time($isotime);
+				#dp("isotime: $isotime, unixtime: $unixtime\n");
+				#my $returnitem;
+				#$returnitem->{'unixtime'} = $unixtime;
+				#$returnitem->{'city'} = $city;
+				#$returnitem->{'type'} = $type;
+				#return $returnitem;
 			}
-			elsif ($innerdata =~ /(\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
-				my $pday = $1;
-				my $pmonth = $2;
-				my $pyear = $3;
-				my $phour = $4;
-				my $pminute = $5;
-				my $city = $6;
-				dp("CITY: $city");
-				dp("datedata: ".$1);
-				dp("monthdata: ". $2);
-				my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
-				dp("isotime: ".$isotime);
-				my $unixtime = str2time($isotime);
-				dp("unixtime: $unixtime");
-				my $returnitem;
-				$returnitem->{'unixtime'} = $unixtime;
-				$returnitem->{'city'} = $city;
-				return $returnitem;
+			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
+				my $type = $1;
+				my $pday = $2;
+				my $pmonth = $3;
+				my $pyear = $4;
+				my $phour = $5;
+				my $pminute = $6;
+				my $city = $7;
+				return parseMini($1, $2, $3, $4, $5, $6, $7);
+				#dp("CITY: $city, TYPE: $type");
+				#dp("datedata: ".$1);
+				#dp("monthdata: ". $2);
+				#my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
+				#dp("isotime: ".$isotime);
+				#my $unixtime = str2time($isotime);
+				#dp("isotime: $isotime, unixtime: $unixtime \n");
+				#my $returnitem;
+				#$returnitem->{'unixtime'} = $unixtime;
+				#$returnitem->{'city'} = $city;
+				#$returnitem->{'type'} = $type;
+				#return $returnitem;
 			}
 		}
 	} else {
@@ -302,16 +320,18 @@ sub parseXML {
 	foreach my $item (@{$parser->{items}}) {
 		dp("item $index:");
 		#da($item);
-		my $havaintoid = parseIDfromLink($item->{'link'});
+		
 		#dp("item title: ". $item->{'title'});
 		#dp("item link: ". $item->{'link'});
 		#dp("item pubDate: ". $item->{'pubDate'});
 		#dp("item description: ". $item->{'description'});
 		#dp("item guid: ". $item->{guid});
-		my $extrainfo = parseExtraInfoFromLink($item->{'link'});
-		da($extrainfo);
+
+		#da($extrainfo);
 		$index++;
 		if (if_link_in_db($item->{'link'}) == 0) {
+			my $havaintoid = parseIDfromLink($item->{'link'});
+			my $extrainfo = parseExtraInfoFromLink($item->{'link'});
 			Irssi::print("$myname New item: $item->{title}");
 			my $extrainfotime = defined($extrainfo->{'unixtime'}) ? $extrainfo->{'unixtime'} : 0;
 			my $extrainfocity = defined($extrainfo->{'city'}) ? $extrainfo->{'city'} : '';
@@ -332,7 +352,7 @@ sub getXML {
 # get all from RSS-feed
 sub timerfunc {
 	getXML();
-	processXML();
+	parseXML();
 }
 
 Irssi::command_bind('taivaanvahti_update', \&timerfunc);
