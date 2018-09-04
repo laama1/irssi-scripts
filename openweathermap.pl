@@ -3,6 +3,8 @@ use strict;
 use Irssi;
 use utf8;
 use JSON;
+use DateTime;
+use POSIX;
 #use open ':std', ':encoding(UTF-8)';
 binmode(STDIN,  ':utf8');
 binmode(STDOUT, ':utf8');
@@ -14,17 +16,12 @@ binmode(STDERR, ':utf8');
 #use open ':std', ':encoding(utf8)';
 
 use Data::Dumper;
+#use Encode;
 
-#use Digest::MD5 qw(md5_hex);		# LAama1 28.4.2017
-#use Encode qw(encode_utf8);
-use Encode;
-
-#use lib '/home/laama/Mount/kiva/.irssi/scripts';
-#use lib '/usr/lib64/perl5/vendor_perl/';
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20180808";
+$VERSION = "20180901";
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -37,6 +34,8 @@ $VERSION = "20180808";
 
 my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
+my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
+my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
@@ -78,7 +77,7 @@ sub CREATEDB {
 	$dbh = KaaosRadioClass::connectSqlite($db);
     #my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 
-	my $stmt = qq/CREATE TABLE IF NOT EXISTS CITIES (ID int primary key, NAME TEXT, COUNTRY text, PVM INT, LAT TEXT, LON TEXT)/;
+	my $stmt = qq/CREATE TABLE IF NOT EXISTS CITIES (ID int, NAME TEXT, COUNTRY text, PVM INT, LAT TEXT, LON TEXT, PRIMARY KEY(ID, NAME))/;
 	
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 	if($rv != 0) {
@@ -88,7 +87,7 @@ sub CREATEDB {
    		Irssi::print("$myname: Table CITIES created successfully");
 	}
 
-	my $stmt2 = qq/CREATE TABLE IF NOT EXISTS DATA (CITY TEXT, PVM INT, COUNTRY TEXT, CITYID int, SUNRISE int, SUNSET int, DESCRIPTION text, WINDSPEED text, WINDDIR text,
+	my $stmt2 = qq/CREATE TABLE IF NOT EXISTS DATA (CITY TEXT primary key, PVM INT, COUNTRY TEXT, CITYID int, SUNRISE int, SUNSET int, DESCRIPTION text, WINDSPEED text, WINDDIR text,
 	TEMPMAX text, TEMP text, HUMIDITY text, PRESSURE text, TEMPMIN text, LAT text, LON text)/;
 	my $rv2 = KaaosRadioClass::writeToOpenDB($dbh, $stmt2);
 	if($rv2 < 0) {
@@ -126,6 +125,82 @@ sub findWeather {
 	return $json;
 }
 
+sub findWeatherForecast {
+	my ($searchword, @rest) = @_;
+	my $returnstring = 'klo ';
+
+	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword."&units=metric&appid=".$apikey, 0);
+	
+	#da("DATA: ",$data);
+	if ($data < 0) {
+		dp('data = '.$data);
+		return 0;
+	}
+	my $dt = DateTime->new(
+		year => 2018,
+		month => 9,
+		day => 1,
+		hour => 12,
+		minute => 0,
+		second => 0,
+		time_zone => 'Europe/London',
+	);
+	my $tz = $dt->time_zone();
+	Irssi::print('timezone: '.$tz);
+	Irssi::print('DT: ' .$dt);
+	Irssi::print('YMD: '. $dt->ymd);
+	my $json = decode_json($data);
+	#da('JSON-list:',$json->{list});
+	my $index = 0;
+
+	foreach my $item (@{$json->{list}}) {
+		if ($index > 8) {
+			last;
+		}
+		Irssi::print('');
+		Irssi::print('Timestamp: ' .$item->{dt});
+		Irssi::print('Localtime: '.localtime($item->{dt}));
+		Irssi::print('Temp: '.$item->{main}->{temp});
+		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
+		$returnstring .= $hour.': '.$item->{main}->{temp} . '°C, ';
+		$index++;
+	}
+	
+	Irssi::print("findWeatherForecast returnsring: $returnstring");
+	return $returnstring;
+}
+
+sub FINDAREAWEATHER {
+	my ($city, @rest) = @_;
+	my ($lat, $lon) = GETCITYCOORDS($city);
+
+	my $newSearchUrl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
+	my $data = KaaosRadioClass::fetchUrl($newSearchUrl, 0);
+	da('URL', $newSearchUrl,'DATA',$data);
+	if ($data < 0) {
+		dp('data = '.$data);
+		return 0;
+	}
+	my $json = decode_json($data);
+	my $sayline;
+	foreach my $city (@{$json->{list}}) {
+		$sayline .= getSayLine2($city) . '. ';
+	}
+	da('JSON:',$json);
+	da('SAYLINE', $sayline);
+	return $sayline;
+}
+
+sub GETCITYCOORDS {
+	my ($city, @rest) = @_;
+	my $sql = "SELECT LAT,LON from CITIES where NAME Like '$city'";
+	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
+	da('SQL', $sql);
+	dp('Result');
+	da(@results);
+	return $results[0], $results[1];
+}
+
 # save new city to database
 sub SAVECITY {
 	my ($json, @rest) = @_;
@@ -144,7 +219,6 @@ sub SAVEDATA {
 	my $sunrise = $json->{sys}->{sunrise} || 0;
 	my $sunset = $json->{sys}->{sunset} || 0;
 	my $weatherdesc = $json->{weather}[0]->{description} || '';
-	#my $weatherdesc = '';
 	my $windspeed = $json->{wind}->{speed} || 0;
 	my $winddir = $json->{wind}->{deg} || 0;
 	my $tempmax = $json->{main}->{temp_max} || 0;
@@ -183,6 +257,17 @@ sub da {
 }
 
 # format the message
+sub getSayLine2 {
+	my ($json, @rest) = @_;
+	if ($json == 0) {
+		dp('json = 0');
+		return 0;
+	}
+	my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.$json->{weather}[0]->{description};
+	return $returnvalue;
+}
+
+# format the message
 sub getSayLine {
 	my ($json, @rest) = @_;
 	if ($json == 0) {
@@ -208,6 +293,20 @@ sub sig_msg_pub {
 		my $city = $2;
 		my $sayline = getSayLine(findWeather($city));
 		dp("sig_msg_pub: found some results from '$city' on channel '$target'. '$sayline'") if $sayline;
+		$server->command("msg -channel $target $sayline") if $sayline;
+		return;
+	} elsif ($msg =~ /\!(se )(.*)$/i) {
+		dd("moksan $1");
+		return if KaaosRadioClass::floodCheck() > 0;
+		my $city = $2;
+		my $sayline = findWeatherForecast($city);
+		$server->command("msg -channel $target $sayline") if $sayline;
+		return;
+	} elsif ($msg =~ /\!(sa )(.*)$/i) {
+		dd('area waeather');
+		return if KaaosRadioClass::floodCheck() > 0;
+		my $city = $2;
+		my $sayline = FINDAREAWEATHER($city);
 		$server->command("msg -channel $target $sayline") if $sayline;
 		return;
 	}

@@ -51,20 +51,20 @@ use KaaosRadioClass;				# LAama1 13.11.2016
 use vars qw($VERSION %IRSSI);
 $VERSION = '2018-08-10';
 %IRSSI = (
-	authors     => "Will Storey, LAama1",
-	contact     => "LAama1",
-	name        => "urltitle",
-	description => "Fetches urls and prints their title and does other shit also.",
-	license     => "Fublic Domain",
-	url         => "http://kaaosradio.fi",
+	authors     => 'Will Storey, LAama1',
+	contact     => 'LAama1',
+	name        => 'urltitle',
+	description => 'Fetches urls and prints their title and does other shit also.',
+	license     => 'Fublic Domain',
+	url         => 'http://kaaosradio.fi',
 	changed     => $VERSION
 );
 
-my $tsfile = Irssi::get_irssi_dir()."/scripts/ts";
-my $logfile = Irssi::get_irssi_dir()."/scripts/urllog_v2.txt";
+my $tsfile = Irssi::get_irssi_dir().'/scripts/ts';
+my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
-my $db = Irssi::get_irssi_dir(). "/scripts/links_fts.db";
-my $debugfile = Irssi::get_irssi_dir()."/scripts/urlurldebug.txt";
+my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
+my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 
 my $howManyDrunk = 0;
 
@@ -209,7 +209,7 @@ sub fetch_title {
 		#return 0, 0,0, $md5hex;
 
 		# return failure?
-		return $response->status_line, 0,0, $md5hex;
+		return 'Error: '.$response->status_line, 0,0, $md5hex;
 	}
 
 	if ($response->content_type !~ /(text)|(xml)/) {
@@ -217,13 +217,13 @@ sub fetch_title {
 			dd('Short mode enabled = 1');
 			return '', 0 , 0, $md5hex;
 		} else {
-			return $response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
+			return 'File: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
 		}
 	}
 
 	my ($titteli, $description, $titleInUrl) = getTitle($response, $url);
 
-	return $titteli, $description, $titleInUrl, $md5hex;
+	return 'Title: '.$titteli, $description, $titleInUrl, $md5hex;
 }
 
 # getTitle params. useragent response
@@ -246,8 +246,8 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
-	dd('geTitle Header x-meta-description: '.$response->header('x-meta-description'));
-	dd('geTitle Header description: '. $response->header('Description'));
+	dd('geTitle Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
+	dd('geTitle Header description found: '. $response->header('Description')) if $response->header('Description');
 	#dp('HEADER: ');
 	dd("geTitle newtitle: $newtitle, newdescription: $newdescription");
 
@@ -375,7 +375,7 @@ sub checkIfTitleInUrl {
 		dp("checkIfTitleInUrl bling2! samewords = title words = $samewords");
 		return 1;
 	}
-	dp("checkIfTitleInUrl great news for the title!");
+	dd('checkIfTitleInUrl: title not found from url!');
 	return 0;
 
 }
@@ -400,7 +400,7 @@ sub countSameWords {
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-	dd("countSameWords titlewordCount: $titlewordCount") if $DEBUG1;
+	dd("countSameWords titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
 		#dd("countSameWords: $item, count: $count1") if $DEBUG1;
 		if ($item ~~ @rows1) {
@@ -414,7 +414,7 @@ sub countSameWords {
 			
 		}
 	}
-	dd("   same words: $count1") if $DEBUG1;
+	dd(">   same words: $count1");
 	return $count1, $titlewordCount;
 }
 
@@ -624,7 +624,6 @@ sub sig_msg_pub {
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
-	#return unless grep(/$target/, @enabled);
 	
 	# TODO if searching for old link..
 	if ($msg =~ /\!url (.*)$/i) {
@@ -634,7 +633,7 @@ sub sig_msg_pub {
 		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1 .../);
 	
 		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
-		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
+		$server->command("msg -channel $target $sayline") if grep /$target/, @enabled;
 		clearUrlData();
 		return;
 	}
@@ -645,7 +644,6 @@ sub sig_msg_pub {
 	} elsif ($msg =~ /(www\.\S+)/i) {
 		$newUrlData->{url} = "http://" . $1;
 	} else { 
-		# clearUrlData();
 		return;
 	}
 	setHeaders(1);			# set default user agent
@@ -656,7 +654,7 @@ sub sig_msg_pub {
 		return;
 	}
 	
-	$newUrlData->{fetchurl} = $newUrlData->{url};
+	$newUrlData->{fetchurl} = $newUrlData->{url};	# this variable will be the url that will be executed
 	$newUrlData->{nick} = $nick;
 	$newUrlData->{chan} = $target;
 	
@@ -668,7 +666,7 @@ sub sig_msg_pub {
 			dp('np FOUND from channel title');
 			$disablebit = 1;
 		} else {
-			dp ('np NOT found from channel title');
+			dp ('np NOT FOUND from channel title');
 		}
 	}
 
@@ -689,12 +687,6 @@ sub sig_msg_pub {
 		$shortModeEnabled = 1;
 	} else {
 		$shortModeEnabled = 0;
-	}
-
-	# kuvaton conversion
-	if ($newUrlData->{fetchurl} =~ s/:\/\/kuvaton\.com\/browse\/[\d]{1,6}/:\/\/kuvaton.com\/kuvei/) {
-		#$urlData[3] .= "$urlData[7] ";
-		dp("kuvaton-klik!");
 	}
 
 	$newUrlData->{fetchurl} = apiConversion($newUrlData->{url}, $server, $target);	#
@@ -718,27 +710,22 @@ sub sig_msg_pub {
 		} else {
 			$description = $newUrlData->{desc};
 		}
-		$title = $description unless noDescForThese($newUrlData->{url});
+		$title = 'Desc: '.$description unless noDescForThese($newUrlData->{url});
 		Irssi::print "Lenght of new title: ". length($title) if $DEBUG1;
 		#dp("sig_msg_pub found description: $description");
 		dp('sig_msg_pub new title.');
 	}
 
-	my $sayline = "Title: $title" if $title;
-	if (length($newUrlData->{url}) >= 70) {
-		# my @short_raw = split(/ /, Irssi::settings_get_str('urltitle_shortmode_channels'));
-		if ($shortModeEnabled == 0) {
-			dp("Short mode enabled: " .$1);
-			$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
-			$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');			
-		}
+	if ($shortModeEnabled == 0 && length($newUrlData->{url}) >= 70) {
+		$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
+		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
-		
-	if ($title ne '' && $drunk == 1 && $isTitleInUrl == 0 && $howManyDrunk < 2 && $disablebit == 0) {
-		$server->command("msg -channel $target tldr;") if grep(/$target/, @enabled);
+
+	if ($title ne '' && $drunk && $isTitleInUrl == 0 && $howManyDrunk < 1 && $disablebit == 0) {
+		$server->command("msg -channel $target tl;dr") if grep(/$target/, @enabled);
 		$howManyDrunk++;
-	} elsif ($title ne '' && $isTitleInUrl == 0 && $disablebit == 0) {
-		$server->command("msg -channel $target $sayline") if grep(/$target/, @enabled);
+	} elsif ($title ne '' && $drunk == 0 && $isTitleInUrl == 0 && $disablebit == 0) {
+		$server->command("msg -channel $target $title") if grep(/$target/, @enabled);
 		$howManyDrunk = 0;
 	}
 	# save links from every channel
@@ -762,7 +749,7 @@ sub checkIfOld {
 	#dp("checkIfOld count: $count");
 
 	if ($count != 0 && $wanhadisabled != 1 && $howManyDrunk == 0) {
-		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($prevUrls[0][1]);
+		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
 		$mon += 1;
 		$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
@@ -776,7 +763,7 @@ sub findUrl {
 	Irssi::print("$myname: etsi request: $searchword");
 	dp("findUrl") if $DEBUG1;
 	my $returnstring;
-	my $temp = "";
+	my $temp = '';
 	if ($searchword =~ s/^id:? ?//i) {
 		my @results;
 		if ($searchword =~ /(\d+)/) {
