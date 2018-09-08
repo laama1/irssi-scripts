@@ -10,13 +10,13 @@ require KaaosRadioClass;
 
 $VERSION = '0.46';
 %IRSSI = (
-'authors' => 'LAama1',
-'contact' => 'LAama1@ircnet',
-'name' => 'LAama1',
-'description' => 'Kaaosradion Revontuli- ja kuun vaiheet -skripti.',
-'license' => 'BSD',
-'url' => 'http://www.kaaosradio.fi',
-'changed' => '2018-09-04',
+	authors => 'LAama1',
+	contact => 'LAama1@ircnet',
+	name => 'LAama1',
+	description => 'Kaaosradion Revontuli- ja kuun vaiheet -skripti.',
+	license => 'BSD',
+	url => 'http://www.kaaosradio.fi',
+	changed => '2018-09-04',
 );
 
 my $DEBUG = 1;
@@ -25,7 +25,7 @@ my $db = $ENV{HOME}.'/public_html/auroras.db';
 my @channels = ('#salamolo2', '#botti');
 
 sub getHelp {
-	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.	!kuu, tulostaa kuun vaiheen, esim. 'täysikuu'.';
+	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.	!kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
 }
 
 sub pubmsg {
