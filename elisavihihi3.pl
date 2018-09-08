@@ -67,7 +67,7 @@ sub print_help {
 sub getChannels {
 	#http://api.elisaviihde.fi/etvrecorder/ajaxprograminfo.sl?channels
 	my $ownjson = fetch_elisaviihde_url('ajaxprograminfo', 'channels');
-	if ($ownjson eq "1") {
+	if ($ownjson eq "-1") {
 		Irssi::print("$myname: error fetching channels!");
 		return -1;
 	}
