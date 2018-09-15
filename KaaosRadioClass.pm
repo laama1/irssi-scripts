@@ -24,6 +24,8 @@ use Data::Dumper;
 # date created: 17.9.2016
 # date changed: 17.9.2016, 21.9.2016, 29.7.2017, 9.10.2017, 21.10.2017
 # date changed: 6.11.2017, 17.12.2017, 18.12.2017, 3.2.2018, 20.7.2018
+# date changed: 9.9.2018, added ktrim function
+
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 $VERSION = 1.01;
@@ -199,6 +201,18 @@ sub getNytsoi24h {
 	$rimpsu = `/home/kaaosradio/stream/meta_stream2.sh nytsoi`;
 	chomp $rimpsu;
 	return $rimpsu;
+}
+
+# trim excess white space
+sub ktrim {
+	my $text = shift;
+	# Special chars
+	$text =~ s/^[\s\t]+//g;		# Remove trailing/beginning whitespace
+	$text =~ s/[\s\t]+$//g;
+	$text =~ s/[\s]+/ /g;		# convert multiple spaces to one
+	$text =~ s/[\t]+//g;		# remove tabs within..
+	$text =~ s/[\n\r]+//g;		# remove line feeds
+	return $text;
 }
 
 # replace weird html characters

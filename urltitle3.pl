@@ -68,9 +68,9 @@ my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 
 my $howManyDrunk = 0;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -108,19 +108,22 @@ my $cookie_jar = HTTP::Cookies->new(
 my $max_size = 262144;		# bytes
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0';
-my @headers = (
+
+my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
 	'max_size' => $max_size,
-	#'ssl_opts' =>
+	#'ssl_opts' => ['verify_hostname' => 0],			# disable cert checking
 	'protocols_allowed' => ['http', 'https', 'ftp'],
 	'protocols_forbidden' => [ 'file', 'mailto'],
 	'timeout' => 3,									# default 180 seconds
 	'cookie_jar' => $cookie_jar,
-	'requests_redirectable' => ['GET', 'HEAD'],		# defaults GET HEAD
+	#'default_headers' => 
+	#'requests_redirectable' => ['GET', 'HEAD'],		# defaults GET HEAD
+	#'parse_head' => 1,
 );
 
-my $ua = LWP::UserAgent->new(@headers);
+my $ua = LWP::UserAgent->new(%headers);
 
 
 # Try to disable cert checking (lwp versions > 5.837)
@@ -135,10 +138,11 @@ eval {
 sub setHeaders {
 	my ($choice, @rest) = @_;
 	if ($choice == 1) {
-		$headers['agent'] = $useragentOld;
+		$ua->agent($useragentOld);
 	} elsif ($choice == 2) {
-		$headers['agent'] = $useragentNew;
+		$ua->agent($useragentNew);
 	}
+	dp('Agent: '. $ua->agent);
 }
 
 # Strip and html-decode title or get size from url. Params: url
@@ -204,11 +208,6 @@ sub fetch_title {
 
 	} else {
 		Irssi::print("$myname: Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
-
-		# return nothing.
-		#return 0, 0,0, $md5hex;
-
-		# return failure?
 		return 'Error: '.$response->status_line, 0,0, $md5hex;
 	}
 
@@ -236,7 +235,7 @@ sub getTitle {
 	# get Charset
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
-	da('header OG: ',$response->header('property'));
+	#da('header OG: ',$response->header('property'));
 	my $ogtitle = "";#$response->header('og:title') || '';		# open graph
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
@@ -534,7 +533,7 @@ sub createDB {
 # Save to sqlite DB
 sub saveToDB {
 	my ($nick, $url, $title, $description, $channel, $md5hex, @rest) = @_;
-	dp("saveToDB") if $DEBUG1;
+	dp('saveToDB') if $DEBUG1;
 	my $pvm = time();
 	my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_dont_save_urls_channels'));
     return -1 if $channel ~~ @dontsave;
@@ -604,14 +603,18 @@ sub apiConversion {
 		my $image = $1;
 		Irssi::print("imgur-klick! img: $image");
 	}
+
 	# set newer headers if mixcloud
 	if ($param =~ /mixcloud\.com/) {
 		setHeaders(2);
 	}
+
 	# taivaanvahti id
 	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
-		Irssi::signal_emit('taivaanvahti_search_id', [$server, 'HAVAINTOID',  $target, $1]);
-		Irssi::print("signal emited!! $1");
+		#Irssi::signal_emit('taivaanvahti_search_id', [$server, 'HAVAINTOID',  $target, $1]);
+		#Irssi::signal_emit('taivaanvahti_search_id', $target, 'HAVAINTOID', $1, 'test');
+		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
+		dp("signal emited!! $1");
 	}
 	return $param;
 
@@ -623,7 +626,7 @@ sub sig_msg_pub {
 	return if ($nick eq 'kaaosradio');
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
-	my @enabled = split(/ /, $enabled_raw);
+	my @enabled = split / /, $enabled_raw;
 	
 	# TODO if searching for old link..
 	if ($msg =~ /\!url (.*)$/i) {
@@ -642,8 +645,8 @@ sub sig_msg_pub {
 	if ($msg =~ /h?(ttps?:\/\/\S+)/i) {
 		$newUrlData->{url} = "h${1}";
 	} elsif ($msg =~ /(www\.\S+)/i) {
-		$newUrlData->{url} = "http://" . $1;
-	} else { 
+		$newUrlData->{url} = "http://$1";
+	} else {
 		return;
 	}
 	setHeaders(1);			# set default user agent
@@ -721,13 +724,16 @@ sub sig_msg_pub {
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
-	if ($title ne '' && $drunk && $isTitleInUrl == 0 && $howManyDrunk < 1 && $disablebit == 0) {
-		$server->command("msg -channel $target tl;dr") if grep(/$target/, @enabled);
-		$howManyDrunk++;
-	} elsif ($title ne '' && $drunk == 0 && $isTitleInUrl == 0 && $disablebit == 0) {
-		$server->command("msg -channel $target $title") if grep(/$target/, @enabled);
-		$howManyDrunk = 0;
+	if ($disablebit == 0 && $isTitleInUrl == 0 && $title ne '') {
+		if ($drunk && $howManyDrunk < 1) {
+			$server->command("msg -channel $target tl;dr") if grep /$target/, @enabled;
+			$howManyDrunk++;
+		} elsif ($drunk == 0) {
+			$server->command("msg -channel $target $title") if grep /$target/, @enabled;
+			$howManyDrunk = 0;
+		}
 	}
+
 	# save links from every channel
 	saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
 	clearUrlData();
@@ -1017,7 +1023,8 @@ Irssi::settings_add_str('urltitle', 'urltitle_shortmode_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_dont_save_urls_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
 
-my $signal_config_hash = { 'taivaanvahti_search_id' => [ qw/array string string string/ ] };
+# to change signal params, restart irssi
+my $signal_config_hash = { 'taivaanvahti_search_id' => [ qw/iobject string string string/ ] };
 Irssi::signal_register($signal_config_hash);
 
 Irssi::signal_add('message public', 'sig_msg_pub');

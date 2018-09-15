@@ -9,12 +9,15 @@ use LWP::Simple;
 use Data::Dumper;
 use DBI;
 use HTTP::Date;
+use DateTime;
+use DateTime::Format::Strptime;
+use Time::Piece;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2018-89-04';
+$VERSION = '2018-09-09';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -22,7 +25,7 @@ $VERSION = '2018-89-04';
 	description => 'Fetch new data from Taivaanvahti.fi',
 	license     => 'Public Domain',
 	url         => 'http://www.kaaosradio.fi',
-	changed     => $VERSION
+	changed     => $VERSION,
 );
 
 my $DEBUG = 1;
@@ -34,6 +37,7 @@ my $taivaanvahtiURL = 'https://www.taivaanvahti.fi/observations/rss';
 my $count = 0;
 my $resultarray = {};
 my $parser = new XML::RSS();
+#my $parser = XML::RSS()->new;
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
@@ -41,39 +45,53 @@ unless (-e $db) {
 		die;
 	}
 	close FILE;
-	createDB();
+	create_db();
 	Irssi::print("$myname: Database file created.");
 } else {
 	Irssi::print("$myname: Database file found!");
 }
 
-sub dp {
+sub DP {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname: @_");
+	return;
 }
 
-sub da {
+sub DA {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname-debug array:");
 	Irssi::print Dumper (@_);
+	return;
 }
 
 sub print_help {
 	my ($server, $targe, @rest) = @_;
 	my $help = 'Taivaanvahti -skripti hakee ajoittain uusimmat havainnot sivulta taivaanvahti.fi. Vastaa myös kutsuttaessa komennolla !taivaanvahti.';
+	return;
 }
 
 # search for ID, when signal received from urltitle3.pl
 sub sig_taivaanvahti_search {
-	dp('sig_taivaavahti_search');
 	my ($server, $column, $target, $value) = @_;
+	DP('sig_taivaavahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
+	#DA($server);
 	open_database_handle();
-	my $sth = $dbh->prepare('SELECT DISTINCT * from taivaanvahti4 where HAVAINTOID = ?');
+	my $sth = $dbh->prepare('SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti4 where HAVAINTOID = ? AND DELETED = 0');
+
 	$sth->bind_param(1, $value);
 	$sth->execute();
 	if (my @line = $sth->fetchrow_array) {
 		# sayit($server, $target, '');
-		da(@line);
+		DP('Found result');
+		DA(@line);
+		my $title = $line[0];
+		my $desc = $line[1];
+		my $location = $line[3];
+		#my $date = localtime($line[3]);
+		DP('Time: '. $line[2]);
+		my $timepiece = localtime($line[2])->strftime('%e.%m. %H:%M');
+		my $sayline = "$title: ($timepiece, $location) $desc";
+		sayit($server, $target, $sayline);
 	}
 	$sth->finish();
 	close_database_handle();
@@ -82,27 +100,30 @@ sub sig_taivaanvahti_search {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
+	return if ($nick eq $server->{nick});   # self-test
+	return if ($nick eq 'kaaosradio');		# bad nicks
 
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/$target/, @enabled);
+    my @enabled = split / /, $enabled_raw;
+    return unless grep /$target/, @enabled;
 
 	if ($msg =~ /^[\.\!]help\b/i) {
 		print_help($server, $target);
 		return;
 	}
 
-	if($msg =~ /^!taivaanvahti/gi)
-	{
-		getXML();
-		parseXML();
+	if($msg =~ /^!taivaanvahti/gi) {
+		get_xml();
+		parse_xml();
 	}
+	return;
 
 }
 
 sub sayit {
 	my ($server, $target, $sayline, @rest) = @_;
 	$server->command("msg -channel $target $sayline");
+	return;
 }
 
 sub msg_to_channel {
@@ -110,9 +131,9 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 
-	if (defined($desc) && length($desc) > 150) {
-		$desc = substr $desc, 0, 150;
-		$desc .= '...';
+	if (defined($desc) && length($desc) > 170) {
+		$desc = substr $desc, 0, 170;
+		$desc .= ' ...';
 	} else {
 		#$desc = "";
 	}
@@ -124,20 +145,23 @@ sub msg_to_channel {
 		next unless $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} ~~ @enabled) {
-			dp("Found! $window->{active}->{name}");
+			DP("Found! $window->{active}->{name}");
 
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
-			dp('');
+			#DP('');
 		}
 	}
+	return;
 }
 
 sub open_database_handle {
 	$dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	return;
 }
 
 sub close_database_handle {
 	$dbh->disconnect();
+	return;
 }
 
 # if link allready in DB
@@ -147,7 +171,7 @@ sub if_link_in_db {
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
-		#da(@line);
+		#DA(@line);
 		$sth->finish();
 		return 1;			# item allready found
 	}
@@ -156,11 +180,11 @@ sub if_link_in_db {
 }
 
 # Save new item to sqlite DB
-sub saveToDB {
+sub save_to_db {
 	my ($title, $link, $date, $desc, $havaintoid, $city, $havaintodate, @rest) = @_;
-	my $pvm = time();
+	my $pvm = time;
 
-	my $sth = $dbh->prepare('INSERT or ignore INTO taivaanvahti4 VALUES(?,?,?,?,?,?,?,?,0)') or die DBI::errstr;
+	my $sth = $dbh->prepare('INSERT or ignore INTO taivaanvahti5 VALUES(?,?,?,?,?,?,?,?,0)') or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
@@ -173,13 +197,14 @@ sub saveToDB {
 	$sth->finish();
 
 	Irssi::print("$myname: New data saved to database: $title");
+	return;
 }
 
-sub createDB {
+sub create_db {
 	open_database_handle();
 
 	# Using FTS (full-text search)
-	my $stmt = 'CREATE VIRTUAL TABLE taivaanvahti4 using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, CITY, HAVAINTOID int primary key, HAVAINTODATE, DELETED int default 0)';
+	my $stmt = 'CREATE VIRTUAL TABLE taivaanvahti5 using fts4(PVM int,TITLE,LINK, PUBDATE int, DESCRIPTION, CITY, HAVAINTOID int primary key, HAVAINTODATE int, DELETED int default 0)';
 
 	my $rv = $dbh->do($stmt);		# return value
 	if($rv < 0) {
@@ -188,13 +213,14 @@ sub createDB {
    		Irssi::print "$myname: Table created successfully";
 	}
 	close_database_handle();
+	return;
 }
 
-sub searchDB {
+sub search_db {
 	my $searchword = shift;
 	open_database_handle();
-	dp($searchword);
-	my $stmt = "SELECT rowid,title,description FROM taivaanvahti4 where TITLE like ? or DESCRIPTION like ? or CITY like ?";
+	DP($searchword);
+	my $stmt = "SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ?";
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -206,19 +232,17 @@ sub searchDB {
 	$resultarray = {};
 	
 	while(@line = $sth->fetchrow_array) {
-		#push @{ $resultarray[$index]}, @line;
-		#$resultarray->{$index} = "kakka";#@line;
 		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[3]};
 		$index++;
-		da(@line);
+		DA(@line);
 	}
 	close_database_handle();
-	da($resultarray);
-	dp("index: $index");
-	
+	DA($resultarray);
+	DP("index: $index");
+	return;
 }
 
-sub parseIDfromLink {
+sub parse_id_from_link {
 	my $link = shift;
 	if ($link =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
 		return $1;
@@ -226,44 +250,72 @@ sub parseIDfromLink {
 	return 0;
 }
 
-sub owntrim {
-	my $text = shift;
-	# Special chars
-	$text =~ s/^[\s\t]+//g;		# Remove trailing/beginning whitespace
-	$text =~ s/[\s\t]+$//g;
-	$text =~ s/[\s]+/ /g;		# convert multiple spaces to one
-	$text =~ s/[\t]+//g;		# remove tabs within..
-	$text =~ s/[\n\r]+//g;		# remove line feeds
-	return $text;
+# example: Tue, 04 Sep 2018 22:37:34 +0300 (use with pubdate if needed)
+sub parseRFC822Time {
+	my ($string, $tzone, @rest) = @_;
+	#%z The time-zone as hour offset from UTC. Required to emit RFC822-conformant dates (using "%a, %d %b %Y %H:%M:%S %z").
+	my $formatter = DateTime::Format::Strptime->new(
+        pattern  => '%a, %d %b %Y %H:%M:%S %z',
+		on_error => 'croak',
+    );
+	DP('STRING: '. $string);
+	my $dt = $formatter->parse_datetime($string);
+	DP('formatter dt: '.$dt);	# ISO 8601
+	#DA($dt);
+	return $dt;
 }
 
-sub parseMini {
-	my ($type, $day, $month, $year, $hour, $minute, $city, @rest) = @_;
-	dp("CITY: $city, TYPE: $type");
-	my $isotime = $year."/".$month."/".$day. " ".$hour.":".$minute;
+sub parse_time {
+	my ($string, @rest) = @_;
+	# Tue, 04 Sep 2018 22:37:34 +0300
+	my $tzone = '+0300';		# Default value for timezone (Finnish summer time)
+	if ($string =~ /\w{3}, (\d{2}) (\w{3}) \d{4} (\d{2}:\d{2}):\d{2} ([+-]\d{4})/i) {
+		return parseRFC822Time($string, $tzone);
+	} else {
+		DP('no luck');
+	}
+	return $string;
+}
+
+# Parse havaintodate
+sub parse_mini {
+	my ($obj_ref, $day, $month, $year, $hour, $minute, $tzone, @rest) = @_;
+	my $isotime = $year. '/' .$month. '/' .$day. ' ' .$hour. ':' .$minute;
 	my $unixtime = str2time($isotime);
-	dp("isotime: $isotime, unixtime: $unixtime\n");
-	my $returnitem;
-	$returnitem->{'unixtime'} = $unixtime;
-	$returnitem->{'city'} = $city;
-	$returnitem->{'type'} = $type;
-	return $returnitem;
+	DP("isotime: $isotime, unixtime: $unixtime\n");
+
+	$obj_ref->{'havaintodate'} = $unixtime;
+
+	my $dt = DateTime->new(
+		year => $year,
+		month => $month,
+		day => $day,
+		hour => $hour,
+		minute => $minute,
+		#time_zone => $tzone,
+	);
+	my $unixtime2 = $dt->epoch();
+	DP("unixtime: $unixtime, epoch: $unixtime2");
+	#return $returnitem;
+	return;
 }
 
-sub parseExtraInfoFromLink {
-	my $url = shift;
-	#dp('parseExtraInfoFromLink url: '. $url);
+sub parse_extrainfo_from_link {
+	my ($url, @rest) = @_;
 	my $text = KaaosRadioClass::fetchUrl($url);
-	
-	my $date = '';
+	my %returnObject = (
+		'unixtime' => 0,
+		'type' => ,
+		'city' => ,
+	);
+
+	my $date;
 	if ($text =~ /<div class="main-heading">(.*?)<\/div>/gis) {
 		my $heading = $1;
-		#dp('heading: '. $heading);
-		#$heading = KaaosRadioClass::replaceWeird($heading);
-		#my $innerdata = KaaosRadioClass::replaceWeird($heading);
 		if ($heading =~ /<h1>(.*?)<\/h1>/is) {
-			my $innerdata = owntrim($1);
-			#dp('innerdata: '. $innerdata);
+			my $innerdata = KaaosRadioClass::ktrim($1);
+			DP('innerdata: '. $innerdata);
+			# Parse havaintodate
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
 				my $type = $1;
 				my $pday = $2;
@@ -272,18 +324,10 @@ sub parseExtraInfoFromLink {
 				my $phour = $5;
 				my $pminute = $6;
 				my $city = $12;
-				return parseMini($1, $2, $3, $3, $4, $6, $12);
-				#dp("CITY: $city, TYPE: $type");
-				#dp("datedata: ".$2);
-				#dp("monthdata: ". $3);
-				#my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
-				#my $unixtime = str2time($isotime);
-				#dp("isotime: $isotime, unixtime: $unixtime\n");
-				#my $returnitem;
-				#$returnitem->{'unixtime'} = $unixtime;
-				#$returnitem->{'city'} = $city;
-				#$returnitem->{'type'} = $type;
-				#return $returnitem;
+
+				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
+				$returnObject{'type'} = $type;
+				$returnObject{'city'} = $city;
 			}
 			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
 				my $type = $1;
@@ -293,75 +337,67 @@ sub parseExtraInfoFromLink {
 				my $phour = $5;
 				my $pminute = $6;
 				my $city = $7;
-				return parseMini($1, $2, $3, $4, $5, $6, $7);
-				#dp("CITY: $city, TYPE: $type");
-				#dp("datedata: ".$1);
-				#dp("monthdata: ". $2);
-				#my $isotime = $pyear."/".$pmonth."/".$pday. " ".$phour.":".$pminute;
-				#dp("isotime: ".$isotime);
-				#my $unixtime = str2time($isotime);
-				#dp("isotime: $isotime, unixtime: $unixtime \n");
-				#my $returnitem;
-				#$returnitem->{'unixtime'} = $unixtime;
-				#$returnitem->{'city'} = $city;
-				#$returnitem->{'type'} = $type;
-				#return $returnitem;
+				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
+				$returnObject{'type'} = $type;
+				$returnObject{'city'} = $city;
 			}
 		}
 	} else {
-		dp('NOT FOUND :(');
+		DP('NOT FOUND :(');
 	}
-	return '';
+	return %returnObject;
 }
 
-sub parseXML {
+sub parse_xml {
 	open_database_handle();
 	my $index = 0;
 	foreach my $item (@{$parser->{items}}) {
-		dp("item $index:");
-		#da($item);
-		
-		#dp("item title: ". $item->{'title'});
-		#dp("item link: ". $item->{'link'});
-		#dp("item pubDate: ". $item->{'pubDate'});
-		#dp("item description: ". $item->{'description'});
-		#dp("item guid: ". $item->{guid});
-
-		#da($extrainfo);
 		$index++;
 		if (if_link_in_db($item->{'link'}) == 0) {
-			my $havaintoid = parseIDfromLink($item->{'link'});
-			my $extrainfo = parseExtraInfoFromLink($item->{'link'});
+			DA($item);
+			my $havaintoid = parse_id_from_link($item->{'link'});
+			my %extrainfo = parse_extrainfo_from_link($item->{'link'});
 			Irssi::print("$myname New item: $item->{title}");
-			my $extrainfotime = defined($extrainfo->{'unixtime'}) ? $extrainfo->{'unixtime'} : 0;
-			my $extrainfocity = defined($extrainfo->{'city'}) ? $extrainfo->{'city'} : '';
+			my $extrainfotime = $extrainfo{'havaintodate'};
 
-			saveToDB($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfocity, $extrainfotime);
+			my $havaintodate = localtime($extrainfo{'havaintodate'})->strftime('%d.%m. %H:%M');
 
-			msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
+			#my $pubdate_dt = parse_time($extrainfo{'unixtime'});
+			my $pubdate_dt = parse_time($item->{'pubDate'});	# publish date
+			my $unixtimestamp = $pubdate_dt->epoch();
+			my $readabletimestamp = $pubdate_dt->strftime('%d.%m. %H:%M');
+			save_to_db($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo{'city'}, $extrainfotime);
+
+			#msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
+			msg_to_channel($item->{'title'}, $item->{'link'}, $havaintodate, $item->{'description'}, $havaintoid, %extrainfo);
 		}
 	}
 	close_database_handle();
+	return;
 }
 
-sub getXML {
-	my $xmlFile = get($taivaanvahtiURL);
-	$parser->parse($xmlFile);
+sub get_xml {
+	my $xmlfile = get($taivaanvahtiURL);
+	$parser->parse($xmlfile);
+	return;
 }
 
 # get all from RSS-feed
 sub timerfunc {
-	getXML();
-	parseXML();
+	get_xml();
+	parse_xml();
+	return;
 }
 
 Irssi::command_bind('taivaanvahti_update', \&timerfunc);
-Irssi::command_bind('taivaanvahti_search', \&searchDB);
+Irssi::command_bind('taivaanvahti_search', \&search_db);
+
 Irssi::settings_add_str('taivaanvahti', 'taivaanvahti_enabled_channels', '');
+
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('taivaanvahti_search_id', 'sig_taivaanvahti_search');
 
-Irssi::timeout_add(1800000, 'timerfunc', undef);		# 30 minutes
+Irssi::timeout_add(1_800_000, 'timerfunc', undef);		# 30 minutes
 #Irssi::timeout_add(5000, 'timerfunc', undef);			# 5 aseconds
 
 Irssi::print("$myname v. $VERSION Loaded!");

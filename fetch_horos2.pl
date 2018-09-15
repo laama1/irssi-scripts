@@ -8,10 +8,10 @@ use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
 
-$VERSION = 0.3;
+$VERSION = 0.4;
 
 my $DEBUG = 0;
-my $DEBUG1 = 0;
+my $DEBUG1 = 1;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
 
@@ -108,11 +108,11 @@ sub grepAstro {
 	
 	foreach my $currentURl (@astrourls) {
 		dp("\n\ngrepAstro index: ". $index);
-		if ($index >= 1 && $DEBUG1) {
+		#if ($index >= 1 && $DEBUG1) {
 			#return;
-			dp("\n premature return from foreach loop because debug enabled. \n");
-			last;
-		}
+		#	dp("\n premature return from foreach loop because debug enabled. \n");
+		#	last;
+		#}
 		dp("grepAstro current url: $currentURl");
 		my $page = KaaosRadioClass::fetchUrl($currentURl, 0);
 		my $sign;
@@ -179,7 +179,7 @@ sub grepAstrosaa {
 	# <p><strong>Astrosää:</strong>Tammikuun t... </p>
 		$index++;
 		my $horo = $1;
-		#dp("grepAstrosaa positions: ". pos($data)) if $DEBUG1;
+
 		dp("grepAstrosaa ($index): ".$horo);
 		
 		if (defined($horo) && $horo ne '') {
@@ -192,7 +192,6 @@ sub grepAstrosaa {
 	if ($index == 0) {
 		dp('grepAstrosaa regex failed!');
 	}
-	#dp("Astrosaas: " .$astrosaas) if $DEBUG1;
 	saveHoroToFile($astrosaas);
 	#return $returnvalue;
 }
@@ -280,7 +279,7 @@ sub grepMenaiset {
 
 	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
 	my ($allHoros, $logtext) = '';
-	logmsg($page);
+	#logmsg($page);
 	
 #	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
 	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi) {
@@ -291,18 +290,18 @@ sub grepMenaiset {
 		
 		my $localsign = '';
 		#my $horoscope = "";
-		dp("menaiset BLOB FOUND! index: $index\n");
+		print("menaiset BLOB FOUND! index: $index") if $DEBUG1;
 
 		while ($newdata =~ /<h3>(.*?)<\/p>/sgi) {
 			my $horodata = $1;
 			my $localdata = '';
 			#dp("\n\nHORO DATA: ->$horodata<-H \n");
 			if ($horodata =~ /(.*?)<\/h/sgi) {
-				$localsign = trim($1);
-				dp("SIGN FOUND: ->$localsign<-S\n");
+				$localsign = ktrim($1);
+				print("SIGN FOUND: $localsign") if $DEBUG1;
 			}
 			if ($horodata =~ /p>(.*)/sgi) {
-				$localdata = trim($1);
+				$localdata = ktrim($1);
 				$localdata = filterKeyword($localdata);
 				$allHoros .= $localdata . "\n" if $localdata;
 				#dp("DATA FOUND: ->$localdata<-D");
@@ -355,7 +354,7 @@ sub filterKeyword {
 		KaaosRadioClass::addLineToFile($infofile, $msg);
 		return;
 	} else {
-		dp("filterKeyword: no match!\n") if $DEBUG1;
+		print("filterKeyword: no match!\n") if $DEBUG1;
 	}
 	
 	return $msg;
@@ -455,7 +454,6 @@ sub conway {
 =cut
 	
 	my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
-	#Irssi::print $moonarray[$r] if $debug;
 	return $moonarray[$r];
 }
 
@@ -492,7 +490,7 @@ sub saveHoroToFile {
 	return KaaosRadioClass::addLineToFile($horofile, grepKeyword($data));
 }
 
-sub trim {
+sub ktrim {
 	my $s = shift;
 	$s =~ s/^\s+|\s+$//g;
 	return $s;
@@ -529,7 +527,7 @@ sub dw {
 
 # debug print
 sub dp {
-    return unless $DEBUG == 1;
+    return unless $DEBUG == 1 || $DEBUG1 == 1;
     print "debug: @_ \n";
 }
 
