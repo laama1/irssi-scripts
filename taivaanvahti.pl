@@ -73,10 +73,10 @@ sub print_help {
 # search for ID, when signal received from urltitle3.pl
 sub sig_taivaanvahti_search {
 	my ($server, $column, $target, $value) = @_;
-	DP('sig_taivaavahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
+	DP('sig_taivaanvahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
 	#DA($server);
 	open_database_handle();
-	my $sth = $dbh->prepare('SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti4 where HAVAINTOID = ? AND DELETED = 0');
+	my $sth = $dbh->prepare('SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti5 where HAVAINTOID = ? AND DELETED = 0');
 
 	$sth->bind_param(1, $value);
 	$sth->execute();
@@ -122,6 +122,12 @@ sub sig_msg_pub {
 
 sub sayit {
 	my ($server, $target, $sayline, @rest) = @_;
+	if (defined($sayline) && length($sayline) > 170) {
+		$sayline = substr $sayline, 0, 170;
+		$sayline .= ' ...';
+	} else {
+		#$desc = "";
+	}
 	$server->command("msg -channel $target $sayline");
 	return;
 }
@@ -167,7 +173,7 @@ sub close_database_handle {
 # if link allready in DB
 sub if_link_in_db {
 	my ($link, @rest) = @_;
-	my $sth = $dbh->prepare("SELECT * from taivaanvahti4 where LINK = ?");
+	my $sth = $dbh->prepare("SELECT * from taivaanvahti5 where LINK = ?");
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
@@ -369,7 +375,7 @@ sub parse_xml {
 			save_to_db($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo{'city'}, $extrainfotime);
 
 			#msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
-			msg_to_channel($item->{'title'}, $item->{'link'}, $havaintodate, $item->{'description'}, $havaintoid, %extrainfo);
+			msg_to_channel($item->{'title'}, $item->{'link'}, $havaintodate . ', '.$extrainfo{'city'}, $item->{'description'}, $havaintoid, %extrainfo);
 		}
 	}
 	close_database_handle();

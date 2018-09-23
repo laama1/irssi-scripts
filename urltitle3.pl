@@ -67,6 +67,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
 my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 
 my $howManyDrunk = 0;
+my $dontprint = 0;
 
 my $DEBUG = 1;
 my $DEBUG1 = 0;
@@ -605,16 +606,23 @@ sub apiConversion {
 	}
 
 	# set newer headers if mixcloud
-	if ($param =~ /mixcloud\.com/) {
+	if ($param =~ /mixcloud\.com/i) {
 		setHeaders(2);
+	}
+	if ($param =~ /imdb\.com\/title\/(tt[\d]+)\/$/i) {
+		# sample: https://www.imdb.com/title/tt2562232/
+		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
+		Irssi::print("IMDB signal emited!! $1");
+		# Irssi::signal_stop();
+		$dontprint = 1;
 	}
 
 	# taivaanvahti id
 	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
-		#Irssi::signal_emit('taivaanvahti_search_id', [$server, 'HAVAINTOID',  $target, $1]);
-		#Irssi::signal_emit('taivaanvahti_search_id', $target, 'HAVAINTOID', $1, 'test');
 		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
-		dp("signal emited!! $1");
+		Irssi::print("Taivaanvahti signal emited!! $1");
+		# Irssi::signal_stop();
+		$dontprint = 1;
 	}
 	return $param;
 
@@ -627,9 +635,9 @@ sub sig_msg_pub {
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
-	
+	$dontprint = 0;
 	# TODO if searching for old link..
-	if ($msg =~ /\!url (.*)$/i) {
+	if ($msg =~ /\!url ?(.*)$/i) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
@@ -663,13 +671,12 @@ sub sig_msg_pub {
 	
 	# check if flooding too many times in a row
 	my $drunk = KaaosRadioClass::Drunk($nick);
-	my $disablebit = 0;		# disable url printing for reasons x,y,z
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (getChannelTitle($target) =~ /np\:/i) {
-			dp('np FOUND from channel title');
-			$disablebit = 1;
+			#dp('np FOUND from channel title');
+			$dontprint = 1;
 		} else {
-			dp ('np NOT FOUND from channel title');
+			#dp('np NOT FOUND from channel title');
 		}
 	}
 
@@ -693,7 +700,11 @@ sub sig_msg_pub {
 	}
 
 	$newUrlData->{fetchurl} = apiConversion($newUrlData->{url}, $server, $target);	#
-		
+	
+	if ($newUrlData->{fetchurl} eq '') {
+		#return;
+	}
+	
 	($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 	my $newtitle = '';
 	$newtitle = $newUrlData->{title} if $newUrlData->{title};
@@ -724,7 +735,7 @@ sub sig_msg_pub {
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
-	if ($disablebit == 0 && $isTitleInUrl == 0 && $title ne '') {
+	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
 		if ($drunk && $howManyDrunk < 1) {
 			$server->command("msg -channel $target tl;dr") if grep /$target/, @enabled;
 			$howManyDrunk++;
@@ -769,7 +780,6 @@ sub findUrl {
 	Irssi::print("$myname: etsi request: $searchword");
 	dp("findUrl") if $DEBUG1;
 	my $returnstring;
-	my $temp = '';
 	if ($searchword =~ s/^id:? ?//i) {
 		my @results;
 		if ($searchword =~ /(\d+)/) {
@@ -781,7 +791,6 @@ sub findUrl {
 		#$returnstring .=
 		dp("id search result dump: ");
 		da(@results);
-		#$temp = createAnswerFromResults(@results);
 		return createAnswerFromResults(@results);
 	} elsif ($searchword =~ s/^kaikki:? ?//i || $searchword =~ s/^all:? ?//i) {
 		# print all found entries
@@ -820,9 +829,9 @@ sub findUrl {
 			$returnstring = "Ei tuloksia.";
 		}
 	}
-	$returnstring = $returnstring.$temp,
+	#$returnstring = $returnstring.$temp,
 	dp("findUrl returnstring: $returnstring");
-	dp("temp:". $temp);
+	#dp("temp:". $temp);
 	return $returnstring;
 }
 
@@ -867,6 +876,14 @@ sub searchIDfromDB {
 	dp("SEARCH ID Dump:");
 	da(@result);
 	return @result;
+}
+
+sub count_db {
+	my $sql = 'SELECT COUNT(*) from links';
+	my $dbh = KaaosRadioClass::connectSqlite($db);
+
+	KaaosRadioClass::closeDB($dbh);
+
 }
 
 sub createShortAnswerFromResults {
@@ -1026,6 +1043,10 @@ Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
 # to change signal params, restart irssi
 my $signal_config_hash = { 'taivaanvahti_search_id' => [ qw/iobject string string string/ ] };
 Irssi::signal_register($signal_config_hash);
+
+my $signal_config_hash2 = { 'imdb_search_id' => [ qw/iobject string string string/ ] };
+Irssi::signal_register($signal_config_hash2);
+
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');

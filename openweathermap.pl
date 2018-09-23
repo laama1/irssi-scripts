@@ -5,6 +5,7 @@ use utf8;
 use JSON;
 use DateTime;
 use POSIX;
+use Time::Piece;
 #use open ':std', ':encoding(UTF-8)';
 binmode(STDIN,  ':utf8');
 binmode(STDOUT, ':utf8');
@@ -42,6 +43,41 @@ my $DEBUG_decode = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
+
+=pod
+UTF8 emojis:
+⛈️ Cloud With Lightning and Rain
+☁️ Cloud
+🌩️ Cloud With Lightning
+🌧️ Cloud With Rain
+🌨️ Cloud With Snow
+🌪️ Tornado
+🌫️ Fog
+🌁 Foggy
+⚡ High Voltage
+⛅ Sun Behind Cloud
+☔ Umbrella With Rain Drops
+🌥️ Sun Behind Large Cloud
+🌦️ Sun Behind Rain Cloud
+🌤️ Sun Behind Small Cloud
+
+🍂 fallen leaf
+🌃 night with stars
+🌌 milky way
+🌛 first quarter moon face
+🌝 full moon face
+🌜 last quarter moon face
+🌚 new moon face
+🌙 crescent moon
+🌑 new moon
+🌓 first quarter moon
+🌖 Waning gibbous moon
+🌒 waxing crescent moon
+🌔 waxing gibbous moon
+
+
+=cut
+
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -274,7 +310,9 @@ sub getSayLine {
 		dp('json = 0');
 		return 0;
 	}
-	my $returnvalue = $json->{name}.', '.$json->{sys}->{country}.': '.$json->{main}->{temp}.'°C, '.$json->{weather}[0]->{description};
+	my $sunrise = '🌅 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
+	my $sunset = '🌇 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
+	my $returnvalue = $json->{name}.', '.$json->{sys}->{country}.': '.$json->{main}->{temp}.'°C, '.$json->{weather}[0]->{description}.'. Aurinko: '.$sunrise.', '.$sunset;
 	return $returnvalue;
 }
 

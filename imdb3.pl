@@ -23,8 +23,8 @@ $VERSION = "20180102";
         changed     => $VERSION
 );
 
-my $DEBUG = 1;
-my $DEBUG1 = 1;
+my $DEBUG = 0;
+my $DEBUG1 = 0;
 my $debugfilename = Irssi::get_irssi_dir(). "/scripts/urldebuglog.txt";
 my $json = JSON->new();
 $json->allow_blessed(1);
@@ -82,16 +82,18 @@ sub do_imdb {
 		$param = 'i';
 		$query = $1;
 	} elsif ($query =~ /(\s?leffa\s?|\s?movie\s?)/i) {
-		$query.="&type=movie";
+		$query.='&type=movie';
 		$query =~ s/$1//;
 	} elsif ($query =~ /(\s?sarja\s?|\s?series\s?)/i) {
-		$query.="&type=series";
+		$query.='&type=series';
 		$query =~ s/$1//;
 	} elsif ($query =~ /(\s?episodi\s?|\s?episode\s?)/i) {
-		$query.="&type=episode";
+		$query.='&type=episode';
 		$query =~ s/$1//;
 	}
 
+	imdb_fetch($server, $target, $query, $param, $year);
+	return 0;
 
 	#dp("msg: $msg, query: $query");
 	unless ($query) {
@@ -126,28 +128,97 @@ sub do_imdb {
 		sayit($server, $target, $saystring);
 		return 0;
 	}
-	if ($imdb ne "1" && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
-		dp("imdb total results more than one!");
+	if ($imdb ne '1' && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
+		dp('imdb total results more than one!');
 		my $manyfound = $imdb->{totalResults};
-		my $sayline = "";
+		my $sayline;
 
 		my $i = 0;
 		while ($i < $manyfound && $i < 6) {
 			dp("Search ${i}:");
 			dp(Dumper $imdb->{"Search"}[$i]);
 			$sayline .= $imdb->{"Search"}[$i]->{Title}. " ".$imdb->{"Search"}[$i]->{Year}." (".$imdb->{"Search"}[$i]->{Type}."), ";
-			dp("Sayline: ".$sayline);
+			dp('Sayline: '.$sayline);
 			$i++;
 		}
 		sayit($server, $target, "$sayline <$manyfound found>");
 		return 0;
 	} #elsif ($imdb eq "1" || $imdb->{totalResults} eq undef) {
 		else {
-		dp("imdb no results found");
-		sayit($server, $target, "Nothing found :P");
+		dp('imdb no results found');
+		sayit($server, $target, 'Nothing found :P');
 		return 0;
 	}
  #=cut
+	return 1;
+}
+
+sub sig_imdb_search {
+	my ($server, $searchparam, $target, $searchword) = @_;
+	# 'imdb_search_id', $server, 'tt-search', $target, $1
+	Irssi::print("imdb3.pl, signal received: $searchparam, $searchword");
+	my $param = 'i';
+	imdb_fetch($server, $target, $searchword, $param);
+
+}
+
+sub imdb_fetch {
+	my ($server, $target, $query, $param, $year, @rest) = @_;
+	unless ($query) {
+		sayit($server, $target, 'En älynnyt..');
+		return 0;
+	}
+	my $url = "http://www.omdbapi.com/?${param}=${query}&apikey=$apikey" if $param and $query;
+	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
+
+	$url .= "&y=${year}" if $year;
+	#$url .= "&year=${year}" if $year;
+	
+	my $imdb = do_search($url);
+	#Irssi::print Dumper $imdb if $DEBUG1;
+	if (!defined($imdb)) {
+		my $saystring = search_omdb($query);
+		dp("Saystring: $saystring");
+		#my $saystring = search_theimdb($query);
+		#my $saystring = search_theimdb($url);
+		if (defined($saystring)) {
+			sayit($server, $target, $saystring);
+		} else {
+			#sayit($server, $target, "$nick, try harder?");
+			sayit($server, $target, "try harder?");
+		}
+		return;
+	}
+
+ # OMDB-API koodia
+	if ($imdb->{Response} =~ /True/ ) {
+		dp("imdb->Response = TRUE");
+		my $saystring = print_line_from_search_result($imdb);
+		sayit($server, $target, $saystring);
+		return 0;
+	}
+	if ($imdb ne '1' && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
+		dp('imdb total results more than one!');
+		my $manyfound = $imdb->{totalResults};
+		my $sayline;
+
+		my $i = 0;
+		while ($i < $manyfound && $i < 6) {
+			dp("Search ${i}:");
+			dp(Dumper $imdb->{"Search"}[$i]);
+			$sayline .= $imdb->{"Search"}[$i]->{Title}. " ".$imdb->{"Search"}[$i]->{Year}." (".$imdb->{"Search"}[$i]->{Type}."), ";
+			dp('Sayline: '.$sayline);
+			$i++;
+		}
+		sayit($server, $target, "$sayline <$manyfound found>");
+		return 0;
+	} #elsif ($imdb eq "1" || $imdb->{totalResults} eq undef) {
+		else {
+		dp('imdb no results found');
+		sayit($server, $target, 'Nothing found :P');
+		return 0;
+	}
+ 
 	return 1;
 }
 
@@ -157,7 +228,7 @@ sub search_omdb {
 	my $url = "http://www.omdbapi.com/?s=${query}&apikey=${apikey}";
 	#my $url = "http://www.theimdbapi.org/api/find/movie?${query}";
 	my $got = KaaosRadioClass::fetchUrl($url, 0);
-	dp("search_omdb url: ".$url);
+	dp('search_omdb url: '.$url);
 	my $imdb = eval {$json->utf8->decode($got)};
 	
 	return if $@;
@@ -328,7 +399,7 @@ sub do_search {
 	my $got = KaaosRadioClass::fetchUrl($url, 0);
 	#Irssi::print("do_search got: $got") if $DEBUG;
 	KaaosRadioClass::writeToFile($debugfilename, $got) if $DEBUG;
-	if ($got eq "-1") {
+	if ($got eq '-1') {
 		dp("imdb3.pl do_search error");
 		return;
 	}
@@ -359,6 +430,9 @@ sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
 	do_imdb($server, $msg, $server->{wanted_nick}, "", $target);
 }
+
+Irssi::signal_add('imdb_search_id', 'sig_imdb_search');
+
 
 Irssi::settings_add_str('imdb', 'imdb_enabled_channels', 'Kaaos-komennot');
 Irssi::signal_add('message public', 'do_imdb');

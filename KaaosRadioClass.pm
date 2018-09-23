@@ -34,11 +34,11 @@ $VERSION = 1.01;
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
 
 #$currentDir = cwd();
-my $currentDir = "/home/laama/.irssi/scripts";
+my $currentDir = '/home/laama/.irssi/scripts';
 # tsfile, time span.. save value of current time there. For flood protect.
 my $tsfile = "$currentDir/ts";	# ????
 my $djlist = "$currentDir/dj_list.txt";
-my $database = "";
+my $database;
 
 #my $myname = $0;
 my $DEBUG = 0;
@@ -46,7 +46,7 @@ my $DEBUG_decode = 0;
 
 my $floodernick = "";
 my $floodertimes = 0;
-my $flooderdate = time();		# init
+my $flooderdate = time;		# init
 
 # returns last line from file -param.
 sub readLastLineFromFilename {
