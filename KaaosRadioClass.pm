@@ -3,8 +3,8 @@ use strict;
 use warnings;
 use lib '/home/laama/perl5/lib/perl5';
 use utf8;
-binmode(STDOUT, ":utf8");
-binmode(STDIN, ":utf8");
+binmode STDOUT, ':utf8';
+binmode STDIN, ':utf8';
 
 use Exporter;
 use DBI;
@@ -28,7 +28,7 @@ use Data::Dumper;
 
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.01;
+$VERSION = 1.02;
 @ISA = qw(Exporter);
 @EXPORT = ();
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
@@ -41,10 +41,10 @@ my $djlist = "$currentDir/dj_list.txt";
 my $database;
 
 #my $myname = $0;
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
-my $floodernick = "";
+my $floodernick;
 my $floodertimes = 0;
 my $flooderdate = time;		# init
 
@@ -101,12 +101,13 @@ sub readLineFromDataBase {
 	$sth->execute();
 
 	if(my $line = $sth->fetchrow_array) {
-		dp("--fetched a result--");
+		dp('--fetched a result--');
 		dp(Dumper $line);
 		$sth->finish();
 		$dbh->disconnect();
 		return $line;
 	}
+	dp('-- Did not find a result');
 	$sth->finish();
 	$dbh->disconnect();
 	#return @returnArray, "jee", $db, $string;
@@ -218,6 +219,8 @@ sub ktrim {
 # replace weird html characters
 sub replaceWeird {
 	my ($text, @rest) = @_;
+	return unless defined $text;
+
 	dp("Text before: $text");
 	$text = Encode::decode('utf8', uri_unescape($text));
 	dp("Text before2: $text");
@@ -242,12 +245,14 @@ sub replaceWeird {
     $text =~ s/\%3F/\?/gi;       # ?
     $text =~ s/\%26/&/g;		# &
 	$text =~ s/\%23/#/g;		# #
-    $text =~ s/Ã¤/ä/g;			# ä
+    $text =~ s/Ã¨/é/g;			# é
+	$text =~ s/Ã¤/ä/g;			# ä
 	$text =~ s/Ã¶/ö/g;			# ö
 	$text =~ s/Ã¥/å/g;			# å
 	$text =~ s/õ/ä/g;			# ä
     $text =~ s/Õ/Ä/g;			# Ä
     $text =~ s/÷/ö/g;			# ö
+	
 
 	# UTF encoded
     $text =~ s/\%C3\%96/Ö/gi;	# Ö

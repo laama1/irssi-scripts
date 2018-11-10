@@ -8,7 +8,7 @@ use Data::Dumper;
 
 require KaaosRadioClass;
 
-$VERSION = '0.46';
+$VERSION = '0.50';
 %IRSSI = (
 	authors => 'LAama1',
 	contact => 'LAama1@ircnet',
@@ -16,7 +16,7 @@ $VERSION = '0.46';
 	description => 'Kaaosradion Revontuli- ja kuun vaiheet -skripti.',
 	license => 'BSD',
 	url => 'http://www.kaaosradio.fi',
-	changed => '2018-09-04',
+	changed => '2018-10-28',
 );
 
 my $DEBUG = 1;
@@ -55,17 +55,19 @@ sub pubmsg {
 sub fetchAuroraData {
 	my $searchdate = time() - (60*60);			# max 1 hour ago
 	Irssi::print('search date: ' . $searchdate) if $DEBUG;
-	my $fetchString = "select * from AURORAS where pvm > $searchdate ORDER BY PVM desc limit 1;";
-	my (@line) = KaaosRadioClass::readLinesFromDataBase($db, $fetchString);
+	my $fetchString = "select kpnow,kp1hforecast,PVM, speed from AURORAS where pvm > $searchdate ORDER BY PVM desc limit 1;";
+	my (@line) = KaaosRadioClass::readLineFromDataBase($db, $fetchString);
 	Irssi::print ('Dump:') if $DEBUG;
 	print Dumper(@line) if $DEBUG;
 	my $kpnow = $line[0];
 	my $kpst = $line[1];
 	my $pvm = $line[2];
+	my $speed = $line[3];
 	Irssi::print("auroras.pl: kpnow: $kpnow, kpst: $kpst, pvm: $pvm");
 	my $returnString = 'Ei saatu tietoja!';
 	if ($kpnow || $kpst) {
-		$returnString = "Kp arvo nyt: $kpnow, ennustus (1h): $kpst (Näkyvyys: Kp5=Helsinki, Kp4=Iisalmi, Kp3=Kemi)";
+		#$returnString = "Kp arvo nyt: $kpnow, ennustus (1h): $kpst (Näkyvyys: Kp5=Helsinki, Kp4=Iisalmi, Kp3=Kemi)";
+		$returnString = "Kp arvo nyt: $kpnow (Näkyvyys: Kp5=Helsinki, Kp4=Iisalmi, Kp3=Kemi). Aurinkotuulen nopeus: $speed km/s";
 	}
 	return $returnString;
 }

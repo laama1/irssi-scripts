@@ -2,8 +2,8 @@ use Irssi;
 use warnings;
 use strict;
 use utf8;
-#binmode(STDOUT, ":utf8");
-#binmode(STDIN, ":utf8");
+binmode(STDOUT, ':utf8');
+binmode(STDIN, ':utf8');
 use open ':std', ':encoding(UTF-8)';
 #use Irssi::Irc;
 use DBI;
@@ -14,25 +14,25 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20180107";
+$VERSION = '20180929';
 %IRSSI = (
-	authors     => "LAama1",
+	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
 	name        => 'Korvamato',
 	description => 'Lisää ja etsii korvamatoja.',
-	license     => "Public Domain",
-	url         => "#kaaosradio",
+	license     => 'Public Domain',
+	url         => '#kaaosradio',
 	changed     => $VERSION
 );
 
 
-my $tiedosto = "/home/laama/public_html/korvamadot.txt";
-my $db = Irssi::get_irssi_dir(). "/scripts/korvamadot.db";
+my $tiedosto = $ENV{HOME}.'/public_html/korvamadot.txt';
+my $db = Irssi::get_irssi_dir(). '/scripts/korvamadot.db';
 my @channels = ('#salamolo2', '#kaaosradio');
-my $myname = "korvamato.pl";
+my $myname = 'korvamato.pl';
 my $DEBUG = 1;
 
-my $helptext = "Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.";
+my $helptext = 'Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.';
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8'.$db) {
@@ -48,7 +48,7 @@ unless (-e $db) {
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp("Printing help..");
+	dp('Printing help..');
 	sayit($server, $target, $helptext);
 	sayit($server, $target, get_statistics());
 	return 0;
@@ -57,35 +57,38 @@ sub print_help {
 sub msgit {
 	my ($server, $nick, $text, @rest) = @_;
 	$server->command("msg $nick $text");
+	return;
 }
 
 sub get_statistics {
-	my $query = "SELECT count(*) from korvamadot where DELETED = 0";
+	my $query = 'SELECT count(*) from korvamadot where DELETED = 0';
 	my $result = KaaosRadioClass::readLineFromDataBase($db, $query);
-	dp("Results:");
+	dp('Results:');
 	da($result);
 	if ($result > 0) {
 		return "Minulla on $result korvamatoa päässäni.";
 	} else {
-		return "Ei vielä korvamatoja päässä.";
+		return 'Ei vielä korvamatoja päässä.';
 	}
 }
 
 # Say it public to a channel. Params: $server, $target, $saywhat
 sub sayit {
 	my ($server, $target, $saywhat) = @_;
+	dp('sayit: '. $saywhat);
 	$server->command("MSG $target $saywhat");
+	return;
 }
 
 sub find_mato {
 	my ($searchword, @rest) = @_;
 	Irssi::print("$myname: etsi request: $searchword");
-	my $returnstring = "";
+	my $returnstring = '';
 	if ($searchword =~ s/kaikki: //gi || $searchword =~ s/all: //gi) {
-		dp("find_mato 1");
+		dp('find_mato 1');
 		# print all found entries
-		my @results = searchFromDB($searchword);
-		$returnstring .= "Loton oikeat numerot: ";
+		my @results = search_from_db($searchword);
+		$returnstring .= 'Loton oikeat numerot: ';
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
 			
@@ -93,16 +96,16 @@ sub find_mato {
 		}
 	} else {
 		# print 1st found item
-		my @results = searchFromDB($searchword);
+		my @results = search_from_db($searchword);
 		my $amount = @results;
-		dp("find_mato 2");
+		dp('find_mato 2');
 		da(@results);
 
 		if ($amount > 1) {
 			$returnstring = "Found $amount, ID: ";
 			my $i = 0;
 			foreach my $id (@results) {
-				$returnstring .= $results[$i][0].", ";
+				$returnstring .= $results[$i][0].', ';
 				$i++;
 			}
 		} else {
@@ -117,12 +120,12 @@ sub find_mato {
 # search URL from DB if URL found from word and return count..
 sub ifUrl {
 	my ($word, @rest) = @_;
-	my $url = "";
+	my $url = '';
 	my $urlsfound = 0;
 	if ($word =~ /(https?\:\/\/[\S]*)\s/gi) {
 		$url = $1;
 		Irssi::print("$myname debug ifUrl: $url") if $DEBUG;
-		my @results = searchURLfromDB($url);
+		my @results = search_url_from_db($url);
 		$urlsfound = @results;					# count, how many
 	}
 	return $urlsfound;
@@ -131,7 +134,7 @@ sub ifUrl {
 # delete korvamato or one info
 sub del_mato {
 	my ($searchword, $id, @rest) = @_;
-	my $string = "";
+	my $string = '';
 	dp("del_mato: $searchword");
 	if ($searchword =~ /link1\:?/gi || $searchword =~ /url\:?/gi) {
 		$string = "UPDATE korvamadot set LINK1 = '' where rowid = $id";
@@ -149,7 +152,7 @@ sub del_mato {
 		$string = "UPDATE korvamadot set DELETED = 1 where rowid = $id";
 	}
 	
-	if ($string ne "") {
+	if ($string ne '') {
 		return updateDB($string);
 	}
 	return;
@@ -164,15 +167,15 @@ sub check_if_delete {
 	}
 	if ($command =~ /(poista|del|delete) (.*)/gi && $id >= 0) {
 		# FIXME: Del by ID
-		dp("check_if_delete: poista1");
+		dp('check_if_delete: poista1');
 		my $searchword = $2;
 		if (del_mato($searchword, $id) == 0) {
 			# TODO: Print old info?
 			return 1;
 		}
 	} elsif ($command =~ /(poista|del|delete)/gi && $id >= 0) {
-		dp("check_if_delete: poista2");
-		if (del_mato("", $id) == 0) {
+		dp('check_if_delete: poista2');
+		if (del_mato('', $id) == 0) {
 			# TODO: Print old info?
 			
 			return 1;
@@ -184,8 +187,8 @@ sub check_if_delete {
 
 sub parse_keyword_return_sql {
 	my ($id, $command, @rest) = @_;
-	my $updatestring = "";
-	my $selectoldstring = "";
+	my $updatestring = '';
+	my $selectoldstring = '';
 	return ($updatestring, $selectoldstring) unless $id > 0;
 			# TODO: sanitize with bind_param
 			# Don't delete deleted.
@@ -229,23 +232,23 @@ sub parse_keyword_return_sql {
 
 sub check_if_exists {
 	my ($searchword, @rest) = @_;
-	dp("check_if_exists");
-	my @results = searchFromDB($searchword);
+	dp('check_if_exists');
+	my @results = search_from_db($searchword);
 	my $amount = @results;		# count
-	my $returnstring = "";
+	my $returnstring = '';
 	#dp("Results:");
 	#da(@results);
 	#dp("Amount found from DB search: $amount, searchword: $searchword");
 	if ($amount > 0) {
 		# TODO: print all ID's with artist - title maybe?
-		my $idstring = "";
+		my $idstring;
 		my @idarray = ();
 		foreach my $result (@results) {
 			$idstring .= @$result[0] .", ";	# add result id's to one and same string
 			push @idarray, @$result[0];
 		}
 		if ($amount == 1) {
-			#my @results = searchIDfromDB($idarray[0]);
+			#my @results = search_id_from_db($idarray[0]);
 			#my $string = "Löytyi ";
 			my $string;
 			dp("string:: ".$string);
@@ -280,7 +283,7 @@ sub insert_into_db {
 		}
 		saveToDB($nick, $command, $info1, $info2, $target, $artist, $title, $link1, $link2);
 		Irssi::print("$myname: \"$command\" request from $nick\n");
-		my @resultarray = searchFromDB($command);
+		my @resultarray = search_from_db($command);
 		my $newid;		# HACK:
 		foreach my $line (@resultarray) {
 			$newid = @$line[0];
@@ -291,21 +294,21 @@ sub insert_into_db {
 	} elsif ($pituus <= 5) {
 		return "Teksti liiian lyhyt ($pituus)! Minimipituus on 6 merkkiä!";
 	} else {
-		return "Jotain muuta tapahtui. Tarkista syöte!";
+		return 'Jotain muuta tapahtui. Tarkista syöte!';
 	}
 	return;
 
 }
 
-sub ifKorvamato {
+sub if_korvamato {
 	my ($msg, $nick, $target, @rest) = @_;
 	
 	if($msg =~ /^!korvamato:?\s(.{1,470})/gi)
 	{
-		#dp("ifKorvamato\n");
+		#dp("if_korvamato\n");
 		
 		my $command = $1;		# command the user has entered
-		my $url = "";			# song possible url
+		my $url = '';			# song possible url
 		my $id = -1;			# artist ID, linenumber (rowid) in DB
 		
 		if (ifUrl($command) > 0) {
@@ -320,21 +323,21 @@ sub ifKorvamato {
 			return "En tajunnut!";
 		}
 		
-		my $searchword = "";
+		my $searchword = '';
 		if ($command =~ /etsi\:? ?(.*)$/gi) {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
-			if ($sayline ne "") {
+			if ($sayline ne '') {
 				return $sayline;
 			}
-			return "En tajunnut! !korvamato etsi <hakusana>";
+			return 'En tajunnut! !korvamato etsi <hakusana>';
 		} elsif ($command =~ /etsi\:?/gi) {
-			return "En tajunnut! !korvamato etsi <hakusana>";
+			return 'En tajunnut! !korvamato etsi <hakusana>';
 		}
 
 		my ($string, $oldstring) = parse_keyword_return_sql($id, $command);
 
-		if ($string ne "") {
+		if ($string ne '') {
 			my $oldvalue = KaaosRadioClass::readLineFromDataBase($db, $oldstring) || "<tyhjä>";
 			my $returnvalue = updateDB($string);
 			if ($returnvalue == 0) {
@@ -347,8 +350,8 @@ sub ifKorvamato {
 			return "Deletoitu. ID: $id";
 		}
 		my $amount = 0;
-		my $returnstring = "";
-		my ($link1, $link2, $info1, $info2, $artist, $title, $lyrics) = "";
+		my $returnstring = '';
+		my ($link1, $link2, $info1, $info2, $artist, $title, $lyrics) = '';
 
 		if ($command =~ /(.*)/gi && $id == -1) {
 			my $newcommand = $1;
@@ -390,7 +393,7 @@ sub ifKorvamato {
 			# Do a search from database
 			$searchword = lc($title) || lc($lyrics) || lc($newcommand);
 			dp("Searchword: $searchword");
-			if ($searchword eq "") {
+			if ($searchword eq '') {
 				return "Nyt skarppiutta! Ei mennyt ihan oikein.";
 			} else {
 				($returnstring, $amount) = check_if_exists($searchword);			
@@ -400,7 +403,7 @@ sub ifKorvamato {
 
 		} elsif ($id != -1) {
 			# TODO: search korvamato '!korvamato id 55'
-			my @results = searchIDfromDB($id);
+			my @results = search_id_from_db($id);
 			dp("Search results DUMPER:");
 			da(@results);
 			$returnstring = createAnswerFromResultsor(@results);
@@ -415,7 +418,7 @@ sub ifKorvamato {
 		}
 		return $returnstring;
 	}
-	return "";
+	return '';
 }
 
 # parse away other keywoards that our sloppy regexp caught
@@ -445,8 +448,8 @@ sub event_privmsg {
 		return;
 	}
 	#if ($msg =~ /^!korvamato/) {
-		my $newReturnString = ifKorvamato($msg, $nick, "PRIV");
-		if ($newReturnString ne "") {
+		my $newReturnString = if_korvamato($msg, $nick, "PRIV");
+		if ($newReturnString ne '') {
 			dp("YES priv");
 			msgit($server, $nick, $newReturnString);
 			return;
@@ -461,32 +464,30 @@ sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 
     my $enabled_raw = Irssi::settings_get_str('korvamato_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/^$target$/, @enabled);
+    my @enabled = split / /, $enabled_raw;
+    return unless grep /^$target$/, @enabled;
 
 	if ($msg =~ /^[\.\!]help\b/i || $msg =~ /^!korvamato$/i) {
 		print_help($server, $target);
 		return;
 	}
 
-	#my $newReturnString = encode_utf8(ifKorvamato($msg, $nick, "PUB"));
-	my $newReturnString = ifKorvamato($msg, $nick, "PUB");
-	if ($newReturnString ne "") {
-		#dp("YES pub, $newReturnString");
+	#my $newReturnString = encode_utf8(if_korvamato($msg, $nick, "PUB"));
+	my $newReturnString = if_korvamato($msg, $nick, 'PUB');
+	if ($newReturnString ne '') {
 		sayit($server, $target, $newReturnString);
 		return;
 	} else {
-		# dp("NO pub");
 		return;
 	}
 
 }
 
 sub createDB {
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 
 	# Using FTS (full-text search)
-	my $stmt = "CREATE VIRTUAL TABLE korvamadot using fts4(NICK,PVM,QUOTE,INFO1,INFO2,CHANNEL,ARTIST,TITLE,LINK1,LINK2,DELETED)";
+	my $stmt = 'CREATE VIRTUAL TABLE korvamadot using fts4(NICK,PVM,QUOTE,INFO1,INFO2,CHANNEL,ARTIST,TITLE,LINK1,LINK2,DELETED)';
 
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
@@ -495,14 +496,15 @@ sub createDB {
    		Irssi::print "$myname: Table created successfully";
 	}
 	$dbh->disconnect();
+	return;
 }
 
 # Save new item to sqlite DB
 sub saveToDB {
 	my ($nick, $quote, $info1, $info2, $channel, $artist, $title, $link1, $link2, @rest) = @_;
 	my $pvm = time();
-	dp("saveToDB");
-	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	dp('saveToDB');
+	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $newdbh->prepare("INSERT INTO korvamadot VALUES(?,?,?,?,?,?,?,?,?,?,0)") or die DBI::errstr;
 	$sth->bind_param(1, $nick);
 	$sth->bind_param(2, $pvm, { TYPE => SQL_INTEGER });
@@ -530,31 +532,29 @@ sub updateDB {
 sub createAnswerFromResultsor {
 	my @resultarray = @_;
 	my $amount = @resultarray;
-	#dp("create answer from results.. how many found #: $amount");
-	#da(@resultarray);
 	if ($amount == 0) {
-		return "Ei tuloksia.";
+		return 'Ei tuloksia.';
 	}
 
-	my $string = "";
-	my $rowid = $resultarray[0] || "";
-	if ($rowid ne "") { $string .= "ID ${rowid}: "; }
+	my $string;
+	my $rowid = $resultarray[0] || '';
+	if ($rowid ne '') { $string .= "ID ${rowid}: "; }
 
-	my $nickster = $resultarray[1] || "";					# who added
+	my $nickster = $resultarray[1] || '';					# who added
 	
-	my $when = $resultarray[2] || "";						# when added
+	my $when = $resultarray[2] || '';						# when added
 	
 	#my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || "-";						# lyrics
-	my $quote = $resultarray[3] || "-";						# lyrics
+	my $quote = $resultarray[3] || '-';						# lyrics
 	if ($quote ne "-") { $string .= "Lyrics: $quote, "; }
 	#dp ("string ### $string");
-	my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || "";
-	if ($info1 ne "") { $string .= "Info1: $info1, "; }
+	my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || '';
+	if ($info1 ne '') { $string .= "Info1: $info1, "; }
 
-	my $info2 = KaaosRadioClass::replaceWeird($resultarray[5]) || "";
-	if ($info2 ne "") { $string .= "Info2: $info2, "; }
+	my $info2 = KaaosRadioClass::replaceWeird($resultarray[5]) || '';
+	if ($info2 ne '') { $string .= "Info2: $info2, "; }
 	
-	my $channelresult = $resultarray[6] || "";
+	my $channelresult = $resultarray[6] || '';
 	
 	my $artist = KaaosRadioClass::replaceWeird($resultarray[7]) || "-";
 	if ($artist ne "-") { $string .= "Artist: $artist, "; }
@@ -565,8 +565,8 @@ sub createAnswerFromResultsor {
 	my $link1 = $resultarray[9] || "-";
 	if ($link1 ne "-") { $string .= "URL: $link1, "; }
 	
-	my $link2 = $resultarray[10] || "";
-	if ($link2 ne "") { $string .= "Link2: $link2"; }
+	my $link2 = $resultarray[10] || '';
+	if ($link2 ne '') { $string .= "Link2: $link2"; }
 	
 	my $deleted = $resultarray[11];
 	#dp ("string ### $string");
@@ -583,10 +583,10 @@ sub createAnswerFromResultsor {
 }
 
 # search rowid = artist ID from database
-sub searchIDfromDB {
+sub search_id_from_db {
 	my ($id, @rest) = @_;
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sth = $dbh->prepare("SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0") or die DBI::errstr;
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
+	my $sth = $dbh->prepare('SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0') or die DBI::errstr;
 	$sth->bind_param(1, $id);
 	$sth->execute();
 	my @result = ();
@@ -598,10 +598,10 @@ sub searchIDfromDB {
 	return @result;
 }
 
-sub searchFromDB {
+sub search_from_db {
 	my ($searchword, @rest) = @_;
 
-	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $newdbh->prepare("SELECT rowid,* FROM korvamadot where (quote LIKE ? or info1 LIKE ? or info2 LIKE ? or artist LIKE ? or title LIKE ?) and DELETED = 0 order by rowID ASC") or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -616,17 +616,15 @@ sub searchFromDB {
 		push @{ $resultarray[$index]}, @line;
 		$index++;
 	}
-	#dp("SEARCH '$searchword' Dump ($index):");
-	#da(@resultarray);
 	return @resultarray;
 }
 
-sub searchURLfromDB {
+sub search_url_from_db {
 	my ($searchword, @rest) = @_;
 	Irssi::print("$myname: Search Url From Database: $searchword");
 	#my $string = "SELECT ROWID,* FROM korvamadot where LINK1 = $searchword or LINK2 = $searchword";
-	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sth = $newdbh->prepare("SELECT rowid,* FROM korvamadot where link1 LIKE ? or link2 LIKE ? order by rowID ASC") or die DBI::errstr;
+	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
+	my $sth = $newdbh->prepare('SELECT rowid,* FROM korvamadot where link1 LIKE ? or link2 LIKE ? order by rowID ASC') or die DBI::errstr;
 	#my $string = "SELECT ROWID,* FROM korvamadot where LINK1 MATCH $searchword or LINK2 MATCH $searchword";
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -640,8 +638,7 @@ sub searchURLfromDB {
 		$index++;
 	}
 
-	#my @results = readFromDB($string);
-	dp("URL Search Dump:");
+	dp('URL Search Dump:');
 	da(@resultarray);
 	# TODO: Return ID(s) and their artist if found
 	return @resultarray;
@@ -650,7 +647,7 @@ sub searchURLfromDB {
 sub readFromDB {
 	my ($string, @rest) = @_;
 	my @resultarray = KaaosRadioClass::readLinesFromDataBase($db, $string);
-	Irssi::print("What gots?") if $DEBUG;
+	Irssi::print('What gots?') if $DEBUG;
  	print (CRAP Dumper(@resultarray)) if $DEBUG;
 	return @resultarray;
 }
@@ -659,11 +656,13 @@ sub da {
 	return unless $DEBUG;
 	print("$myname-debug array:");
 	print Dumper (@_);
+	return;
 }
 
 sub dp {
 	return unless $DEBUG;
 	print("$myname-debug: @_");
+	return;
 }
 
 Irssi::settings_add_str('korvamato', 'korvamato_enabled_channels', '');

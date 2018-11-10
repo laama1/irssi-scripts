@@ -203,7 +203,7 @@ sub grepIltis {
 	#logmsg($page);
 	#if ($page != -1 && $page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
 	if ($page != -1 && $page =~ /itemProp="articleBody"/si) {
-		
+		$page = KaaosRadioClass::ktrim($page);
 		#my $parsethis = $1;
 		my $allHoros = '';
 		my $index = 0;
@@ -213,6 +213,7 @@ sub grepIltis {
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		
 		while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi) {
+		#while($page =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
 			my $sign = $1;
 			my $datum = $2;
 			my $horo = $3;
@@ -227,8 +228,10 @@ sub grepIltis {
 			$index++;
 		}
 		if ($index == 0 ) {
+			dp('iltis regexp 2..');
 			# iltis regex #2, if nothing found
-			while($page =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
+			#<p>OINAS 21.3.–19.4. Voimiasi ja hermojasi koetellaan tänään toden teolla, mutta kun pidät tavoitteesi mielessäsi etkä antaudu häiriötekijöiden edessä, huomaat, että lopussa kiitos seisoo.</p>
+			while($page =~ m/<p>(\w+) (\d+\.\d+\.[–-]\d+\.\d+\.) (.*?)<\/p>/sgi) {
 				my $sign = $1;
 				my $datum = $2;
 				my $horo = $3;
@@ -245,6 +248,7 @@ sub grepIltis {
 		}
 		if ($index == 0 ) {
 			# iltis regex #3, if nothing found
+			dp('iltis regexp 3..');
 			while($page =~ m/<p><em>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/em> (.*?)<\/p>/sgi) {
 				my $sign = $1;
 				my $datum = $2;
@@ -280,8 +284,7 @@ sub grepMenaiset {
 	my $page = KaaosRadioClass::fetchUrl($menaisetUrl, 0);
 	my ($allHoros, $logtext) = '';
 	#logmsg($page);
-	
-#	while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
+	#while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
 	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi) {
 		my $newdata = $1;
 		$newdata = parseComments($newdata);
@@ -510,7 +513,8 @@ sub parseComments {
 		$i++;
 	}
 	$data =~ s/<head>(.*?)<\/head>//si;
-	dp("Elements parsed: $i");
+	dp("comment etc. Elements parsed: $i");
+	#dw('data: '. $data);
 	return $data;
 }
 
@@ -532,4 +536,4 @@ sub dp {
 }
 
 $dbh->disconnect();
-print "how many saved: $howManySaved";
+print "arg: $ARGV[0], how many saved: $howManySaved\n";

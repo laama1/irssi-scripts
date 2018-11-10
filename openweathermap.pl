@@ -22,7 +22,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20180901";
+$VERSION = '20181028';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -229,10 +229,11 @@ sub FINDAREAWEATHER {
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
-	my $sql = "SELECT LAT,LON from CITIES where NAME Like '$city'";
+	my $sql = "SELECT LAT,LON from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
-	da('SQL', $sql);
-	dp('Result');
+	#my @results = KaaosRadioClass::readLinesFromDataBase($db,$sql);
+	da('GETCITYCOORDS SQL: ', $sql);
+	dp('GETCITYCOORDS Result: ');
 	da(@results);
 	return $results[0], $results[1];
 }
@@ -279,12 +280,12 @@ sub dp {
 	}
 }
 
-sub dd {
-	my ($string, @rest) = @_;
-	if ($DEBUG_decode == 1) {
-		print("\n$myname debug: ".$string);
-	}
-}
+#sub dd {
+#	my ($string, @rest) = @_;
+#	if ($DEBUG_decode == 1) {
+#		print("\n$myname debug: ".$string);
+#	}
+#}
 
 # debug print array
 sub da {
@@ -325,7 +326,7 @@ sub sig_msg_pub {
 	my @enabled = split(/ /, $enabled_raw);
 	return unless grep(/$target/, @enabled);
 	if ($msg =~ /\!(sää |saa |s )(.*)$/i) {
-		dd("Hopsan $1");
+		dp("Hopsan $1");
 		return if KaaosRadioClass::floodCheck() > 0;
 		#my $searchWord = $1;
 		my $city = $2;
@@ -334,14 +335,14 @@ sub sig_msg_pub {
 		$server->command("msg -channel $target $sayline") if $sayline;
 		return;
 	} elsif ($msg =~ /\!(se )(.*)$/i) {
-		dd("moksan $1");
+		dp("moksan $1");
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		my $sayline = findWeatherForecast($city);
 		$server->command("msg -channel $target $sayline") if $sayline;
 		return;
 	} elsif ($msg =~ /\!(sa )(.*)$/i) {
-		dd('area waeather');
+		dp('area waeather');
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		my $sayline = FINDAREAWEATHER($city);

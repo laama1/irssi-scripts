@@ -4,21 +4,22 @@
 # skripti hakee urlista tiedon revontulista.
 # KP-arvo tallennetaan tietokantaan myöhempää käyttöä varten.
 # LAama1 1.10.2016, 7.9.2017 (minor), 14.3.2018 (copy to kiva.vhosti.fi)
-
+use strict;
 use Data::Dumper;
 
-use lib '/home/laama/.irssi/scripts';
+use lib $ENV{HOME}.'/.irssi/scripts';
 use KaaosRadioClass;
+use JSON;
 
-use strict;
 use DBI qw(:sql_types);
 
 my $DEBUG = 1;
 my $myname = 'fetch_auroras.pl';
 #my $auroraurl = 'http://www.aurora-service.eu/aurora-forecast/';
 my $auroraurl = 'http://www.aurora-service.org/aurora-forecast/';
+my $aurorasliveurl = 'http://api.auroras.live/v1/';
 
-my $db = '/home/laama/public_html/auroras.db';
+my $db = $ENV{HOME}.'/public_html/auroras.db';
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
@@ -27,11 +28,12 @@ unless (-e $db) {
 	}
 	close FILE;
 	
-	KaaosRadioClass::writeToDB($db, "CREATE TABLE AURORAS (kpnow TEXT, kp1hforecast TEXT, PVM INT)");
+	KaaosRadioClass::writeToDB($db, 'CREATE TABLE AURORAS (kpnow TEXT, kp1hforecast TEXT, PVM INT,BZ, DENSITY, SPEED, RFCDATE)');
 	print("$myname: Database file created.\n") if $DEBUG;
 }
 
-grepData();
+#grepData();
+grepJSON();
 #saveAuroras():
 
 sub grepData {
@@ -53,16 +55,32 @@ sub grepData {
 	saveAuroras($kpnow, $kpst) if ($kpnow && $kpst);
 }
 
+sub grepJSON {
+	my $params = '?type=ace&data=all';
+	my $json = KaaosRadioClass::getJSON($aurorasliveurl . $params);
+	my $kp = $json->{kp};
+	my $kp1 = $json->{kp1hour};
+	my $bz = $json->{bz};
+	my $density = $json->{density};		# proton density
+	my $speed = $json->{speed};			# proton speed
+	my $rfcdate = $json->{date};		# RFC date
+	saveAuroras($kp, $kp1, $bz, $density, $speed, $rfcdate);
+}
+
 sub saveAuroras {
-	my ($value1, $value2) = @_;
+	my ($value1, $value2, $bz, $density, $speeed, $rfcdate) = @_;
 	my $dbh = KaaosRadioClass::connectSqlite($db);
 	print "$myname: Saving values to db, $value1, $value2\n" if $DEBUG;
 	my $time = time();
 	#my $string = ;
-	my $sth = $dbh->prepare("insert INTO AURORAS values (?, ?, ?)") or die DBI::errstr;
+	my $sth = $dbh->prepare("insert INTO AURORAS values (?, ?, ?, ?, ?, ?, ?)") or die DBI::errstr;
 	$sth->bind_param(1, $value1);
 	$sth->bind_param(2, $value2);
 	$sth->bind_param(3, $time, { TYPE => SQL_INTEGER });
+	$sth->bind_param(4, $bz);
+	$sth->bind_param(5, $density);
+	$sth->bind_param(6, $speeed);
+	$sth->bind_param(7, $rfcdate);
 	
 	$sth->execute;
 	$sth->finish();
