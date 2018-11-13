@@ -13,7 +13,7 @@ use HTTP::Cookies;
 use HTML::Entities qw(decode_entities);
 use Encode;
 use URI::Escape;
-
+use JSON;
 
 use Data::Dumper;
 
@@ -394,6 +394,22 @@ sub fetchUrl {
 	} else {
 		return $page;
 	}
+}
+
+sub getJSON {
+	my ($url, @rest) = @_;
+	my $response = fetchUrl($url, 0);
+	if ($response && $response eq '-1') {
+		dp('error fetching url!');
+		return -1;
+	}
+	return -2 unless $response;
+	
+	my $json = JSON->new->utf8;
+	$json->convert_blessed(1);
+
+	$json = decode_json($response);
+	return $json;
 }
 
 sub dp {

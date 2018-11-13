@@ -49,7 +49,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2018-08-10';
+$VERSION = '2018-11-12';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -183,7 +183,7 @@ sub fetch_title {
 		}
 
 		if ($datasize > $max_size) {
-			dp("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size");
+			dp("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
 			$page = substr $page, 0, $max_size;
 			$datasize = length $page;
 			dp("fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
@@ -229,7 +229,7 @@ sub fetch_title {
 # getTitle params. useragent response
 sub getTitle {
 	my ($response, $url, @rest) = @_;
-	dp("getTitle") if $DEBUG1;
+	dp('getTitle') if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
 	
@@ -237,7 +237,7 @@ sub getTitle {
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
 	#da('header OG: ',$response->header('property'));
-	my $ogtitle = "";#$response->header('og:title') || '';		# open graph
+	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
 	dd("\ngetTitle response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
@@ -252,7 +252,7 @@ sub getTitle {
 	dd("geTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
-	my $temppage = $response->decoded_content;
+	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
 		dp('geTitle script filtered..') if $DEBUG1;
 	}
@@ -275,7 +275,6 @@ sub getTitle {
 		#$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
-		
 		dd('getTitle testcharset not UTF-8: '. $testcharset);
 		dd('getTitle newtitle again: '. $newtitle);
 		$newtitle = checkAndEtu($newtitle, $testcharset);
@@ -286,7 +285,6 @@ sub getTitle {
 	
 	if ($newtitle eq '') {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
-			# TODO chomp linefeeds ?
 			$title = decode_entities($1);
 			dp('getTitle backup titlematch: '. $title);
 		}
@@ -299,7 +297,6 @@ sub getTitle {
 	my $titleInUrl = 0;
 	if ($title ne '') {
 		dd("getTitle undecoded title: $title") if $DEBUG1;
-		#$title = KaaosRadioClass::replaceWeird($title);
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
 	return $title, decode_entities($newdescription), $titleInUrl;
@@ -633,8 +630,8 @@ sub sig_msg_pub {
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');
 	# Check we have an enabled channel
-	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
-	my @enabled = split / /, $enabled_raw;
+	#my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
+	#my @enabled = split / /, $enabled_raw;
 	$dontprint = 0;
 	# TODO if searching for old link..
 	if ($msg =~ /\!url ?(.*)$/i) {
@@ -644,7 +641,8 @@ sub sig_msg_pub {
 		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1 .../);
 	
 		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
-		$server->command("msg -channel $target $sayline") if grep /$target/, @enabled;
+		#$server->command("msg -channel $target $sayline") if grep /$target/, @enabled;
+		msg_to_channel($server, $target, $sayline);
 		clearUrlData();
 		return;
 	}
@@ -715,18 +713,11 @@ sub sig_msg_pub {
 	print "$myname: NOT JEE" if ($newtitle eq "0");
 	$title = $newtitle;
 	
-	dp("sig_msg_pub: title: ".$newUrlData->{title}. ", description: ".$newUrlData->{desc});
+	dp("sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
-	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne "0" && length($newUrlData->{desc}) > length($newUrlData->{title})) {
-		Irssi::print "Shortening description a bit..." if length($newUrlData->{desc}) > 220;
-		if ($newUrlData->{desc} =~ /(.{240}).*/) {
-			$description = $1 . "...";
-		} else {
-			$description = $newUrlData->{desc};
-		}
-		$title = 'Desc: '.$description unless noDescForThese($newUrlData->{url});
-		Irssi::print "Lenght of new title: ". length($title) if $DEBUG1;
-		#dp("sig_msg_pub found description: $description");
+	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
+		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
+		
 		dp('sig_msg_pub new title.');
 	}
 
@@ -737,10 +728,10 @@ sub sig_msg_pub {
 
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
 		if ($drunk && $howManyDrunk < 1) {
-			$server->command("msg -channel $target tl;dr") if grep /$target/, @enabled;
+			msg_to_channel($server, $target, 'tl;dr');
 			$howManyDrunk++;
 		} elsif ($drunk == 0) {
-			$server->command("msg -channel $target $title") if grep /$target/, @enabled;
+			msg_to_channel($server, $target, $title);
 			$howManyDrunk = 0;
 		}
 	}
@@ -749,6 +740,18 @@ sub sig_msg_pub {
 	saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
 	clearUrlData();
 	return;
+}
+
+sub msg_to_channel {
+	my ($server, $target, $title, @rest) = @_;
+	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
+	my @enabled = split / /, $enabled_raw;
+
+	if ($title =~ /(.{240}).*/s) {
+		$title = $1 . '...';
+	}
+	dp('msg_to_channel title: ' . $title.', length: 'length $title);
+	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 }
 
 # wanha
@@ -769,7 +772,8 @@ sub checkIfOld {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
 		$mon += 1;
-		$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
+		#$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
+		msg_to_channel($server, $target, "w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		return 1;
 	}
 	return 0;
