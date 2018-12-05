@@ -4,7 +4,7 @@ use strict;
 use utf8;
 binmode(STDOUT, ':utf8');
 binmode(STDIN, ':utf8');
-use open ':std', ':encoding(UTF-8)';
+#use open ':std', ':encoding(UTF-8)';
 #use Irssi::Irc;
 use DBI;
 use DBI qw(:sql_types);
@@ -26,7 +26,7 @@ $VERSION = '20181110';
 );
 
 
-my $tiedosto = $ENV{HOME}.'/public_html/korvamadot.txt';
+#my $tiedosto = $ENV{HOME}.'/public_html/korvamadot.txt';
 my $db = Irssi::get_irssi_dir(). '/scripts/korvamadot.db';
 my @channels = ('#salamolo2', '#kaaosradio');
 my $myname = 'korvamato.pl';
@@ -273,10 +273,10 @@ sub insert_into_db {
 	dp("insert_into_db Pituus: $pituus");
 	if ($pituus < 470 && $pituus > 5)
 	{
-		my $returnvalue = KaaosRadioClass::addLineToFile($tiedosto, $command);
-		if ($returnvalue < 0) {
-			Irssi::print("$myname: Error when saving to textfile: $tiedosto");
-		}
+		#my $returnvalue = KaaosRadioClass::addLineToFile($tiedosto, $command);
+		#if ($returnvalue < 0) {
+		#	Irssi::print("$myname: Error when saving to textfile: $tiedosto");
+		#}
 		saveToDB($nick, $command, $info1, $info2, $target, $artist, $title, $link1, $link2);
 		Irssi::print("$myname: \"$command\" request from $nick\n");
 		my @resultarray = search_from_db($command);
@@ -318,14 +318,14 @@ sub if_korvamato {
 		}
 		
 		my $searchword = '';
-		if ($command =~ /etsi\:? ?(.*)$/gi) {
+		if ($command =~ /^etsi\:? ?(.*)$/gi) {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
 			if ($sayline ne '') {
 				return $sayline;
 			}
 			return 'En tajunnut! !korvamato etsi <hakusana>';
-		} elsif ($command =~ /etsi\:?/gi) {
+		} elsif ($command =~ /^etsi\:?/gi) {
 			return 'En tajunnut! !korvamato etsi <hakusana>';
 		}
 
@@ -444,7 +444,15 @@ sub event_privmsg {
 		msgit($server, $nick, $helptext);
 		msgit($server, $nick, get_statistics());
 		return;
+	} elsif ($msg =~ /^!korvamato random/i) {
+		dp('random!');
+		my $sayline = search_random_from_db();
+		msgit($server, $nick, $sayline);
+		return;
 	}
+
+
+
 	if ($msg =~ /^!korvamato/) {
 		my $newReturnString = if_korvamato($msg, $nick, "PRIV");
 		if ($newReturnString ne '') {
@@ -467,6 +475,11 @@ sub event_pubmsg {
 
 	if ($msg =~ /^[\.\!]help\b/i || $msg =~ /^!korvamato$/i) {
 		print_help($server, $target);
+		return;
+	} elsif ($msg =~ /^!korvamato random/i) {
+		dp('random!');
+		my $sayline = search_random_from_db();
+		sayit($server, $target, $sayline);
 		return;
 	}
 
@@ -545,6 +558,7 @@ sub createAnswerFromResultsor {
 	my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || '-';						# lyrics
 	#my $quote = $resultarray[3] || '-';						# lyrics
 	if ($quote ne '-') { $string .= "Lyrics: $quote, "; }
+	else { return 'Ei löytynyt'; }
 	#dp ("string ### $string");
 	my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || '';
 	if ($info1 ne '') { $string .= "Info1: $info1, "; }
@@ -576,7 +590,7 @@ sub createAnswerFromResultsor {
 		dp("String: $string");
 		return $string;
 	}
-	return "Poistettu.";
+	return 'Poistettu.';
 
 }
 
@@ -639,6 +653,11 @@ sub search_url_from_db {
 	da(@resultarray);
 	# TODO: Return ID(s) and their artist if found
 	return @resultarray;
+}
+
+sub search_random_from_db {
+	my $sql = 'SELECT rowid,* FROM korvamadot WHERE rowid IN (SELECT rowid FROM korvamadot WHERE deleted = 0 ORDER BY RANDOM() LIMIT 1)';
+	return createAnswerFromResultsor(KaaosRadioClass::readLineFromDataBase($db, $sql));
 }
 
 sub readFromDB {

@@ -750,7 +750,7 @@ sub msg_to_channel {
 	if ($title =~ /(.{240}).*/s) {
 		$title = $1 . '...';
 	}
-	dp('msg_to_channel title: ' . $title.', length: 'length $title);
+	dp('msg_to_channel title: ' . $title.', length: '.length $title);
 	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 }
 

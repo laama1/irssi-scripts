@@ -11,7 +11,7 @@ binmode(STDIN, ":utf8");
 use KaaosRadioClass;		# LAama1 30.12.2016
 my $myname = "addquote.pl";
 my $tiedosto = $ENV{HOME}."/public_html/quotes.txt";
-my $publicurl = "http://lamanzi.vhosti.fi/quotes.txt";
+my $publicurl = "http://lamaz.bot.nu/quotes.txt";
 my $db = Irssi::get_irssi_dir(). "/scripts/quotes.db";
 
 use vars qw($VERSION %IRSSI);

@@ -100,12 +100,12 @@ sub readLineFromDataBase {
 	my $sth = $dbh->prepare($string) or return DBI::errstr;
 	$sth->execute();
 
-	if(my $line = $sth->fetchrow_array) {
+	if(my @line = $sth->fetchrow_array) {
 		dp('--fetched a result--');
-		dp(Dumper $line);
+		dp(Dumper @line);
 		$sth->finish();
 		$dbh->disconnect();
-		return $line;
+		return @line;
 	}
 	dp('-- Did not find a result');
 	$sth->finish();

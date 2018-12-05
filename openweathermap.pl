@@ -6,6 +6,7 @@ use JSON;
 use DateTime;
 use POSIX;
 use Time::Piece;
+#use Switch 'Perl6';
 #use open ':std', ':encoding(UTF-8)';
 binmode(STDIN,  ':utf8');
 binmode(STDOUT, ':utf8');
@@ -57,12 +58,30 @@ UTF8 emojis:
 ⚡ High Voltage
 ⛅ Sun Behind Cloud
 ☔ Umbrella With Rain Drops
+🌂 closed umbrella
+🌈 rainbow
 🌥️ Sun Behind Large Cloud
 🌦️ Sun Behind Rain Cloud
 🌤️ Sun Behind Small Cloud
-
-🍂 fallen leaf
+🌄 sunrise over mountains
+🌅 sunrise
+🌇 sunset over buildings
+🌆 cityscape at dusk
+🌉 bridge at night
 🌃 night with stars
+
+🌊 water wave
+🌀 cyclone
+🌬️ wind
+💨 dashing away
+🍂 fallen leaf
+🌋 volcano
+🌏 earth globe asia australia
+🌟 glowing star
+🌠 shooting star
+🎆 fireworks
+
+
 🌌 milky way
 🌛 first quarter moon face
 🌝 full moon face
@@ -107,6 +126,20 @@ sub replace_scandic_letters {
 	#}
 	dd("replace_scandic_letters row after: $row");
 	return $row;
+}
+
+sub replace_with_emoji {
+	my ($string, @rest) = @_;
+	$string;
+	my $icon;
+	if ($string =~ /fog/i) {
+		$icon = '🌫';
+	} elsif ($string =~ /wind/i) {
+		$icon = '💨';
+	} else {
+		$icon = $string;
+	}
+	return $icon;
 }
 
 sub CREATEDB {
@@ -202,14 +235,14 @@ sub findWeatherForecast {
 		$index++;
 	}
 	
-	Irssi::print("findWeatherForecast returnsring: $returnstring");
+	dp("findWeatherForecast returnsring: $returnstring");
 	return $returnstring;
 }
 
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
 	my ($lat, $lon) = GETCITYCOORDS($city);
-
+	return 'City not found.' unless ($lat && $lon);
 	my $newSearchUrl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($newSearchUrl, 0);
 	da('URL', $newSearchUrl,'DATA',$data);
@@ -231,8 +264,8 @@ sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
 	my $sql = "SELECT LAT,LON from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
-	#my @results = KaaosRadioClass::readLinesFromDataBase($db,$sql);
-	da('GETCITYCOORDS SQL: ', $sql);
+
+	dp('GETCITYCOORDS SQL: '. $sql);
 	dp('GETCITYCOORDS Result: ');
 	da(@results);
 	return $results[0], $results[1];
@@ -242,9 +275,9 @@ sub GETCITYCOORDS {
 sub SAVECITY {
 	my ($json, @rest) = @_;
 	my $now = time;
-	my $stmt = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
-	dp('save City stmt: '.$stmt);
-	return KaaosRadioClass::writeToOpenDB($dbh, $stmt);
+	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
+	dp('save City stmt: '.$sql);
+	return KaaosRadioClass::writeToOpenDB($dbh, $sql);
 }
 
 sub SAVEDATA {
@@ -311,9 +344,18 @@ sub getSayLine {
 		dp('json = 0');
 		return 0;
 	}
-	my $sunrise = '🌅 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
-	my $sunset = '🌇 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
-	my $returnvalue = $json->{name}.', '.$json->{sys}->{country}.': '.$json->{main}->{temp}.'°C, '.$json->{weather}[0]->{description}.'. Aurinko: '.$sunrise.', '.$sunset;
+	my $tempmin = $json->{main}->{temp_min};
+	my $tempmax = $json->{main}->{temp_max};
+	my $temp;
+	if ($tempmin != $tempmax) {
+		$temp = "($tempmin..$tempmax) °C"
+	} else {
+		$temp = $json->{main}->{temp}.'°C';
+	}
+	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
+	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
+	my $wind = '💨  '. $json->{wind}->{speed}. ' m/s';
+	my $returnvalue = $json->{name}.', '.$json->{sys}->{country}.': '.$temp.', '.$json->{weather}[0]->{description}.'. Sun: '.$sunrise.', '.$sunset.', '.$wind;
 	return $returnvalue;
 }
 

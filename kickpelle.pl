@@ -10,7 +10,7 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-my $DEBUG = 1;
+my $DEBUG = 0;
 $VERSION = "2018-06-20";
 %IRSSI = (
 	authors     => 'LAama1',
@@ -35,9 +35,7 @@ my $publicvotes = {};
 my @badwords = ();
 GETBADWORDLIST();
 
-
-
-my $helptext = 'Kickaa pelle ulos kanavalta kirjoittamalla minulle kanavalla !kick <nick> [kickmessage]';
+my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea.';
 
 
 sub print_help {
@@ -61,7 +59,7 @@ sub sayit {
 }
 
 sub getStats {
-	dp("jees");
+	dp('jees');
 	da(@$publicvotes);
 }
 
@@ -69,8 +67,8 @@ sub ifUserFoundFromChannel {
 	my ($channel, $nick, @rest) = @_;
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
-		next if $window->{name} eq "(status)";
-		next unless $window->{active}->{type} eq "CHANNEL";
+		next if $window->{name} eq '(status)';
+		next unless $window->{active}->{type} eq 'CHANNEL';
 		if($window->{active}->{name} eq $channel) {
 			dp("Found! $window->{active}->{name}");
 			dp('what if...');
@@ -114,7 +112,7 @@ sub DELBADWORD {
 	my $found = 0;
 	foreach my $word (@badwords) {
 		if ($badword == $word) {
-			splice(@badwords, $index, 1);
+			splice @badwords, $index, 1;
 			$found = 1;
 			last;
 		}
@@ -134,7 +132,7 @@ sub GETBADWORDLIST {
 	dp('bad words loaded:');
 	da(@badwords);
 	if ($badwords[0] == -1) {
-		dp("no bad words!");
+		dp('no bad words!');
 		@badwords = ('____', 'russiancup');
 		SAVEBADWORDLIST();
 	}
@@ -158,9 +156,9 @@ sub kickPerson {
 
 	$publicvotes->{$nick}->{$channel}->{'reason'} = $reason;
 
-	dp("count: ".$howmany. ", modulo: ".($howmany % $votelimit));
+	dp('count: '.$howmany. ', modulo: '.($howmany % $votelimit));
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
-		dp("KICK-KING!");
+		dp('KICK-KING!');
 		##$server->send_raw("kick $channel $nick :*BOOT ".$publicvotes->{$nick}->{$channel}->{'reason'}." *");
 		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{'reason'});
 		$publicvotes->{$nick}->{'bootcount'} += 1;
@@ -196,15 +194,65 @@ sub badWordFilter {
 	return 0;
 }
 
+# check if op or voice
+sub ifop {
+	my ($server, $channel, $nick, @test) = @_;
+	dp('SERVER');
+	da($server);
+	my @windows = Irssi::windows();
+	foreach my $window (@windows) {
+		next if $window->{name} eq '(status)';
+		next unless $window->{active}->{type} eq 'CHANNEL';
+		if($window->{active}->{name} eq $channel) {
+			dp("Found! $window->{active}->{name}");
+			dp('what if...');
+			#da($window);
+
+			# starseeds..
+			if ($window->{active_server}->{chatnet}) {
+				#dp('CHATNETS');
+				#da(Irssi::chatnets());
+				dp('FIND CHATNETS');
+				da(Irssi::server_find_chatnet($window->{active_server}->{chatnet}));
+			}
+
+			# irc.starseeds.space...
+			if ($window->{active_server}->{address}) {
+				dp('ACTIVE SERVER ADDRESS');
+				da($window->{active_server}->{address});
+				dp('SERVER ADDRESS');
+				da($server);
+			}
+			my @nicks = $window->{active}->nicks();
+			dp('nicks: ');
+			da(@nicks);
+
+			foreach my $comparenick (@nicks) {
+				if ($comparenick->{nick} eq $nick) {
+					if ($comparenick->{op} eq 1 || $comparenick->{voice} eq 1) {
+						dp("$nick is op or voice.");
+						return 1;
+					} else {
+						return 0;
+					}
+				}
+			}
+		}
+	}
+}
+
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 
     my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/$target/, @enabled);
+    my @enabled = split / /, $enabled_raw;
+    return unless grep /$target/, @enabled;
 
 	if ($msg =~ /^!help kick\b/i || $msg =~ /^!kick$/i) {
 		print_help($server, $target);
+		return;
+	}
+	if (ifop($server, $target, $nick) != 1) {
 		return;
 	}
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{
@@ -225,7 +273,7 @@ sub event_pubmsg {
 		if (ADDBADWORD($1) == 0) {
 			sayit($server, $target, "Added $1 to list.");
 		} else {
-			sayit($server, $target, "Allready found or error.");
+			sayit($server, $target, 'Allready found or error.');
 		}
 	} elsif ($msg =~ /^!badword/gi) {
 		dp('listing bad words');
