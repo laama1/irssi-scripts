@@ -52,20 +52,24 @@ UTF8 emojis:
 🌩️ Cloud With Lightning
 🌧️ Cloud With Rain
 🌨️ Cloud With Snow
+❄️ Snow flake
 🌪️ Tornado
 🌫️ Fog
-🌁 Foggy
+🌁 Foggy (city)
 ⚡ High Voltage
-⛅ Sun Behind Cloud
+
 ☔ Umbrella With Rain Drops
 🌂 closed umbrella
 🌈 rainbow
 🌥️ Sun Behind Large Cloud
+⛅ Sun Behind Cloud
 🌦️ Sun Behind Rain Cloud
 🌤️ Sun Behind Small Cloud
+
 🌄 sunrise over mountains
 🌅 sunrise
 🌇 sunset over buildings
+🌞 Sun With Face
 🌆 cityscape at dusk
 🌉 bridge at night
 🌃 night with stars
@@ -81,7 +85,6 @@ UTF8 emojis:
 🌠 shooting star
 🎆 fireworks
 
-
 🌌 milky way
 🌛 first quarter moon face
 🌝 full moon face
@@ -94,7 +97,7 @@ UTF8 emojis:
 🌒 waxing crescent moon
 🌔 waxing gibbous moon
 
-
+🦄 Unicorn Face
 =cut
 
 
@@ -130,16 +133,55 @@ sub replace_scandic_letters {
 
 sub replace_with_emoji {
 	my ($string, @rest) = @_;
-	$string;
-	my $icon;
-	if ($string =~ /fog/i) {
-		$icon = '🌫';
-	} elsif ($string =~ /wind/i) {
-		$icon = '💨';
-	} else {
-		$icon = $string;
+	$string =~ s/fog|mist/🌫️/ui;
+	$string =~ s/wind/💨/ui;
+	$string =~ s/snow/❄️/ui;
+	#if ()
+	#$string =~ s/overcast clouds/🌥️/ui;
+	return $string;
+}
+
+sub is_sun_up {
+	my ($sunrise, $sunset, $tz, @rest) = @_;
+	my $comparetime = localtime;
+	if ($comparetime > $sunset || $comparetime < $sunrise) {
+		Irssi::print 'SUN ... IS ... DOWN!!';
+		return conway();
 	}
-	return $icon;
+	return '🌞';
+}
+
+sub conway {
+	# John Conway method
+	#my ($y,$m,$d);
+	chomp(my $y = `date +%Y`);
+	chomp(my $m = `date +%m`);
+	chomp(my $d = `date +%d`);
+
+	my $r = $y % 100;
+	$r %= 19;
+	if ($r > 9) { $r-= 19; }
+	$r = (($r * 11) % 30) + $m + $d;
+	if ($m < 3) { $r += 2; }
+	$r -= 8.3;              # year > 2000
+
+	$r = ($r + 0.5) % 30;	#test321
+	my $age = $r;
+	$r = 7/30 * $r + 1;
+
+=pod
+      0: 'New Moon'        🌑
+      1: 'Waxing Crescent' 🌒
+      2: 'First Quarter',  🌓
+      3: 'Waxing Gibbous', 🌔
+      4: 'Full Moon',      🌕
+      5: 'Waning Gibbous', 🌖
+      6: 'Last Quarter',   🌗
+      7: 'Waning Crescent' 🌘
+=cut
+
+	my @moonarray = ('🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘');
+	return $moonarray[$r];
 }
 
 sub CREATEDB {
@@ -173,15 +215,19 @@ sub CREATEDB {
 # param: searchword, returns json answer or 0
 sub findWeather {
 	my ($searchword, @rest) = @_;
-	my $searchtime = time() - (2*60*60);
+	#my $searchtime = time() - (2*60*60);
 	dp("findWeather: $searchword") if $DEBUG;
 	my $returnstring;
 
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword."&units=metric&appid=".$apikey, 0);
 	da("DATA:",$data);
 	if ($data < 0) {
-		dp('data = '.$data);
-		return 0;
+		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
+		$data = KaaosRadioClass::fetchUrl($url.$name."&units=metric&appid=".$apikey, 0);
+		if ($data < 0) {
+			dp('data = '.$data);
+			return 0;
+		}
 	}
 	
 	my $json = decode_json($data);
@@ -241,7 +287,7 @@ sub findWeatherForecast {
 
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
-	my ($lat, $lon) = GETCITYCOORDS($city);
+	my ($lat, $lon, $name) = GETCITYCOORDS($city);
 	return 'City not found.' unless ($lat && $lon);
 	my $newSearchUrl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($newSearchUrl, 0);
@@ -262,13 +308,13 @@ sub FINDAREAWEATHER {
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
-	my $sql = "SELECT LAT,LON from CITIES where NAME Like '%".$city."%'";
+	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
 
 	dp('GETCITYCOORDS SQL: '. $sql);
 	dp('GETCITYCOORDS Result: ');
 	da(@results);
-	return $results[0], $results[1];
+	return $results[0], $results[1], $results[2];
 }
 
 # save new city to database
@@ -313,12 +359,6 @@ sub dp {
 	}
 }
 
-#sub dd {
-#	my ($string, @rest) = @_;
-#	if ($DEBUG_decode == 1) {
-#		print("\n$myname debug: ".$string);
-#	}
-#}
 
 # debug print array
 sub da {
@@ -333,7 +373,7 @@ sub getSayLine2 {
 		dp('json = 0');
 		return 0;
 	}
-	my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.$json->{weather}[0]->{description};
+	my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.replace_with_emoji($json->{weather}[0]->{description});
 	return $returnvalue;
 }
 
@@ -352,10 +392,15 @@ sub getSayLine {
 	} else {
 		$temp = $json->{main}->{temp}.'°C';
 	}
+	my $sky = is_sun_up($json->{sys}->{sunrise}, $json->{sys}->{sunset});
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
-	my $wind = '💨  '. $json->{wind}->{speed}. ' m/s';
-	my $returnvalue = $json->{name}.', '.$json->{sys}->{country}.': '.$temp.', '.$json->{weather}[0]->{description}.'. Sun: '.$sunrise.', '.$sunset.', '.$wind;
+	my $wind = '💨 '. $json->{wind}->{speed}. ' m/s';
+	my $city = $json->{name};
+	if ($city eq 'Kokkola') {
+		$city = '🦄 Kokkola';
+	}
+	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.replace_with_emoji($json->{weather}[0]->{description}).'. '.$sunrise.', '.$sunset.', '.$wind. ' --> '.$sky;
 	return $returnvalue;
 }
 
@@ -367,8 +412,13 @@ sub sig_msg_pub {
 	my $enabled_raw = Irssi::settings_get_str('openweathermap_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
 	return unless grep(/$target/, @enabled);
+	my $sayline = filter($msg);
+	$server->command("msg -channel $target $sayline") if $sayline;
+	return;
+	
+	
 	if ($msg =~ /\!(sää |saa |s )(.*)$/i) {
-		dp("Hopsan $1");
+		dp("Hopsan $1 $2");
 		return if KaaosRadioClass::floodCheck() > 0;
 		#my $searchWord = $1;
 		my $city = $2;
@@ -393,6 +443,32 @@ sub sig_msg_pub {
 	}
 }
 
+sub filter {
+	my ($msg, @rest) = @_;
+	my $returnstring = '';
+	if ($msg =~ /\!(sää |saa |s )(.*)$/i) {
+		return if KaaosRadioClass::floodCheck() > 0;
+		my $city = $2;
+		$returnstring = getSayLine(findWeather($city));
+	} elsif ($msg =~ /\!(se )(.*)$/i) {
+		return if KaaosRadioClass::floodCheck() > 0;
+		my $city = $2;
+		$returnstring = findWeatherForecast($city);
+	} elsif ($msg =~ /\!(sa )(.*)$/i) {
+		return if KaaosRadioClass::floodCheck() > 0;
+		my $city = $2;
+		$returnstring = FINDAREAWEATHER($city);
+	}
+	return $returnstring;
+}
+
+sub sig_msg_priv {
+	my ($server, $msg, $nick, $address) = @_;
+	return if ($nick eq $server->{nick});		# self-test
+	my $sayline = filter($msg);
+	$server->command("msg $nick $sayline") if $sayline;
+}
+
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
 	dp('own public');
@@ -404,6 +480,7 @@ Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '')
 #Irssi::settings_add_str('openweathermap', 'openweathermap_shortmode_channels', '');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
+Irssi::signal_add('message private', 'sig_msg_priv');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
 Irssi::print("$myname v. $VERSION loaded.");
 Irssi::print("\nNew commands:");

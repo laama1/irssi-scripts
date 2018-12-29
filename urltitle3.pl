@@ -26,9 +26,9 @@ use HTML::Entities qw(decode_entities);
 #use RDF::RDFa::Parser;
 use utf8;
 #use open ':std', ':encoding(UTF-8)';
-binmode(STDIN,  ':utf8');
-binmode(STDOUT, ':utf8');
-binmode(STDERR, ':utf8');
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+binmode STDERR, ':utf8';
 #binmode STDOUT, ":encoding(utf8)";
 #binmode STDIN, ":encoding(utf8)";
 #binmode STDERR, ":encoding(utf8)";
@@ -49,7 +49,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2018-11-12';
+$VERSION = '2018-12-26';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -183,10 +183,10 @@ sub fetch_title {
 		}
 
 		if ($datasize > $max_size) {
-			dp("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
+			dd("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
 			$page = substr $page, 0, $max_size;
 			$datasize = length $page;
-			dp("fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
+			dd("fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
 		}
 
 		$size = $response->content_length || 0;
@@ -328,7 +328,7 @@ sub etu {
 ### Check if charset is utf8 or not, and convert. Params: 1) String to convert 2) source charset.
 sub checkAndEtu {
 	my ($string, $charset, @rest) = @_;
-	dp("checkAndEtu, charset: $charset, string: $string");
+	dd("checkAndEtu, charset: $charset, string: $string");
 	my $returnString = "";
 	if ($charset !~ /utf-8/i && $charset !~ /utf8/i) {
 		dd("charset is reported different from utf8");
@@ -363,13 +363,13 @@ sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
 	my ($samewords, $titlewordCount) = countSameWords($url, $title);
-	dp("checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
+	dd("checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
 
 	if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
-		dp("checkIfTitleInUrl bling1! title wordcount: $titlewordCount same words: $samewords");
+		dd("checkIfTitleInUrl bling1! title wordcount: $titlewordCount same words: $samewords");
 		return 1;
 	} elsif ($samewords == $titlewordCount) {
-		dp("checkIfTitleInUrl bling2! samewords = title words = $samewords");
+		dd("checkIfTitleInUrl bling2! samewords = title words = $samewords");
 		return 1;
 	}
 	dd('checkIfTitleInUrl: title not found from url!');
@@ -579,7 +579,7 @@ sub checkForPrevEntry {
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
-	dp("$count elements found!") if $DEBUG1;
+	dd("$count previous elements found!");# if $DEBUG1;
 	if ($count == 0)	{ return; }
 	else { return @elements };
 }
@@ -671,7 +671,7 @@ sub sig_msg_pub {
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (getChannelTitle($target) =~ /np\:/i) {
-			#dp('np FOUND from channel title');
+			dp('np FOUND from channel title');
 			$dontprint = 1;
 		} else {
 			#dp('np NOT FOUND from channel title');
@@ -718,7 +718,7 @@ sub sig_msg_pub {
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
 		
-		dp('sig_msg_pub new title.');
+		dp('sig_msg_pub new title.') if $DEBUG1;
 	}
 
 	if ($shortModeEnabled == 0 && length($newUrlData->{url}) >= 70) {
@@ -750,7 +750,7 @@ sub msg_to_channel {
 	if ($title =~ /(.{240}).*/s) {
 		$title = $1 . '...';
 	}
-	dp('msg_to_channel title: ' . $title.', length: '.length $title);
+	dp('msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
 	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 }
 
@@ -760,7 +760,7 @@ sub checkIfOld {
 	my $wanhadisabled = Irssi::settings_get_str('urltitle_wanha_disabled');
 	dp("checkIfOld") if $DEBUG1;
 	if ($wanhadisabled == 1) {
-		dp("Wanha is disabled.");
+		dp("Wanha is disabled.") if $DEBUG1;
 		return 0;
 	}
 	
@@ -800,7 +800,7 @@ sub findUrl {
 		# print all found entries
 		my @results = searchDB($searchword);
 		$returnstring .= "Loton oikeat numerot: ";
-		dp("Loton oikeat numerot");
+		dp('Loton oikeat numerot');
 		my $in = 0;
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
@@ -862,8 +862,8 @@ sub searchDB {
 	}
 	dp("searchDB '$searchWord' Dump:");
 	da(@resultarray);
-	dp("searchDB dump end.");
-	return @resultarray;	
+	dp("searchDB dump end.") if $DEBUG1;
+	return @resultarray;
 }
 
 # search rowid = artist ID from database
@@ -914,7 +914,7 @@ sub createShortAnswerFromResults {
 		#Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp("stringi: $returnstring");
+	dp("stringi: $returnstring") if $DEBUG1;
 	#dp($string);
 	return $returnstring;
 
@@ -922,12 +922,12 @@ sub createShortAnswerFromResults {
 
 # Create one line from one result!
 sub createAnswerFromResults {
-	dp("createAnswerFromResults");
+	dp("createAnswerFromResults") if $DEBUG1;
 	my @resultarray = @_;
 
 	my $amount = @resultarray;
-	dp(" #### create answer from results.. how many values: $amount");
-	da(@resultarray);
+	dp(" #### create answer from results.. how many values: $amount") if $DEBUG1;
+	da(@resultarray) if $DEBUG1;
 	if ($amount == 0) {
 		return "Ei tuloksia.";
 	}
@@ -941,7 +941,7 @@ sub createAnswerFromResults {
 	$returnstring .= "url: $url, ";
 	my $title = $resultarray[4];
 	$returnstring .= "title: $title, ";
-	dp("title: $title");
+	dd("title: $title");
 	my $desc = $resultarray[5];
 	$returnstring .= "desc: $desc, ";
 	my $channel = $resultarray[6];

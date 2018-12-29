@@ -43,7 +43,7 @@ sub print_help {
 
 sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
-
+	return if ($nick eq $server->{nick});   #self-test
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
     my @enabled = split(/ /, $enabled_raw);
     return unless grep(/^$target$/, @enabled);

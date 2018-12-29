@@ -39,10 +39,9 @@ unless (-e $db) {
 
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
-	my ($target, $text) = $msg =~ /^(\S*)\s:(.*)/;
+	#my ($target, $text) = $msg =~ /^(\S*)\s:(.*)/;
 	return if ($nick eq $server->{nick});	#self-test
-	dp("priv, target: $target, msg: $msg");
-	parseQuote($msg, $nick, "priv", $server);
+	parseQuote($msg, $nick, 'priv', $server);
 }
 
 sub parseQuote {
@@ -62,7 +61,7 @@ sub parseQuote {
 			Irssi::print("$myname: $msg request from $nick (too long!)");
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
 		}
-	}	
+	}
 }
 
 sub event_pubmsg {
