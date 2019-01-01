@@ -183,6 +183,58 @@ sub check_if_delete {
 	return 0;
 }
 
+sub parse_keyword_run_sql {
+	my ($id, $command, @rest) = @_;
+	my $updatestring = '';			#$server->command("msg -channel $target $title") if grep /$target/, @enabled;
+	my $selectoldstring = '';
+	return ($updatestring, $selectoldstring) unless $id > 0;
+			# TODO: sanitize with bind_param
+			# Don't delete deleted.
+	if ($command =~ /.*link1:? ?(.*)/gi || $command =~ /.*url:? ?(.*)/gi) {
+		my $link1 = $1;
+		Irssi::print("$myname Add link1: $link1");
+		$updatestring = "UPDATE korvamadot set link1 = \"$link1\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
+	} elsif ($command =~ /link2:? ?(.*)/gi) {
+		my $link2 = $1;
+		Irssi::print("$myname Add link2: $link2");
+		$updatestring = "UPDATE korvamadot set link2 = \"$link2\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
+	} elsif ($command =~ /info1?:? ?(.*)/gi) {
+		my $info1 = $1;
+		Irssi::print("$myname Add info1: $info1");
+		$updatestring = "UPDATE korvamadot set info1 = \"$info1\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
+	} elsif ($command =~ /info2:? ?(.*)/gi) {
+		my $info2 = $1;
+		Irssi::print("$myname Add info2: $info2");
+		$updatestring = "UPDATE korvamadot set info2 = \"$info2\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
+	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
+		my $artist = $1;
+		Irssi::print("$myname Add Artist: $artist");
+		$updatestring = "UPDATE korvamadot set artist = \"$artist\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
+	} elsif ($command =~ /title:? ?(.*)/gi) {
+		my $title = $1;
+		$updatestring = "UPDATE korvamadot set title = \"$title\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT title from korvamadot where rowid = $id";
+	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
+		my $lyrics = $1;
+		$updatestring = "Update korvamadot set quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
+		$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
+	}
+
+	return ($updatestring, $selectoldstring);
+}
+
+sub get_position {
+    my ($regex, $string) = @_;
+    return if not $string =~ /$regex/;
+    return (@-);
+}
+
+
 sub parse_keyword_return_sql {
 	my ($id, $command, @rest) = @_;
 	my $updatestring = '';			#$server->command("msg -channel $target $title") if grep /$target/, @enabled;
@@ -450,8 +502,6 @@ sub event_privmsg {
 		msgit($server, $nick, $sayline);
 		return;
 	}
-
-
 
 	if ($msg =~ /^!korvamato/) {
 		my $newReturnString = if_korvamato($msg, $nick, "PRIV");

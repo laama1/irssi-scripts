@@ -1,5 +1,5 @@
 use Irssi;
-use Irssi::Irc;
+#use Irssi::Irc;
 use DBI;
 use DBI qw(:sql_types);
 use warnings;
@@ -10,7 +10,7 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-my $DEBUG = 0;
+my $DEBUG = 1;
 $VERSION = "2018-06-20";
 %IRSSI = (
 	authors     => 'LAama1',
@@ -28,10 +28,8 @@ my $myname = 'kickpelle.pl';
 my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
 my $votelimit = 3;		# how many votes needed to kick someone
 my $publicvotes = {};
-# publicvotes->{nick}->{channel}->votecount
-# 
-#
-#
+my $lastprivkick = time;
+
 my @badwords = ();
 GETBADWORDLIST();
 
@@ -70,8 +68,8 @@ sub ifUserFoundFromChannel {
 		next if $window->{name} eq '(status)';
 		next unless $window->{active}->{type} eq 'CHANNEL';
 		if($window->{active}->{name} eq $channel) {
-			dp("Found! $window->{active}->{name}");
-			dp('what if...');
+			#dp("Found! $window->{active}->{name}");
+			#dp('what if...');
 			#da($window);
 			my @nicks = $window->{active}->nicks();
 			#da(@nicks);
@@ -143,45 +141,53 @@ sub kickPerson {
 	my ($server, $channel, $nick, $reason, $kicker, @rest) = @_;
 	dp("target: $channel, nick: $nick, reason: $reason");
 
-	if ($publicvotes->{$nick}->{$channel}->{$kicker}) {
-		sayit($server, $channel, "Only one vote per user. ($nick) votes: ".($publicvotes->{$nick}->{$channel}->{'votecount'} % $votelimit));
+	if (defined($publicvotes->{$nick}->{$channel}->{$kicker})) {
+		sayit($server, $channel, "Only one vote per user. ($nick) votes: ".($publicvotes->{$nick}->{$channel}->{votecount} % $votelimit));
 		return 0;
 	} else {
-		$publicvotes->{$nick}->{$channel}->{$kicker} += 1;
+		$publicvotes->{$nick}->{$channel}->{$kicker} = 1;
 	}
 
-	$publicvotes->{$nick}->{$channel}->{'votecount'} += 1;
-	my $howmany = $publicvotes->{$nick}->{$channel}->{'votecount'};
-	$publicvotes->{$nick}->{'when'} = localtime(time());
+	$publicvotes->{$nick}->{$channel}->{votecount} += 1;
+	my $howmany = $publicvotes->{$nick}->{$channel}->{votecount};
+	$publicvotes->{$nick}->{when} = localtime(time);
 
-	$publicvotes->{$nick}->{$channel}->{'reason'} = $reason;
+	$publicvotes->{$nick}->{$channel}->{reason} = $reason;
 
 	dp('count: '.$howmany. ', modulo: '.($howmany % $votelimit));
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
 		dp('KICK-KING!');
-		##$server->send_raw("kick $channel $nick :*BOOT ".$publicvotes->{$nick}->{$channel}->{'reason'}." *");
-		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{'reason'});
-		$publicvotes->{$nick}->{'bootcount'} += 1;
+		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{reason});
+		$publicvotes->{$nick}->{bootcount} += 1;
 	} else {
-		sayit($server, $channel, "($nick) votes: ".($howmany % $votelimit). '/3');
+		sayit($server, $channel, "($nick) votes: ".($howmany % $votelimit). "/3, \"$reason\"");
 	}
 }
 
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
-	$server->send_raw("kick $channel $nick :*BOOT ".$reason.'*');
+	$server->send_raw("kick $channel $nick :*BOOT $reason*");
 	Irssi::signal_stop();
 	return;
 }
 
 sub event_privmsg {
 	my ($server, $data, $nick, $address) = @_;
-	if($data =~ /^!kick (#[^\s]?) ([^\s]?) (.{1,470})/gi) {
+	#dp('data: '.$data);
+	if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
+	#if($data =~ /^!kick (#[^\s]*) ([^\s]*)/gi) {
+		dp("event_privmsg: $1 $2 $3");
 		my $kickchannel = $1;
 		my $kicknick = $2;
-		my $kickreason = $3 || "";
-		if (ifUserFoundFromChannel($kickchannel, $kicknick)) {
-			kickPerson($server, $kickchannel, $kicknick, $kickreason);
+		my $kickreason = $3 || '';
+		if (get_nickrec($server, $kickchannel, $kicknick)) {
+			if (ifop2($server, $kickchannel, $nick)) {
+				kickPerson($server, $kickchannel, $kicknick, $kickreason);
+			} else {
+				msgit($server, $nick, "You don't have operator status on $kickchannel!");	
+			}
+		} else {
+			msgit($server, $nick, "No nick $kicknick on $kickchannel!");
 		}
 	}
 }
@@ -189,7 +195,7 @@ sub event_privmsg {
 sub badWordFilter {
 	my ($msg, @rest) = @_;
 	foreach my $badword (@badwords) {
-		return 1 if $msg =~ m/$badword/;
+		return 1 if $msg =~ m/$badword/i;
 	}
 	return 0;
 }
@@ -197,8 +203,8 @@ sub badWordFilter {
 # check if op or voice
 sub ifop {
 	my ($server, $channel, $nick, @test) = @_;
-	dp('SERVER');
-	da($server);
+	#dp('SERVER');
+	#da($server);
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
@@ -212,24 +218,24 @@ sub ifop {
 			if ($window->{active_server}->{chatnet}) {
 				#dp('CHATNETS');
 				#da(Irssi::chatnets());
-				dp('FIND CHATNETS');
-				da(Irssi::server_find_chatnet($window->{active_server}->{chatnet}));
+				#dp('FIND CHATNETS');
+				#da(Irssi::server_find_chatnet($window->{active_server}->{chatnet}));
 			}
 
 			# irc.starseeds.space...
 			if ($window->{active_server}->{address}) {
-				dp('ACTIVE SERVER ADDRESS');
-				da($window->{active_server}->{address});
-				dp('SERVER ADDRESS');
-				da($server);
+				#dp('ACTIVE SERVER ADDRESS');
+				#da($window->{active_server}->{address});
+				#dp('SERVER ADDRESS');
+				#da($server);
 			}
 			my @nicks = $window->{active}->nicks();
-			dp('nicks: ');
-			da(@nicks);
+			#dp('nicks: ');
+			#da(@nicks);
 
 			foreach my $comparenick (@nicks) {
 				if ($comparenick->{nick} eq $nick) {
-					if ($comparenick->{op} eq 1 || $comparenick->{voice} eq 1) {
+					if ($comparenick->{op} == 1 || $comparenick->{voice} == 1) {
 						dp("$nick is op or voice.");
 						return 1;
 					} else {
@@ -239,6 +245,19 @@ sub ifop {
 			}
 		}
 	}
+}
+
+sub get_nickrec {
+	my ($server, $channel, $nick) = @_;
+	return unless defined($server) && defined($channel) && defined($nick);
+	my $chanrec = $server->channel_find($channel);
+	return $chanrec ? $chanrec->nick_find($nick) : undef;
+}
+
+sub ifop2 {
+	my ($server, $channel, $nick) = @_;
+	my $nickrec = get_nickrec($server, $channel, $nick);
+	return ($nickrec->{op} == 1 || $nickrec->{voice} == 1 || $nickrec->{halfop} == 1) ? 1 : 0;
 }
 
 sub event_pubmsg {
@@ -252,20 +271,26 @@ sub event_pubmsg {
 		print_help($server, $target);
 		return;
 	}
-	if (ifop($server, $target, $nick) != 1) {
+	if (badWordFilter($msg)) {
+		dp('badword found!');
+		doKick($server, $target, $nick, 'Bad words!');
+		return;
+	}
+
+	if (ifop2($server, $target, $nick) != 1) {
 		return;
 	}
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{
 		my $kicknick = $1;		# nick to kick
 		my $reason = $2;
-		if (ifUserFoundFromChannel($target, $kicknick) == 1) {
+		if (get_nickrec($server, $target, $nick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
-		dp("msg: $msg");
+		#dp("msg: $msg");
 		my $kicknick = $1;
-		my $reason = "";
-		if (ifUserFoundFromChannel($target, $kicknick) == 1) {
+		my $reason = '';
+		if (get_nickrec($server, $target, $kicknick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
@@ -282,12 +307,6 @@ sub event_pubmsg {
 			$string .= "$badword, ";
 		}
 		sayit($server, $target, $string);
-	}
-
-	if (badWordFilter($msg)) {
-		dp('badword found!');
-		#kickPerson($server, $target, $nick, "Bad words!", $server->{nick});
-		doKick($server, $target, $nick, 'Bad words!');
 	}
 }
 

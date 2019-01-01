@@ -3,14 +3,14 @@ use strict;
 #use warnings;
 use utf8;
 use Data::Dumper;
-use lib '/home/laama/.irssi/scripts';
+use lib $ENV{HOME}.'/.irssi/scripts';
 use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
 
 $VERSION = 0.4;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 1;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
@@ -51,6 +51,7 @@ open(STDERR, ">>:utf8", $logfile) or do {
 	print 'failed to open STDERR ($!)\n';
 	die;
 };
+
 warn 'testing warning redirect' if $DEBUG;
 my $debuglog = $mydir.'/logs/fetch_horos2_debug.log';
 my $horofile = $mydir.'/horos.txt';
@@ -142,7 +143,7 @@ sub grepAstroHoro {
 	#dw($page);
 	my $skoopit = "";
 	my $index = 0;
-	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)<\/em>/sgi) {
+	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)<\/em>/sgi && $index < 100) {
 		my $sign = $1;
 		my $horo = $2;
 		dp("grepAstroHoro sign: ".$sign);
@@ -175,7 +176,7 @@ sub grepAstrosaa {
 	#dp("grepAstrosaa page: $data");
 	#<strong>Astrosää:</strong>Halmikuun aloittava viikko on .... eniten.</p>
 	#while ($data =~ m/<p><strong>Astrosää:<\/strong>(.*?)<\/p>/sgi && $index++) {
-	while ($data =~ m/<strong>Astrosää:<\/strong>(.*?)<\/p>/sgi) {
+	while ($data =~ m/<strong>Astrosää:<\/strong>(.*?)<\/p>/sgi && $index < 100) {
 	# <p><strong>Astrosää:</strong>Tammikuun t... </p>
 		$index++;
 		my $horo = $1;
@@ -212,7 +213,7 @@ sub grepIltis {
 		# open database connection
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		
-		while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi) {
+		while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi && $index < 100) {
 		#while($page =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
 			my $sign = $1;
 			my $datum = $2;
@@ -285,7 +286,7 @@ sub grepMenaiset {
 	my ($allHoros, $logtext) = '';
 	#logmsg($page);
 	#while ($page =~ /<div class="field-item even"><p>([^<].*?)<\!--EndFragment/sgi) {
-	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi) {
+	while ($page =~ /<div class="field-item even"><p>Lue(.*?)inline-teaser/sgi && $index < 100) {
 		my $newdata = $1;
 		$newdata = parseComments($newdata);
 		logmsg($newdata);
@@ -513,8 +514,7 @@ sub parseComments {
 		$i++;
 	}
 	$data =~ s/<head>(.*?)<\/head>//si;
-	dp("comment etc. Elements parsed: $i");
-	#dw('data: '. $data);
+	logmsg("comments etc. elements parsed: $i");
 	return $data;
 }
 

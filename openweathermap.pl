@@ -6,6 +6,9 @@ use JSON;
 use DateTime;
 use POSIX;
 use Time::Piece;
+
+use Math::Trig; # for apparent temp
+
 #use Switch 'Perl6';
 #use open ':std', ':encoding(UTF-8)';
 binmode(STDIN,  ':utf8');
@@ -70,6 +73,7 @@ UTF8 emojis:
 🌅 sunrise
 🌇 sunset over buildings
 🌞 Sun With Face
+☀️ Sun
 🌆 cityscape at dusk
 🌉 bridge at night
 🌃 night with stars
@@ -133,11 +137,13 @@ sub replace_scandic_letters {
 
 sub replace_with_emoji {
 	my ($string, @rest) = @_;
-	$string =~ s/fog|mist/🌫️/ui;
-	$string =~ s/wind/💨/ui;
-	$string =~ s/snow/❄️/ui;
-	#if ()
-	#$string =~ s/overcast clouds/🌥️/ui;
+	$string =~ s/fog|mist/🌫️ /ui;
+	$string =~ s/wind/💨 /ui;
+	$string =~ s/snow/❄️ /ui;
+	if (is_sun_up()) {
+		$string =~ s/overcast clouds/🌥️ /ui;
+		$string =~ s/clear sky/☀️ /ui;
+	}
 	return $string;
 }
 
@@ -145,10 +151,18 @@ sub is_sun_up {
 	my ($sunrise, $sunset, $tz, @rest) = @_;
 	my $comparetime = localtime;
 	if ($comparetime > $sunset || $comparetime < $sunrise) {
-		Irssi::print 'SUN ... IS ... DOWN!!';
-		return conway();
+		dp('SUN ... IS ... DOWN!!');
+		return 0;
 	}
-	return '🌞';
+	return 1;
+}
+
+sub get_sun_moon {
+	my ($sunrise, $sunset, $tz, @rest) = @_;
+	if (is_sun_up($sunrise, $sunset)) {
+		return '🌞';
+	}
+	return conway();
 }
 
 sub conway {
@@ -244,7 +258,7 @@ sub findWeatherForecast {
 	my ($searchword, @rest) = @_;
 	my $returnstring = 'klo ';
 
-	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword."&units=metric&appid=".$apikey, 0);
+	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
 	
 	#da("DATA: ",$data);
 	if ($data < 0) {
@@ -277,7 +291,8 @@ sub findWeatherForecast {
 		Irssi::print('Localtime: '.localtime($item->{dt}));
 		Irssi::print('Temp: '.$item->{main}->{temp});
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
-		$returnstring .= $hour.': '.$item->{main}->{temp} . '°C, ';
+		$returnstring .= sprintf ('%.2d', $hour) .': '.$item->{main}->{temp} . '°C, ';
+		#$returnstring .= $hour.': '.$item->{main}->{temp} . '°C, ';
 		$index++;
 	}
 	
@@ -359,10 +374,9 @@ sub dp {
 	}
 }
 
-
 # debug print array
 sub da {
-	Irssi::print("debugarray: ");
+	Irssi::print("$myname debugarray: ");
 	Irssi::print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
 }
 
@@ -392,7 +406,9 @@ sub getSayLine {
 	} else {
 		$temp = $json->{main}->{temp}.'°C';
 	}
-	my $sky = is_sun_up($json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	my $apptemp = getApparentTemperature($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
+	dp($apptemp);
+	my $sky = get_sun_moon($json->{sys}->{sunrise}, $json->{sys}->{sunset});
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
 	my $wind = '💨 '. $json->{wind}->{speed}. ' m/s';
@@ -400,7 +416,19 @@ sub getSayLine {
 	if ($city eq 'Kokkola') {
 		$city = '🦄 Kokkola';
 	}
+	my $weatherdesc = '';
+	my $index = 0;
+	foreach my $item (@{$json->{weather}}) {
+		if ($index > 1) {
+			$weatherdesc .= ' ---, ';
+		}
+		$weatherdesc .= $item->{description};
+		$index++;
+	}
+	dp('weatherdesc: '.$weatherdesc);
+	
 	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.replace_with_emoji($json->{weather}[0]->{description}).'. '.$sunrise.', '.$sunset.', '.$wind. ' --> '.$sky;
+	#my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.replace_with_emoji($weatherdesc).'. '.$sunrise.', '.$sunset.', '.$wind. ' --> '.$sky;
 	return $returnvalue;
 }
 
@@ -460,6 +488,54 @@ sub filter {
 		$returnstring = FINDAREAWEATHER($city);
 	}
 	return $returnstring;
+}
+
+use constant SOLAR_CONSTANT => 1395; # solar constant (w/m2)
+use constant TRANSMISSIONCOEFFICIENTCLEARDAY => 0.81;
+use constant TRANSMISSIONCOEFFICIENTCLOUDY => 0.62;
+# from your local weather android app
+# params:
+# $dryBulbTemperature = degrees in celsius ?
+# $humidity = percent
+# $windSpeed = m/s ?
+# cloudiness = percent
+# $latitude = degrees?
+# $timestamp = unixtime ?
+sub getApparentTemperature {
+	my ($dryBulbTemperature, $humidity ,$windSpeed, $cloudiness, $latitude, $timestamp, @rest) = @_;
+	da(@_);
+	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
+	my $cosOfZenithAngle = getCosOfZenithAngle(deg2rad($latitude), $timestamp);
+	dp('cosOfZenithAngle: '.$cosOfZenithAngle);
+	my $secOfZenithAngle = 1/ $cosOfZenithAngle;
+	my $transmissionCoefficient = TRANSMISSIONCOEFFICIENTCLEARDAY - (TRANSMISSIONCOEFFICIENTCLEARDAY - TRANSMISSIONCOEFFICIENTCLOUDY) * ($cloudiness/100.0);
+	my $calculatedIrradiation = 0;
+	if ($cosOfZenithAngle > 0) {
+            $calculatedIrradiation = (SOLAR_CONSTANT * $cosOfZenithAngle * $transmissionCoefficient ** $secOfZenithAngle)/10;
+    }
+	my $apparentTemperature = $dryBulbTemperature + (0.348 * $e) - (0.70 * $windSpeed) + ((0.70 * $calculatedIrradiation)/($windSpeed + 10)) - 4.25;
+	return printf("%.1f", $apparentTemperature);
+}
+
+sub getCosOfZenithAngle {
+	my ($latitude, $timestamp, @rest) = @_;
+	# TODO: create perl time element
+	my $declination = deg2rad(-23.44 * cos(deg2rad((360.0/365.0) * (9 + getDayOfYear($timestamp)))));
+	my $hourAngle = ((12 * 60) - getMinuteOfDay($timestamp)) * 0.25;
+	return sin $latitude * sin $declination + (cos $latitude * cos $declination * cos deg2rad($hourAngle));
+
+}
+
+# TODO: Timezone
+sub getDayOfYear {
+	my ($timestamp, $tz, @rest) = @_;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime $timestamp;
+	return $yday +1;
+}
+sub getMinuteOfDay {
+	my ($timestamp, $tz, @rest) = @_;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime $timestamp;
+	return $hour*60 + $min;
 }
 
 sub sig_msg_priv {
