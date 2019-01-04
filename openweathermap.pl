@@ -136,22 +136,29 @@ sub replace_scandic_letters {
 }
 
 sub replace_with_emoji {
-	my ($string, @rest) = @_;
+	my ($string, $sunrise, $sunset, @rest) = @_;
+	my $sunmoon = get_sun_moon($sunrise, $sunset);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
 	$string =~ s/snow/❄️ /ui;
-	if (is_sun_up()) {
+	$string =~ s/clear sky/$sunmoon /ui;
+	$string =~ s/Sky is Clear/$sunmoon /ui;
+	my $sunup = is_sun_up($sunrise, $sunset);
+	if ($sunup == 1) {
 		$string =~ s/overcast clouds/🌥️ /ui;
-		$string =~ s/clear sky/☀️ /ui;
+		$string =~ s/broken clouds/⛅ /ui;
+		$string =~ s/few clouds/🌤️ /ui;
+	} elsif ($sunup == 0) {
+
 	}
 	return $string;
 }
 
+# TODO: timezone
 sub is_sun_up {
 	my ($sunrise, $sunset, $tz, @rest) = @_;
 	my $comparetime = localtime;
 	if ($comparetime > $sunset || $comparetime < $sunrise) {
-		dp('SUN ... IS ... DOWN!!');
 		return 0;
 	}
 	return 1;
@@ -230,23 +237,24 @@ sub CREATEDB {
 sub findWeather {
 	my ($searchword, @rest) = @_;
 	#my $searchtime = time() - (2*60*60);
-	dp("findWeather: $searchword") if $DEBUG;
+	dp("findWeather: $searchword") if $DEBUG1;
 	my $returnstring;
 
-	my $data = KaaosRadioClass::fetchUrl($url.$searchword."&units=metric&appid=".$apikey, 0);
+	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
 	da("DATA:",$data);
 	if ($data < 0) {
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
-		$data = KaaosRadioClass::fetchUrl($url.$name."&units=metric&appid=".$apikey, 0);
+		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
+		da('data:',$data);
 		if ($data < 0) {
-			dp('data = '.$data);
 			return 0;
 		}
+		
 	}
 	
 	my $json = decode_json($data);
 	da('JSON:',$json);
-	da('JSON-temp: '. $json->{main}->{temp});
+	da('JSON-temp: ', $json->{main}->{temp});
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
@@ -256,13 +264,12 @@ sub findWeather {
 
 sub findWeatherForecast {
 	my ($searchword, @rest) = @_;
-	my $returnstring = 'klo ';
+	my $returnstring = "\002klo\002 ";
 
 	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
 	
-	#da("DATA: ",$data);
 	if ($data < 0) {
-		dp('data = '.$data);
+		da('findWeatherForecast failed data:',$data);
 		return 0;
 	}
 	my $dt = DateTime->new(
@@ -272,31 +279,30 @@ sub findWeatherForecast {
 		hour => 12,
 		minute => 0,
 		second => 0,
-		time_zone => 'Europe/London',
+		time_zone => 'Europe/London',	# why?
 	);
 	my $tz = $dt->time_zone();
-	Irssi::print('timezone: '.$tz);
-	Irssi::print('DT: ' .$dt);
-	Irssi::print('YMD: '. $dt->ymd);
+	da('timezone:',$tz);
+	da('DT:',$dt) if $DEBUG1;
+	da('YMD:',$dt->ymd);
 	my $json = decode_json($data);
-	#da('JSON-list:',$json->{list});
+	da('JSON-list:',$json->{list}) if $DEBUG1;
 	my $index = 0;
 
 	foreach my $item (@{$json->{list}}) {
 		if ($index > 8) {
 			last;
 		}
-		Irssi::print('');
-		Irssi::print('Timestamp: ' .$item->{dt});
-		Irssi::print('Localtime: '.localtime($item->{dt}));
-		Irssi::print('Temp: '.$item->{main}->{temp});
+		dp('item Timestamp: ' .$item->{dt});
+		dp('item Localtime: '.localtime($item->{dt}));
+		dp('item Temp: '.$item->{main}->{temp});
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
-		$returnstring .= sprintf ('%.2d', $hour) .': '.$item->{main}->{temp} . '°C, ';
+		$returnstring .= "\002".sprintf ('%.2d', $hour) .":\002 ".sprintf('%.1f',$item->{main}->{temp}) .'°C, ';
 		#$returnstring .= $hour.': '.$item->{main}->{temp} . '°C, ';
 		$index++;
 	}
 	
-	dp("findWeatherForecast returnsring: $returnstring");
+	dp("findWeatherForecast returnstring: $returnstring") if $DEBUG1;
 	return $returnstring;
 }
 
@@ -306,38 +312,39 @@ sub FINDAREAWEATHER {
 	return 'City not found.' unless ($lat && $lon);
 	my $newSearchUrl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($newSearchUrl, 0);
-	da('URL', $newSearchUrl,'DATA',$data);
+	da('FINDAREAWEATHER URL', $newSearchUrl,'DATA',$data) if $DEBUG1;
 	if ($data < 0) {
-		dp('data = '.$data);
+		dp('FINDAREAWEATHER data:',$data);
 		return 0;
 	}
 	my $json = decode_json($data);
 	my $sayline;
 	foreach my $city (@{$json->{list}}) {
+		# TODO: get city coords from API and save to DB
 		$sayline .= getSayLine2($city) . '. ';
 	}
-	da('JSON:',$json);
-	da('SAYLINE', $sayline);
+	da('FINDAREAWEATHER decoded JSON:',$json);
+	da('FINDAREAWEATHER SAYLINE', $sayline);
 	return $sayline;
 }
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
+	# TODO: Bind params
 	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
 
-	dp('GETCITYCOORDS SQL: '. $sql);
-	dp('GETCITYCOORDS Result: ');
-	da(@results);
+	da('GETCITYCOORDS Result:',@results, 'SQL:', $sql);
 	return $results[0], $results[1], $results[2];
 }
 
-# save new city to database
+# save new city to database if it does not exist
 sub SAVECITY {
 	my ($json, @rest) = @_;
 	my $now = time;
+	# TODO: bind params
 	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
-	dp('save City stmt: '.$sql);
+	#dp('save City stmt: '.$sql);
 	return KaaosRadioClass::writeToOpenDB($dbh, $sql);
 }
 
@@ -362,7 +369,7 @@ sub SAVEDATA {
 									#1	#2		#2		#4		#5		#6		#7			#8			#9		#10			#11	#12			#13		#14		#15		#16	
 	my $stmt = "INSERT INTO DATA (CITY, PVM, COUNTRY, CITYID, SUNRISE, SUNSET, DESCRIPTION, WINDSPEED, WINDDIR, TEMPMAX, TEMP, HUMIDITY, PRESSURE, TEMPMIN, LAT, LON)
 	 VALUES ('$name', $now, '$country', $id, $sunrise, $sunset, '$weatherdesc', '$windspeed', '$winddir', '$tempmax', '$temp', '$humidity', '$pressure', '$tempmin', '$lat', '$long')";
-	dp('save Data stmt: '.$stmt);
+	#dp('save Data stmt: '.$stmt);
 	return KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 }
 
@@ -387,7 +394,7 @@ sub getSayLine2 {
 		dp('json = 0');
 		return 0;
 	}
-	my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.replace_with_emoji($json->{weather}[0]->{description});
+	my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.replace_with_emoji($json->{weather}[0]->{description}, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
 	return $returnvalue;
 }
 
@@ -395,7 +402,7 @@ sub getSayLine2 {
 sub getSayLine {
 	my ($json, @rest) = @_;
 	if ($json == 0) {
-		dp('json = 0');
+		dp('getSayLine json = 0');
 		return 0;
 	}
 	my $tempmin = $json->{main}->{temp_min};
@@ -407,8 +414,17 @@ sub getSayLine {
 		$temp = $json->{main}->{temp}.'°C';
 	}
 	my $apptemp = getApparentTemperature($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
-	dp($apptemp);
-	my $sky = get_sun_moon($json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	dp('apparent temp: '.$apptemp);
+	my $sky = '';
+	if (is_sun_up == 0) {
+		$sky = ' --> '.get_sun_moon($json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	}
+	if ($apptemp) {
+		$apptemp = ' feels like: '.$apptemp.'°C';
+	} else {
+		$apptemp = '';
+	}
+	
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
 	my $wind = '💨 '. $json->{wind}->{speed}. ' m/s';
@@ -417,18 +433,18 @@ sub getSayLine {
 		$city = '🦄 Kokkola';
 	}
 	my $weatherdesc = '';
-	my $index = 0;
+	my $index = 1;
 	foreach my $item (@{$json->{weather}}) {
+		da('weather:', $item) if $DEBUG1;
 		if ($index > 1) {
-			$weatherdesc .= ' ---, ';
+			$weatherdesc .= ', ';
 		}
 		$weatherdesc .= $item->{description};
 		$index++;
 	}
-	dp('weatherdesc: '.$weatherdesc);
-	
-	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.replace_with_emoji($json->{weather}[0]->{description}).'. '.$sunrise.', '.$sunset.', '.$wind. ' --> '.$sky;
-	#my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.replace_with_emoji($weatherdesc).'. '.$sunrise.', '.$sunset.', '.$wind. ' --> '.$sky;
+	da('weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather});
+	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.$newdesc.'. '.$sunrise.', '.$sunset.', '.$wind.$sky.$apptemp;
 	return $returnvalue;
 }
 
@@ -493,14 +509,15 @@ sub filter {
 use constant SOLAR_CONSTANT => 1395; # solar constant (w/m2)
 use constant TRANSMISSIONCOEFFICIENTCLEARDAY => 0.81;
 use constant TRANSMISSIONCOEFFICIENTCLOUDY => 0.62;
-# from your local weather android app
+# copied from android app: your local weather
+# TODO: mention license
 # params:
 # $dryBulbTemperature = degrees in celsius ?
 # $humidity = percent
-# $windSpeed = m/s ?
+# $windSpeed = m/s
 # cloudiness = percent
 # $latitude = degrees?
-# $timestamp = unixtime ?
+# $timestamp = unixtime
 sub getApparentTemperature {
 	my ($dryBulbTemperature, $humidity ,$windSpeed, $cloudiness, $latitude, $timestamp, @rest) = @_;
 	da(@_);
@@ -514,7 +531,7 @@ sub getApparentTemperature {
             $calculatedIrradiation = (SOLAR_CONSTANT * $cosOfZenithAngle * $transmissionCoefficient ** $secOfZenithAngle)/10;
     }
 	my $apparentTemperature = $dryBulbTemperature + (0.348 * $e) - (0.70 * $windSpeed) + ((0.70 * $calculatedIrradiation)/($windSpeed + 10)) - 4.25;
-	return printf("%.1f", $apparentTemperature);
+	return sprintf("%.1f", $apparentTemperature);
 }
 
 sub getCosOfZenithAngle {
@@ -552,8 +569,6 @@ sub sig_msg_pub_own {
 }
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
-
-#Irssi::settings_add_str('openweathermap', 'openweathermap_shortmode_channels', '');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message private', 'sig_msg_priv');
