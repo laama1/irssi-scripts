@@ -302,6 +302,14 @@ sub getTitle {
 	return $title, decode_entities($newdescription), $titleInUrl;
 }
 
+sub get_channel_title {
+	my ($server, $channel) = @_;
+	my $chanrec = $server->channel_find($channel);
+	return '' unless defined $chanrec;
+	da('chanrec topic:',$chanrec->{topic}) if $DEBUG1;
+	return $chanrec->{topic};
+}
+
 sub getChannelTitle {
 	my ($channel, @rest) = @_;
 	my @windows = Irssi::windows();
@@ -432,7 +440,7 @@ sub split_row_to_array {
 	dd("split_row_to_array after: $row") if $DEBUG1;
 	#my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
-	dd("split_row_to_array words: " . ($#returnArray+1)) if $DEBUG1;
+	dd('split_row_to_array words: ' . ($#returnArray+1)) if $DEBUG1;
 
 	return @returnArray;
 }
@@ -606,7 +614,7 @@ sub apiConversion {
 	if ($param =~ /mixcloud\.com/i) {
 		setHeaders(2);
 	}
-	if ($param =~ /imdb\.com\/title\/(tt[\d]+)\/$/i) {
+	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
 		Irssi::print("IMDB signal emited!! $1");
@@ -670,11 +678,12 @@ sub sig_msg_pub {
 	# check if flooding too many times in a row
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
-		if (getChannelTitle($target) =~ /np\:/i) {
+		#if (getChannelTitle($target) =~ /np\:/i) {
+		if (get_channel_title($server, $target) =~ /np\:/i) {
 			dp('np FOUND from channel title');
 			$dontprint = 1;
 		} else {
-			#dp('np NOT FOUND from channel title');
+			dp('np NOT FOUND from channel title') if $DEBUG1;
 		}
 	}
 
@@ -710,15 +719,15 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 	
 	print "$myname: Shortening url a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
-	print "$myname: NOT JEE" if ($newtitle eq "0");
+	dp("$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
 	dp("sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
-	if ($newUrlData->{desc} && $newUrlData->{desc} ne "" && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
+	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
 		
-		dp('sig_msg_pub new title.') if $DEBUG1;
+		dp('sig_msg_pub new title: ' .$title) if $DEBUG1;
 	}
 
 	if ($shortModeEnabled == 0 && length($newUrlData->{url}) >= 70) {
@@ -790,22 +799,20 @@ sub findUrl {
 			$searchword = $1;
 			@results = searchIDfromDB($searchword);
 		} else {
-			my @results = searchDB($searchword);
+			@results = searchDB($searchword);
 		}
-		#$returnstring .=
-		dp("id search result dump: ");
-		da(@results);
+		da('id search result dump:',@results);
 		return createAnswerFromResults(@results);
 	} elsif ($searchword =~ s/^kaikki:? ?//i || $searchword =~ s/^all:? ?//i) {
 		# print all found entries
 		my @results = searchDB($searchword);
-		$returnstring .= "Loton oikeat numerot: ";
+		$returnstring .= 'Loton oikeat numerot: ';
 		dp('Loton oikeat numerot');
 		my $in = 0;
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
 			#$returnstring .= createAnswerFromResults(@$line)
-			$returnstring .= createShortAnswerFromResults(@$line) .", ";
+			$returnstring .= createShortAnswerFromResults(@$line) .', ';
 			$in++;
 		}
 	} else {
@@ -829,8 +836,8 @@ sub findUrl {
 			$returnstring .= "url: $results[0][3], ";
 			$returnstring .= "title: $results[0][4], ";
 			$returnstring .= "desc: $results[0][5]";
-		} elsif ($amount == 0) {
-			$returnstring = "Ei tuloksia.";
+		} elsif ($amount < 1) {
+			$returnstring = 'Ei tuloksia.';
 		}
 	}
 	#$returnstring = $returnstring.$temp,
@@ -839,11 +846,12 @@ sub findUrl {
 	return $returnstring;
 }
 
+# TODO: limit number of search results
 sub searchDB {
 	my ($searchWord, @rest) = @_;
 	dp("searchDB: $searchWord");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sqlString = "SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ?";
+	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ?';
 	my $sth = $dbh->prepare($sqlString) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchWord%");
 	$sth->bind_param(2, "%$searchWord%");
@@ -855,14 +863,14 @@ sub searchDB {
 	my $index = 0;
 	#dp("Results: ");
 	while(@line = $sth->fetchrow_array) {
-		dp("Line $index:");
-		da(@line);
+		#dp("Line $index:");
+		#da(@line);
 		push @{ $resultarray[$index]}, @line;
 		$index++;
 	}
-	dp("searchDB '$searchWord' Dump:");
-	da(@resultarray);
-	dp("searchDB dump end.") if $DEBUG1;
+	#dp("searchDB '$searchWord' Dump:");
+	#da(@resultarray);
+	#dp("searchDB dump end.") if $DEBUG1;
 	return @resultarray;
 }
 
@@ -1034,8 +1042,8 @@ sub da {
 
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
-	dp("own public");
-	sig_msg_pub($server, $msg, $server->{nick}, "", $target);
+	dp('own public');
+	sig_msg_pub($server, $msg, $server->{nick}, '', $target);
 }
 
 Irssi::settings_add_str('urltitle', 'urltitle_enabled_channels', '');

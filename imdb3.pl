@@ -12,9 +12,9 @@ use Data::Dumper;
 use KaaosRadioClass;		# LAama1 26.10.2016
 
 
-$VERSION = "20180102";
+$VERSION = '2019-01-22';
 %IRSSI = (
-        authors     => "LAama1",
+        authors     => 'LAama1',
         contact     => "LAama1 #kaaosleffat",
         name        => "IMDB/OMDB",
         description => "Fetch info from omdbapi or theimdbapi.org",
@@ -25,18 +25,18 @@ $VERSION = "20180102";
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $debugfilename = Irssi::get_irssi_dir(). "/scripts/urldebuglog.txt";
+my $debugfilename = Irssi::get_irssi_dir(). '/scripts/urldebuglog.txt';
 my $json = JSON->new();
 $json->allow_blessed(1);
 #my $ua = LWP::UserAgent->new(timeout => '4');
 
 # OMDB api
-my $apikey = "a06b4d3f";
+my $apikey = 'a06b4d3f';
 #&apikey=4d66421a
 
 sub print_help {
 	my ($server, $target) = @_;
-	my $helpmessage = "!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffoja IMDB:stä hakusanalla, muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.";
+	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffoja IMDB:stä hakusanalla, muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.';
 	sayit($server, $target, $helpmessage);
 	return 0;
 }
@@ -45,10 +45,10 @@ sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   #self-test
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/^$target$/, @enabled);
+    my @enabled = split / /, $enabled_raw ;
+    return unless grep /^$target$/, @enabled;
 	
-	if ($msg =~ /^[\.\!]help\b/i) {
+	if ($msg =~ /^!help imdb/i || $msg =~ /^!imdb$/i) {
 		print_help($server, $target);
 		return 0;
 	}
@@ -58,7 +58,6 @@ sub do_imdb {
 	my $param = 't';		# title search
 	my $query;
 	my $year;
-	
 
 	#Irssi::print("Boingk! $msg do_imdb") if $DEBUG;
 	if ($msg =~ /\!imdb (.*)$/) {		#if search word found

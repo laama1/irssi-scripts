@@ -10,18 +10,19 @@ binmode(STDOUT, ":utf8");
 binmode(STDIN, ":utf8");
 use KaaosRadioClass;		# LAama1 30.12.2016
 my $myname = "addquote.pl";
-my $tiedosto = $ENV{HOME}."/public_html/quotes.txt";
-my $publicurl = "http://lamaz.bot.nu/quotes.txt";
-my $db = Irssi::get_irssi_dir(). "/scripts/quotes.db";
+#my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
+my $tiedosto = '/var/www/html/quotes/quotes.txt';
+my $publicurl = 'http://lamaz.bot.nu/quotes.txt';
+my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20180119";
+$VERSION = '20190121';
 %IRSSI = (
-	authors     => "LAama1",
-	contact     => "ircnet: LAama1",
-	name        => "addquote.pl",
-	description => "Add quote to database & textfile from channel.",
-	license     => "Public Domain",
+	authors     => 'LAama1',
+	contact     => 'ircnet: LAama1',
+	name        => 'addquote.pl',
+	description => 'Add quote to database & textfile from channel.',
+	license     => 'Public Domain',
 	url         => $publicurl,
 	changed     => $VERSION
 );

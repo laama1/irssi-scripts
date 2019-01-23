@@ -523,7 +523,7 @@ sub event_pubmsg {
     my @enabled = split / /, $enabled_raw;
     return unless grep /^$target$/, @enabled;
 
-	if ($msg =~ /^[\.\!]help\b/i || $msg =~ /^!korvamato$/i) {
+	if ($msg =~ /^[\.\!]help korvamato\b/i || $msg =~ /^!korvamato$/i) {
 		print_help($server, $target);
 		return;
 	} elsif ($msg =~ /^!korvamato random/i) {

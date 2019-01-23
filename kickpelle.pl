@@ -7,33 +7,34 @@ use strict;
 use utf8;
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
-
-
 use vars qw($VERSION %IRSSI);
-my $DEBUG = 1;
-$VERSION = "2018-06-20";
+
+$VERSION = '2019-01-22';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
 	name        => 'KickPelle',
 	description => 'Kickaa Pelle ulos kanavalta anomuumisti.',
 	license     => 'Public Domain',
-	url         => '#salamolo2',
+	url         => '#salamolo',
 	changed     => $VERSION
 );
 
-
+# config
+my $DEBUG = 1;
+my $votelimit = 3;		# how many votes needed to kick someone
 my $channels = '#kaaosradio';
 my $myname = 'kickpelle.pl';
 my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
-my $votelimit = 3;		# how many votes needed to kick someone
+
 my $publicvotes = {};
 my $lastprivkick = time;
-
 my @badwords = ();
+
 GETBADWORDLIST();
 
-my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea.';
+my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea.
+Operaattorit voivat käyttää myös !kick #kanava <nick>, jolloin henkilö lähtee ensimmäisestä osumasta!';
 
 
 sub print_help {
@@ -46,6 +47,7 @@ sub print_help {
 sub msgit {
 	my ($server, $nick, $text, @rest) = @_;
 	$server->command("msg $nick $text");
+	return;
 }
 
 # Say it public to a channel
@@ -54,37 +56,13 @@ sub sayit {
 	if (KaaosRadioClass::floodCheck(5) == 0) {
 		$server->command("MSG $target $saywhat");
 	}
+	return;
 }
 
 sub getStats {
-	dp('jees');
-	da(@$publicvotes);
-}
-
-sub ifUserFoundFromChannel {
-	my ($channel, $nick, @rest) = @_;
-	my @windows = Irssi::windows();
-	foreach my $window (@windows) {
-		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
-		if($window->{active}->{name} eq $channel) {
-			#dp("Found! $window->{active}->{name}");
-			#dp('what if...');
-			#da($window);
-			my @nicks = $window->{active}->nicks();
-			#da(@nicks);
-			foreach my $comparenick (@nicks) {
-				if ($comparenick->{nick} eq $nick) {
-					dp("found it! feel free to kick $nick");
-					# return 1 on first match
-					# TODO: operator status check.
-					#return 1 unless $comparenick->{op} == 1 or $comparenick->{halfop} == 1 or $comparenick->{voice} == 1;
-					return 1;
-				}
-			}
-		}
-	}
-	return 0;
+	#da(@$publicvotes);
+	da('getStats:',$publicvotes);
+	return;
 }
 
 sub ADDBADWORD {
@@ -102,6 +80,7 @@ sub ADDBADWORD {
 sub SAVEBADWORDLIST {
 	my @rest = @_;
 	KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
+	return;
 }
 
 sub DELBADWORD {
@@ -118,28 +97,27 @@ sub DELBADWORD {
 	}
 
 	if ($found == 1) {
-		KaaosRadioClass::writeArrayToFile(@badwords);
+		KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
 	}
 	return;
 }
 
 sub GETBADWORDLIST {
-	my (@stuff) = @_;
+	my @rest = @_;
 	dp("bad word file: $badwordfile");
 	@badwords = KaaosRadioClass::readTextFile($badwordfile);
-	dp('bad words loaded:');
-	da(@badwords);
 	if ($badwords[0] == -1) {
 		dp('no bad words!');
 		@badwords = ('____', 'russiancup');
 		SAVEBADWORDLIST();
 	}
+	da('bad words loaded:',@badwords);
 	return;
 }
 
 sub kickPerson {
 	my ($server, $channel, $nick, $reason, $kicker, @rest) = @_;
-	dp("target: $channel, nick: $nick, reason: $reason");
+	#dp("target: $channel, nick: $nick, reason: $reason");
 
 	if (defined($publicvotes->{$nick}->{$channel}->{$kicker})) {
 		sayit($server, $channel, "Only one vote per user. ($nick) votes: ".($publicvotes->{$nick}->{$channel}->{votecount} % $votelimit));
@@ -149,14 +127,14 @@ sub kickPerson {
 	}
 
 	$publicvotes->{$nick}->{$channel}->{votecount} += 1;
-	my $howmany = $publicvotes->{$nick}->{$channel}->{votecount};
-	$publicvotes->{$nick}->{when} = localtime(time);
-
+	$publicvotes->{$nick}->{when} = localtime time;
 	$publicvotes->{$nick}->{$channel}->{reason} = $reason;
 
-	dp('count: '.$howmany. ', modulo: '.($howmany % $votelimit));
+	my $howmany = $publicvotes->{$nick}->{$channel}->{votecount};
+	dp('kickPerson count: '.$howmany. ', modulo: '.($howmany % $votelimit));
+
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
-		dp('KICK-KING!');
+		dp('kickPerson KICK-KING!');
 		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{reason});
 		$publicvotes->{$nick}->{bootcount} += 1;
 	} else {
@@ -167,85 +145,48 @@ sub kickPerson {
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
 	$server->send_raw("kick $channel $nick :*BOOT $reason*");
-	Irssi::signal_stop();
+	#Irssi::signal_stop();
 	return;
 }
 
 sub event_privmsg {
 	my ($server, $data, $nick, $address) = @_;
-	#dp('data: '.$data);
-	if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
-	#if($data =~ /^!kick (#[^\s]*) ([^\s]*)/gi) {
-		dp("event_privmsg: $1 $2 $3");
+	#if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
+	if($data =~ /^!kick (#[^\s]*) ([^\s]*)/gi) {
+		#dp("event_privmsg: $1 $2 $3");
+		dp("event_privmsg params: $1 $2");
 		my $kickchannel = $1;
 		my $kicknick = $2;
-		my $kickreason = $3 || '';
+		#my $kickreason = $3 || '';
+		my $kickreason = 'dat ass';
 		if (get_nickrec($server, $kickchannel, $kicknick)) {
+			dp('event_privmsg, get_nickrec found');
 			if (ifop2($server, $kickchannel, $nick)) {
-				kickPerson($server, $kickchannel, $kicknick, $kickreason);
+				#kickPerson($server, $kickchannel, $kicknick, $kickreason);
+				dp("event_privmsg, $nick is op.");
+				doKick($server, $kickchannel, $kicknick, $kickreason);
+				msgit($server, $nick, "Kicked $kicknick off $kickchannel!");
 			} else {
-				msgit($server, $nick, "You don't have operator status on $kickchannel!");	
+				dp("event_privmsg, $nick is NOT op.");
+				msgit($server, $nick, "You don't have operator status on $kickchannel!");
 			}
 		} else {
+			dp("event_privmsg, no $kicknick on $kickchannel.");
 			msgit($server, $nick, "No nick $kicknick on $kickchannel!");
 		}
 	}
+	return;
 }
 
 sub badWordFilter {
 	my ($msg, @rest) = @_;
 	foreach my $badword (@badwords) {
+		#dp('badWordFilter badword: '.$badword);
 		return 1 if $msg =~ m/$badword/i;
 	}
 	return 0;
 }
 
-# check if op or voice
-sub ifop {
-	my ($server, $channel, $nick, @test) = @_;
-	#dp('SERVER');
-	#da($server);
-	my @windows = Irssi::windows();
-	foreach my $window (@windows) {
-		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
-		if($window->{active}->{name} eq $channel) {
-			dp("Found! $window->{active}->{name}");
-			dp('what if...');
-			#da($window);
-
-			# starseeds..
-			if ($window->{active_server}->{chatnet}) {
-				#dp('CHATNETS');
-				#da(Irssi::chatnets());
-				#dp('FIND CHATNETS');
-				#da(Irssi::server_find_chatnet($window->{active_server}->{chatnet}));
-			}
-
-			# irc.starseeds.space...
-			if ($window->{active_server}->{address}) {
-				#dp('ACTIVE SERVER ADDRESS');
-				#da($window->{active_server}->{address});
-				#dp('SERVER ADDRESS');
-				#da($server);
-			}
-			my @nicks = $window->{active}->nicks();
-			#dp('nicks: ');
-			#da(@nicks);
-
-			foreach my $comparenick (@nicks) {
-				if ($comparenick->{nick} eq $nick) {
-					if ($comparenick->{op} == 1 || $comparenick->{voice} == 1) {
-						dp("$nick is op or voice.");
-						return 1;
-					} else {
-						return 0;
-					}
-				}
-			}
-		}
-	}
-}
 
 sub get_nickrec {
 	my ($server, $channel, $nick) = @_;
@@ -289,18 +230,18 @@ sub event_pubmsg {
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
 		#dp("msg: $msg");
 		my $kicknick = $1;
-		my $reason = '';
+		my $reason = '';		# no reason, just for kicks
 		if (get_nickrec($server, $target, $kicknick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
-		dp('adding bad word');
+		dp('adding a bad word');
 		if (ADDBADWORD($1) == 0) {
 			sayit($server, $target, "Added $1 to list.");
 		} else {
 			sayit($server, $target, 'Allready found or error.');
 		}
-	} elsif ($msg =~ /^!badword/gi) {
+	} elsif ($msg =~ /^!badwords$/gi) {
 		dp('listing bad words');
 		my $string = 'Bad words: ';
 		foreach my $badword (@badwords) {
@@ -314,15 +255,17 @@ sub da {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname-debug array:");
 	Irssi::print Dumper (@_);
+	return;
 }
 
 sub dp {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname-debug: @_");
+	return;
 }
 
 Irssi::command_bind('kickpellestats', \&getStats);
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-Irssi::print("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2");
+Irssi::print("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");

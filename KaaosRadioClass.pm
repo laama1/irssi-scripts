@@ -1,7 +1,7 @@
 package KaaosRadioClass;
 use strict;
 use warnings;
-use lib '/home/laama/perl5/lib/perl5';
+use lib $ENV{HOME}.'/perl5/lib/perl5';
 use utf8;
 binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
@@ -34,7 +34,7 @@ $VERSION = 1.02;
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
 
 #$currentDir = cwd();
-my $currentDir = '/home/laama/.irssi/scripts';
+my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 # tsfile, time span.. save value of current time there. For flood protect.
 my $tsfile = "$currentDir/ts";	# ????
 my $djlist = "$currentDir/dj_list.txt";
@@ -52,7 +52,7 @@ my $flooderdate = time;		# init
 sub readLastLineFromFilename {
 	my ($file, @rest) = @_;
 
-	my $readline = "";
+	my $readline = '';
 	if (-e $file) {
 		open (INPUT, "<$file:utf8") || return -1;
 		while (<INPUT>)	{
@@ -73,20 +73,20 @@ sub readLinesFromDataBase {
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return DBI::errstr;
 	$sth->execute();
-	my @returnArray = ();
+	my @returnArray;
 	my @line;
 	my $index = 0;
 	while(@line = $sth->fetchrow_array) {
 		dp("--fetched a line--");
 		dp(Dumper @line);
-		#ush @{ $returnArray[$index] }, @line;
+		#push @{ $returnArray[$index] }, @line;
 		#push @returnArray, \@line;
 		$returnArray[$index] = @line;
 		#push @{ $Hits[$i] }, $i;
 		dp("Index: $index \n");
 		$index++;
 	}
-	dp("return array:");
+	dp('return array:');
 	dp(Dumper(@returnArray));
 	$dbh->disconnect();
 	return @returnArray;
@@ -290,8 +290,6 @@ sub replaceWeird {
 
 sub stripLinks {
 	my ($string, @rest) = @_;
-	#my $link;
-	#my $linkname;
 	if ( $string =~ /(<a.*href.*>)[\s\S]+?<\/a>/) {
 		$string =~ s/$1//g;
 		$string =~ s/<\/a>//g;
@@ -305,7 +303,7 @@ sub connectSqlite {
 	unless (-e $dbfile) {
 		return -1;						# return error
 	}
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","", {RaiseError => 1});
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1});
 	return $dbh if $dbh;
 	return -2;
 }
@@ -354,8 +352,9 @@ sub readDjList {
 sub fetchUrl {
 	my ($url, $getsize);
 	($url, $getsize) = @_;
+	dp('fetchUrl url: '. $url);
 	#$url = decode_entities($url);
-	my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
+	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
@@ -371,25 +370,26 @@ sub fetchUrl {
 
 	my $response = $ua->get($url);
 	my $size = 0;
-	my $page = "";
-	my $finalURI = "";
+	my $page = '';
+	my $finalURI = '';
 	if ($response->is_success) {
 		$page = $response->decoded_content();		# $page = $response->decoded_content(charset => 'none');
 		$size = $response->content_length || 0;		# or content_size?
 		if ($size / (1024*1024) > 1) {
-			$size = sprintf("%.2f", $size / (1024*1024))."MiB";
+			$size = sprintf("%.2f", $size / (1024*1024)).'MiB';
 		} elsif ($size / 1024 > 1) {
-			$size = sprintf("%.2f", $size / 1024) . "KiB";
+			$size = sprintf("%.2f", $size / 1024) . 'KiB';
 		} else {
-			$size = $size."B";
+			$size = $size.'B';
 		}
-		$finalURI = $response->request()->uri() || "";
+		$finalURI = $response->request()->uri() || '';
 		#Irssi::print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
 		#return("Failure ($url): " . $response->code() . ", " . $response->message() . ", " . $response->status_line);
 		return -1;
+		#return;
 	}
-	if ($getsize && $getsize == 1) {
+	if (defined $getsize && $getsize == 1) {
 		return $page, $size, $finalURI;
 	} else {
 		return $page;
@@ -425,4 +425,36 @@ sub da {
 	print Dumper (@_);
 }
 
+sub conway {
+	# John Conway method
+	#my ($y,$m,$d);
+	chomp(my $y = `date +%Y`);
+	chomp(my $m = `date +%m`);
+	chomp(my $d = `date +%d`);
+
+	my $r = $y % 100;
+	$r %= 19;
+	if ($r > 9) { $r-= 19; }
+	$r = (($r * 11) % 30) + $m + $d;
+	if ($m < 3) { $r += 2; }
+	$r -= 8.3;              # year > 2000
+
+	$r = ($r + 0.5) % 30;	#test321
+	my $age = $r;
+	$r = 7/30 * $r + 1;
+
+=pod
+      0: 'New Moon'        🌑
+      1: 'Waxing Crescent' 🌒
+      2: 'First Quarter',  🌓
+      3: 'Waxing Gibbous', 🌔
+      4: 'Full Moon',      🌕
+      5: 'Waning Gibbous', 🌖
+      6: 'Last Quarter',   🌗
+      7: 'Waning Crescent' 🌘
+=cut
+
+	my @moonarray = ('🌑 uusikuu', '🌒 kuun kasvava sirppi', '🌓 kuun ensimmäinen neljännes', '🌔 kasvava kuperakuu', '🌕 täysikuu', '🌖 laskeva kuperakuu', '🌗 kuun viimeinen neljännes', '🌘 kuun vähenevä sirppi');
+	return $moonarray[$r] .", ikä: $age vrk.";
+}
 1;		# loaded OK
