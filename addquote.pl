@@ -9,7 +9,7 @@ use utf8;
 binmode(STDOUT, ":utf8");
 binmode(STDIN, ":utf8");
 use KaaosRadioClass;		# LAama1 30.12.2016
-my $myname = "addquote.pl";
+my $myname = 'addquote.pl';
 #my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
 my $tiedosto = '/var/www/html/quotes/quotes.txt';
 my $publicurl = 'http://lamaz.bot.nu/quotes.txt';
@@ -49,9 +49,9 @@ sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
 	if($msg =~ /^!aq\s(.{1,470})/gi)
 	{
-		dp("parseQuote nick: $nick");
+		#dp("parseQuote nick: $nick");
 		my $uusiquote = $1;
-		my $pituus = length($uusiquote);
+		my $pituus = length $uusiquote;
 		if ($pituus < 470) {
 			return if KaaosRadioClass::floodCheck();
 			KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
@@ -72,7 +72,6 @@ sub event_pubmsg {
 
 sub createDB {
     my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	#my $stmt = qq(CREATE TABLE QUOTES (NICK TEXT, PVM INT, QUOTE TEXT not null,CHANNEL TEXT));
 	my $stmt = qq(CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL));
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {

@@ -151,10 +151,8 @@ sub msg_to_channel {
 		next unless $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} ~~ @enabled) {
-			DP("Found! $window->{active}->{name}");
-
+			#DP("Found! $window->{active}->{name}");
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
-			#DP('');
 		}
 	}
 	return;
@@ -226,7 +224,7 @@ sub search_db {
 	my $searchword = shift;
 	open_database_handle();
 	DP($searchword);
-	my $stmt = "SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ?";
+	my $stmt = 'SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ?';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -320,7 +318,7 @@ sub parse_extrainfo_from_link {
 		my $heading = $1;
 		if ($heading =~ /<h1>(.*?)<\/h1>/is) {
 			my $innerdata = KaaosRadioClass::ktrim($1);
-			DP('innerdata: '. $innerdata);
+			#DP('innerdata: '. $innerdata);
 			# Parse havaintodate
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
 				my $type = $1;

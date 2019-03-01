@@ -7,6 +7,12 @@ use DateTime;
 use POSIX;
 use Time::Piece;
 
+#use Number::Format qw('format_number' :vars);
+use Number::Format qw(:subs :vars);
+#use CLDR::Number;
+$DECIMAL_POINT = ',';
+my $fi = new Number::Format(-decimal_point => ',');
+
 use Math::Trig; # for apparent temp
 
 #use Switch 'Perl6';
@@ -26,8 +32,8 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20181028';
-%IRSSI = (
+$VERSION = '20190226';
+%IRSSI = (	
 	authors     => 'LAama1',
 	contact     => 'LAama1',
 	name        => 'openweathermap',
@@ -117,25 +123,6 @@ unless (-e $db) {
 	if (CREATEDB() == 0) {
 		Irssi::print("$myname: Database file created.");
 	}
-}
-
-# Data type
-sub replace_scandic_letters {
-	my ($row, @rest) = @_;
-	dd("replace_scandic_letters row: $row");
-
-	#if ($row) {
-	$row =~ s/ä/ae/g;
-	$row =~ s/Ä/ae/g;
-	$row =~ s/ö/oe/g;
-	$row =~ s/Ö/oe/g;
-	$row =~ s/Ã¤/ae/g;
-	$row =~ s/Ã¶/oe/g;
-	#$row =~ s/\s+/ /gi;
-	#$row =~ s/\’//g;
-	#}
-	dd("replace_scandic_letters row after: $row");
-	return $row;
 }
 
 sub replace_with_emoji {
@@ -239,7 +226,6 @@ sub CREATEDB {
 # param: searchword, returns json answer or 0
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
-	dp("FINDWEATHER: $searchword") if $DEBUG1;
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
 	da('FINDWEATHER DATA:',$data);
 	if ($data < 0) {
@@ -257,7 +243,6 @@ sub FINDWEATHER {
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
-	#$dbh = KaaosRadioClass::closeDB($dbh);
 	return $json;
 }
 
@@ -269,7 +254,7 @@ sub findWeatherForecast {
 	
 	if ($data < 0) {
 		# retry with search word
-		da('findWeatherForecast failed data:',$data);
+		da('findWeatherForecast failed data:',$data) if $DEBUG1;
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$data = KaaosRadioClass::fetchUrl($forecastUrl.$name.'&units=metric&appid='.$apikey, 0);
 		return 0 if ($data < 0);
@@ -278,34 +263,17 @@ sub findWeatherForecast {
 		my $jsondata = decode_json($data);
 		$returnstring = $name . ', '.$jsondata->{city}->{country}.': '.$returnstring;
 	}
-	
-	# my $dt = DateTime->new(
-	# 	year => 2018,
-	# 	month => 9,
-	# 	day => 1,
-	# 	hour => 12,
-	# 	minute => 0,
-	# 	second => 0,
-	# 	time_zone => 'Europe/London',	# why?
-	# );
-	# my $tz = $dt->time_zone();
-	# da('timezone:',$tz) if $DEBUG1;
-	# da('DT:',$dt) if $DEBUG1;
-	# da('YMD:',$dt->ymd) if $DEBUG1;
-	my $json = decode_json($data);
-	da('findWeatherForecast new data:',$json) if $DEBUG1;
-	da('JSON-list:',$json->{list}) if $DEBUG1;
-	my $index = 0;
 
+	my $json = decode_json($data);
+	my $index = 0;
 	foreach my $item (@{$json->{list}}) {
 		if ($index > 8) {
+			# max 8 items: 8x 3h = 24h
 			last;
 		}
-		dp('item Timestamp: ' .$item->{dt}) if $DEBUG1;
-		dp('item Localtime: '.localtime($item->{dt})) if $DEBUG1;
 		dp('item Temp: '.$item->{main}->{temp}) if $DEBUG1;
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
-		$returnstring .= "\002".sprintf ('%.2d', $hour) .":\002 ".sprintf('%.1f',$item->{main}->{temp}) .'°C, ';
+		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
 		$index++;
 	}
 	
@@ -328,6 +296,7 @@ sub FINDAREAWEATHER {
 		dp('FINDAREAWEATHER failed data:',$data);
 		return 0;
 	}
+
 	my $json = decode_json($data);
 	my $sayline;
 	foreach my $city (@{$json->{list}}) {
@@ -422,7 +391,8 @@ sub getSayLine2 {
 
 	# FIXME: 
 	#my $returnvalue = $json->{name}.': '.$json->{main}->{temp}.'°C, '.replace_with_emoji($json->{weather}[0]->{description}, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
-	my $returnvalue = $json->{name}.': '.sprintf("%.1f", $json->{main}->{temp}).'°C, '.replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	#my $returnvalue = $json->{name}.': '.sprintf("%.1f", $json->{main}->{temp}).'°C, '.replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
+	my $returnvalue = $json->{name}.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
 	return $returnvalue;
 }
 
@@ -433,13 +403,13 @@ sub getSayLine {
 		dp('getSayLine json = 0');
 		return 0;
 	}
-	my $tempmin = $json->{main}->{temp_min};
-	my $tempmax = $json->{main}->{temp_max};
+	my $tempmin = $fi->format_number($json->{main}->{temp_min}, 1);
+	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $temp;
 	if ($tempmin != $tempmax) {
 		$temp = "($tempmin..$tempmax) °C"
 	} else {
-		$temp = $json->{main}->{temp}.'°C';
+		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
 	}
 	my $apptemp = getApparentTemperature($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
 	dp('apparent temp: '.$apptemp);
@@ -449,7 +419,7 @@ sub getSayLine {
 		$sky = ' --> '. conway();
 	}
 	if ($apptemp) {
-		$apptemp = ', feels like: '.$apptemp.'°C';
+		$apptemp = ', feels like: '.$fi->format_number($apptemp, 1).'°C';
 	} else {
 		$apptemp = '';
 	}
@@ -459,7 +429,7 @@ sub getSayLine {
 	my $wind = '💨 '. $json->{wind}->{speed}. ' m/s';
 	my $city = $json->{name};
 	if ($city eq 'Kokkola') {
-		$city = '🎠 Kokkola';
+		$city = '🦄 Kokkola';
 	}
 	my $weatherdesc = '';
 	my $index = 1;

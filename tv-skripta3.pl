@@ -5,22 +5,23 @@
 use warnings;
 use strict;
 use Irssi;
-use LWP::UserAgent;
-use HTTP::Cookies;
+#use LWP::UserAgent;
+#use HTTP::Cookies;
+#use DateTime::Format::ISO8601;
 #use Crypt::SSLeay;
-use HTML::Entities qw(decode_entities);
+#use HTML::Entities qw(decode_entities);
 use JSON;
 use Data::Dumper;
 #use XML::Simple;
 use utf8;
 #use DateTime::Format::ISO8601;
-#use KaaosRadioClass;		# LAama1 26.10.2016
+use KaaosRadioClass;		# LAama1 26.10.2016
 
 #use DBI;
 #use DBI qw(:sql_types);
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "2015-12-03";
+$VERSION = '2019-01-28';
 %IRSSI = (
 	authors     => "LAama1",
 	contact     => "ircnet: LAama1",
@@ -31,16 +32,16 @@ $VERSION = "2015-12-03";
 	changed     => $VERSION
 );
 
-my $tsfile = Irssi::get_irssi_dir()."/scripts/ts";
+#my $tsfile = Irssi::get_irssi_dir()."/scripts/ts";
 my $logfile = Irssi::get_irssi_dir()."/scripts/urllog.txt";
-my $cookie_file = Irssi::get_irssi_dir() . '/scripts/tv_cookies.dat';
+#my $cookie_file = Irssi::get_irssi_dir() . '/scripts/tv_cookies.dat';
 my $db = Irssi::get_irssi_dir(). "/scripts/tv-skripta2.db";
 # TODO: floodportect via KaaosRadioClass
-my $floodernick = "";
+my $floodernick = '';
 my $floodertimes = 0;
 #my $XML = new XML::Simple;
 
-my $myname = "tv-skripta3.pl";
+my $myname = 'tv-skripta3.pl';
 
 my $DEBUG = 1;
 my $DEBUG1 = 0;
@@ -56,36 +57,15 @@ unless (-e $db) {
 	#createDB();
 }
 
-
-my $cookie_jar = HTTP::Cookies->new(
-	file => $cookie_file,
-	autosave => 1,
-);
-
-my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
-my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 32768);
-$ua->cookie_jar($cookie_jar);
-$ua->timeout(5);
-$ua->protocols_allowed( [ 'http', 'https'] );
-#$ua->protocols_forbidden( [ 'file', 'mailto'] );
-$ua->protocols_forbidden( [ 'mailto', 'ftp', 'file'] );
-
-# Try to disable cert checking (lwp versions > 5.837)
-eval {
-	$ua->ssl_opts('verify_hostname' => 0);
-	1;
-} or do {
-};
-
 sub fetch_search {
 	my ($name, $param1, @rest) = @_;
 	my $url = "http://api.tvmaze.com/singlesearch/shows?q=$name";
-	my $response = $ua->get($url);
-	if ($response->is_success) {
+	my $response = KaaosRadioClass::fetchUrl($url);
+	if ($response ne '-1') {
 		Irssi::print("Successfully fetched tvmaze $url.");
 		my $json = JSON->new->utf8;
 		$json->convert_blessed(1);
-		$json = decode_json($response->decoded_content());
+		$json = decode_json($response);
 		if ($DEBUG1) {
 			Irssi::print("Json after fetch search: ");
 			Irssi::print Dumper($json);
@@ -93,7 +73,7 @@ sub fetch_search {
 		return $json;
 	} else {
 		Irssi::print("Failure tvmaze ($url): " . $response->code() . " " . $response->message() . " " . $response->status_line);
-		return "";
+		return;
 	}
 }
 
@@ -105,22 +85,18 @@ sub dp {
 sub fetch_url_return_json {
 	my ($url, $param1, @rest) = @_;
 	dp($url);
-	#my $url = "http://api.tvmaze.com/episodes/$epid";
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
-	my $response = $ua->get($url);
-	if ($response->is_success) {
+	my $response = KaaosRadioClass::fetchUrl($url);
+	if ($response ne '-1') {
 		Irssi::print("$myname: Succesfully fetched url: $url.");
-		#my $json = JSON->new->utf8;
-        	#$json->convert_blessed(1);
-		$json = decode_json($response->decoded_content());
-		#return \$json;
+		$json = decode_json($response);
 	} else {
 		Irssi::print("$myname: Fetching url: $url failed.");
-		return "";
+		return;
 	}
 
-	my $title = "";
+	my $title = '';
 	if ($json->{'name'}) {
         	my $seriesname = $json->{'name'};
         	my $season = $json->{'season'};
@@ -134,6 +110,7 @@ sub fetch_url_return_json {
 			my $minutes = 1;
 			my $seconds = 1;
 			my $timezone = 1;
+			my $formatted_time = '';
 			if ($airdate =~ /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-]\d{2}):(\d{2})/ ) {
 				$year = $1;
 				$month = $2;
@@ -143,11 +120,16 @@ sub fetch_url_return_json {
 				$seconds = $6;
 				$timezone = $7;
 				dp("$day.$month.$year $hour:$minutes $timezone");
+				$formatted_time = "$day.$month.$year $hour:$minutes UTC";
+				dp('my formatted time: '.$formatted_time);
+			} else {
+				$formatted_time = $airdate;
 			}
 
-        	my $summary = $json->{'summary'};
+        	my $summary = $json->{'summary'} || '';
         	$summary =~ s/<(\/|!)?[-.a-zA-Z0-9]*.*?>//g;    #http://www.perlmonks.org/?node_id=46815
-        	$title = "$seriesname ${season}x${epnumber}, $airdate, $summary";
+        	#$title = "$seriesname ${season}x${epnumber}, $airdate, $summary";
+			$title = "$seriesname ${season}x${epnumber}, $formatted_time, $summary";
 	}
 	return $title;
 }
@@ -160,49 +142,32 @@ sub sig_msg_pub {
 	my @enabled = split(/ /, $enabled_raw);
 	return unless grep(/$target/, @enabled);
 	return unless ($msg =~ /^[\.\!]ep\b/i);
-	#my $keyword = $1;
-	my $episode = "";
+	my $episode = '';
 	my $previousepisode = 0;
-	#my $prevepisode = "";
 	my $info = 0;
 	if ($msg =~ /\binfo (.*)/i) {
-		#$msg =~ s/ info\b//i;
-		#$msg =~ s/$keyword\b//i;
-		#$episode = $msg;
 		$episode = $1;
 		$info = 1;
 	} elsif ($msg =~ /\bprev (.*)$/i) {
-		#$msg =~ s/ prev\b//i;
-		#$msg =~ s/\.ep\b//i;
 		$previousepisode = 1;
-		#$episode = $msg
 		$episode = $1;
-	} elsif ($msg =~ /^[\.\!]ep (.*)$/i) {
+	} elsif ($msg =~ /^\!ep (.*)$/i) {
 		$episode = $1;
 	} else { return; }
-	#$msg =~ s/$keyword\b//i;
 
-	if ($floodertimes < 6 && $floodernick eq $nick) {
-		$floodertimes++;
-	} elsif ( $floodertimes >= 6 && $floodernick eq $nick){
-		$server->command("msg -channel $target $nick, tl;dr");
-		$floodertimes++;
-		return;
-	} else {
-		$floodernick = $nick;
-		$floodertimes = 1;
-	}
-	
+	return if KaaosRadioClass::Drunk($nick);
+	return if KaaosRadioClass::floodCheck();
+
 	dp("Episode: $episode");
 	my $localjson = JSON->new->utf8;
 	$localjson->convert_blessed(1);
 	$localjson = fetch_search($episode, $info) || 0;
 	if ($DEBUG1) {
-		Irssi::print("localjson dumper:");
-		Irssi::print Dumper $localjson if $DEBUG1;
+		Irssi::print('localjson dumper:');
+		Irssi::print Dumper $localjson;
 	}
 	
-	my $title = "error.";
+	my $title = 'error.';
 	if ($previousepisode == 1 && $localjson) {
 		my $prevepisodeurl = $localjson->{'_links'}->{'previousepisode'}->{'href'} || 0;
 		dp("prevepisodeurl: $prevepisodeurl");
@@ -236,55 +201,25 @@ sub get_series_info {
 }
 
 sub get_next_episode {
-	my $myjson = @_;
-	Irssi::print Dumper $myjson if $DEBUG;;
+	my ($myjson, @rest) = @_;
+	Irssi::print Dumper $myjson if $DEBUG;
 	my $nextepisodeurl = $myjson->{'_links'}->{'nextepisode'}->{'href'};
 	$nextepisodeurl = $myjson->{'_links'}->{'lastepisode'}->{'href'} unless $nextepisodeurl;
 	
-	Irssi::print $nextepisodeurl;
+	Irssi::print $myname . ': '.$nextepisodeurl;
 	my $myjson2 = fetch_episode($nextepisodeurl);
-
-        my $seriesname = $myjson2->{'name'};
-        my $season = $myjson2->{'season'};
-        my $epnumber = $myjson2->{'number'};
-        my $airdate = $myjson2->{'airstamp'};
-        my $summary = $myjson2->{'summary'};
-        $summary =~ s/<(\/|!)?[-.a-zA-Z0-9]*.*?>//g;    #http://www.perlmonks.org/?node_id=46815
-        my $title = "$seriesname ${season}x${epnumber}, $airdate, $summary";
+    my $seriesname = $myjson2->{'name'};
+    my $season = $myjson2->{'season'};
+    my $epnumber = $myjson2->{'number'};
+    my $airdate = $myjson2->{'airstamp'};
+    my $summary = $myjson2->{'summary'};
+    $summary =~ s/<(\/|!)?[-.a-zA-Z0-9]*.*?>//g;    #http://www.perlmonks.org/?node_id=46815
+    my $title = "$seriesname ${season}x${epnumber}, $airdate, $summary";
 	return $title;
-}
-
-sub flood_protect {		#return 1 if flood protection activated
-	my ($nick, $address, $maxdiff) = @_;
-	my $last = 0;
-	if (-e $tsfile) {
-		open(TS,"<$tsfile") || die("Can't open $tsfile: $!");
-		$last=<TS>;
-		if ($DEBUG1) { Irssi::print("last: $last"); }
-		close(TS);
-	} else {}
-
-	open(TS,">$tsfile") || die("Can't open $tsfile: $!");
-	my $cur = time();
-	if ($DEBUG1) { Irssi::print("current time: $cur"); }
-	print(TS $cur);
-	close(TS) || die ("Can't close $tsfile: $!");
-	
-	my $diff = 0;
-	if ($last) { $diff = $cur - $last; }
-	else { $diff = 3; }
-	if ( $DEBUG1) { Irssi::print("diff: $diff"); }
-	
-	if ($diff <3) {
-		Irssi::print("$myname: Flood protection activated (nick: $nick, address: $address, difference: ${diff}s)");
-		return 1;
-	}
-	return 0;
 }
 
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
-	#if ($DEBUG) { Irssi::print("own public"); }
 	sig_msg_pub($server, $msg, $server->{nick}, "", $target);
 }
 

@@ -161,7 +161,7 @@ sub del_mato {
 sub check_if_delete {
 	my ($command, $id) = @_;
 	return -1 unless $id > 0;
-	if ($command =~ s/ ([0-9]{1-3})//gi) {
+	if ($command =~ s/ ([0-9]{1,4})//gi) {
 		$id = $1;
 		dp("check_if_delete new id: $id");
 	}
@@ -364,9 +364,9 @@ sub if_korvamato {
 
 		if ($command =~ s/\bid\:? (\d+)\b//gi) {			# search and replace from $command
 			$id = $1;
-			Irssi::print("$myname ID: $id, command: $command") if $DEBUG;
+			dp("$myname ID: $id, command: $command");
 		} elsif ($command =~ /\bid\:?/gi) {
-			return 'En tajunnut! Kokeile !korvamato id: 123';
+			return 'En tajunnut! Kokeile esim. !korvamato id: 123';
 		}
 		
 		my $searchword = '';
@@ -376,9 +376,9 @@ sub if_korvamato {
 			if ($sayline ne '') {
 				return $sayline;
 			}
-			return 'En tajunnut! !korvamato etsi <hakusana>';
+			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
 		} elsif ($command =~ /^etsi\:?/gi) {
-			return 'En tajunnut! !korvamato etsi <hakusana>';
+			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
 		}
 
 		my ($string, $oldstring) = parse_keyword_return_sql($id, $command);
@@ -386,12 +386,12 @@ sub if_korvamato {
 		if ($string ne '') {
 			my $oldvalue = KaaosRadioClass::readLineFromDataBase($db, $oldstring) || '<tyhjä>';
 			# HACK:
+			dp('oldvalue: '. $oldvalue);
 			if ($oldvalue == 1) {
 				$oldvalue = '<tyhjä>';
 			}
 			my $returnvalue = updateDB($string);
 			if ($returnvalue == 0) {
-				dp($oldvalue);
 				return "Päivitetty. Oli: $oldvalue";
 			}
 		}
