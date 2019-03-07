@@ -9,8 +9,8 @@ use Time::Piece;
 
 #use Number::Format qw('format_number' :vars);
 use Number::Format qw(:subs :vars);
-#use CLDR::Number;
-$DECIMAL_POINT = ',';
+# didnt find --laama use CLDR::Number;
+# $DECIMAL_POINT = ',';
 my $fi = new Number::Format(-decimal_point => ',');
 
 use Math::Trig; # for apparent temp
@@ -32,7 +32,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190226';
+$VERSION = '20190303';
 %IRSSI = (	
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -43,7 +43,7 @@ $VERSION = '20190226';
 	changed     => $VERSION
 );
 
-my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';
+my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
@@ -197,10 +197,8 @@ sub conway {
 
 sub CREATEDB {
 	$dbh = KaaosRadioClass::connectSqlite($db);
-    #my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-
 	my $stmt = qq/CREATE TABLE IF NOT EXISTS CITIES (ID int, NAME TEXT, COUNTRY text, PVM INT, LAT TEXT, LON TEXT, PRIMARY KEY(ID, NAME))/;
-	
+
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 	if($rv != 0) {
    		Irssi::print ("$myname: DBI Error $rv");
@@ -346,10 +344,9 @@ sub SAVEDATA {
 	my $temp = $json->{main}->{temp} || 0;
 	my $lat = $json->{coord}->{lat} || 0;
 	my $long = $json->{coord}->{lon} || 0;
-									#1	#2		#2		#4		#5		#6		#7			#8			#9		#10			#11	#12			#13		#14		#15		#16	
+									#1	#2	 #2			#4		#5		#6		#7			#8			#9		#10		#11		#12		#13			#14		#15	#16	
 	my $stmt = "INSERT INTO DATA (CITY, PVM, COUNTRY, CITYID, SUNRISE, SUNSET, DESCRIPTION, WINDSPEED, WINDDIR, TEMPMAX, TEMP, HUMIDITY, PRESSURE, TEMPMIN, LAT, LON)
 	 VALUES ('$name', $now, '$country', $id, $sunrise, $sunset, '$weatherdesc', '$windspeed', '$winddir', '$tempmax', '$temp', '$humidity', '$pressure', '$tempmin', '$lat', '$long')";
-	#dp('save Data stmt: '.$stmt);
 	return KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 }
 
@@ -419,14 +416,14 @@ sub getSayLine {
 		$sky = ' --> '. conway();
 	}
 	if ($apptemp) {
-		$apptemp = ', feels like: '.$fi->format_number($apptemp, 1).'°C';
+		$apptemp = ', (~ '.$fi->format_number($apptemp, 1).'°C)';
 	} else {
 		$apptemp = '';
 	}
 	
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
-	my $wind = '💨 '. $json->{wind}->{speed}. ' m/s';
+	my $wind = '💨 '. $fi->format_number($json->{wind}->{speed}, 1). ' m/s';
 	my $city = $json->{name};
 	if ($city eq 'Kokkola') {
 		$city = '🦄 Kokkola';
@@ -498,8 +495,8 @@ use constant TRANSMISSIONCOEFFICIENTCLOUDY => 0.62;
 # $latitude = degrees?
 # $timestamp = unixtime
 sub getApparentTemperature {
-	my ($dryBulbTemperature, $humidity ,$windSpeed, $cloudiness, $latitude, $timestamp, @rest) = @_;
-	da('getApparentTemperature params:', @_);
+	my ($dryBulbTemperature, $humidity, $windSpeed, $cloudiness, $latitude, $timestamp, @rest) = @_;
+	da(__LINE__.': getApparentTemperature params:', @_);
 	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
 	my $cosOfZenithAngle = getCosOfZenithAngle(deg2rad($latitude), $timestamp);
 	dp('cosOfZenithAngle: '.$cosOfZenithAngle);
@@ -515,14 +512,12 @@ sub getApparentTemperature {
 
 sub getCosOfZenithAngle {
 	my ($latitude, $timestamp, @rest) = @_;
-	# TODO: create perl time element
 	my $declination = deg2rad(-23.44 * cos(deg2rad((360.0/365.0) * (9 + getDayOfYear($timestamp)))));
 	my $hourAngle = ((12 * 60) - getMinuteOfDay($timestamp)) * 0.25;
 	return sin $latitude * sin $declination + (cos $latitude * cos $declination * cos deg2rad($hourAngle));
 
 }
 
-# TODO: Timezone
 sub getDayOfYear {
 	my ($timestamp, $tz, @rest) = @_;
 	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime $timestamp;
