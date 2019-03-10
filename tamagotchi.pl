@@ -1,11 +1,11 @@
 use warnings;
 use strict;
 use Irssi;
-use KaaosRadioClass;				# LAama1 7.3.2019
+#use KaaosRadioClass;				# LAama1 7.3.2019
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '0.3';
+$VERSION = '0.5';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
@@ -16,9 +16,8 @@ $VERSION = '0.3';
         changed     => $VERSION
 );
 
-my $levelpoints = 2;	# how many points between levels
+my $levelpoints = 25;	# how many points between levels
 my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra');
-
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
 my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams');
@@ -91,7 +90,7 @@ sub count_level {
 }
 
 sub evolve {
-	my ($server, $target, $level, @nicks) = @_;
+	my ($server, $target, $level, @nicks, @rest) = @_;
 	my $newnick = '';
 	#Irssi::print('tamagotchi.pl level: '. ($level-1));
 	$newnick = @nicks[($level % (scalar(@nicks)))-1];
@@ -100,6 +99,7 @@ sub evolve {
 		Irssi::print('tamagotchi.pl extralevel: '. ($extralevel-1));
 		$newnick = $ybernicks[($extralevel-1)] . $newnick;
 	}
+	msg_channel($server, $target, '*EvolVing*');
 	change_nick($server, $newnick);
 	return;
 }
