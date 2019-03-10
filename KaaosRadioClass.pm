@@ -144,7 +144,7 @@ sub writeToFile {
 	open (OUTPUT, '>:utf8', $filename) || return -1;
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
-	dp('Write done.');
+	dp('Write done to '. $filename);
 	return 0;
 }
 
@@ -164,7 +164,7 @@ sub writeArrayToFile {
 
 # check if people are flooding two or more commands too soon
 sub floodCheck {
-	my ($timedifference,@rest) = @_ || 3;
+	my ($timedifference, @rest) = @_ || 3;
 	my $last = 0;
 	my $cur = time;
 
@@ -312,7 +312,7 @@ sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
 	if ($rv < 0) {
-		dp("KaaosRadioClass.pm, DBI Error: ".DBI::errstr);
+		dp('KaaosRadioClass.pm, DBI Error: '.DBI::errstr);
    		return DBI::errstr;
 	}
 	return 0;
@@ -325,7 +325,7 @@ sub writeToDB {
 
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
-		dp("KaaosRadioClass.pm, DBI Error: ".DBI::errstr);
+		dp('KaaosRadioClass.pm, DBI Error: '.DBI::errstr);
    		return DBI::errstr;
 	}
 	$dbh->disconnect();
@@ -338,10 +338,15 @@ sub closeDB {
 	return 0;
 }
 
+# get month based on integer 1-12. Optional parameter: lowercase enabled or not
 sub getMonthString {
-	my ($month, @rest) = @_;
-	if ($month > 12 || $month < 1) { return;}
+	my ($month, $lowercase, @rest);
+	($month, $lowercase, @rest) = @_
+	if ($month > 12 || $month < 1) return;
 	my @months = qw(Tammikuu Helmikuu Maaliskuu Huhtikuu Toukokuu Kesäkuu Heinäkuu Elokuu Syyskuu Lokakuu Marraskuu Joulukuu);
+	if ($lowercase == 1) {
+		return lc $months[$month-1];	
+	}
 	return $months[$month-1];
 }
 
@@ -428,6 +433,7 @@ sub da {
 sub conway {
 	# John Conway method
 	#my ($y,$m,$d);
+	my @params = @_;
 	chomp(my $y = `date +%Y`);
 	chomp(my $m = `date +%m`);
 	chomp(my $d = `date +%d`);

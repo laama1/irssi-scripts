@@ -22,7 +22,7 @@ $VERSION = '0.50';
 my $DEBUG = 1;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
-my @channels = ('#salamolo2', '#botti', '#kaaosradio');
+my @channels = ('#salamolo', '#botti', '#kaaosradio');
 
 sub getHelp {
 	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.	!kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
@@ -46,7 +46,7 @@ sub pubmsg {
 	} elsif ($msg =~ /(!kuu)\b/i || $msg =~ /(!moon)/i) {
 		my $keyword = $1;
 		return if KaaosRadioClass::floodCheck() == 1;
-		my $outputstring = conway();
+		my $outputstring = KaaosRadioClass::conway();
 		Irssi::print("auroras.pl: $keyword request from $nick on channel $target");
 		$serverrec->command("MSG $target Kuun vaihe: $outputstring");
 	}
@@ -72,38 +72,5 @@ sub fetchAuroraData {
 	return $returnString;
 }
 
-
-sub conway {
-	# John Conway method
-	#my ($y,$m,$d);
-	chomp(my $y = `date +%Y`);
-	chomp(my $m = `date +%m`);
-	chomp(my $d = `date +%d`);
-
-	my $r = $y % 100;
-	$r %= 19;
-	if ($r > 9) { $r-= 19; }
-	$r = (($r * 11) % 30) + $m + $d;
-	if ($m < 3) { $r += 2; }
-	$r -= 8.3;              # year > 2000
-
-	$r = ($r + 0.5) % 30;	#test321
-	my $age = $r;
-	$r = 7/30 * $r + 1;
-
-=pod
-      0: 'New Moon'        🌑
-      1: 'Waxing Crescent' 🌒
-      2: 'First Quarter',  🌓
-      3: 'Waxing Gibbous', 🌔
-      4: 'Full Moon',      🌕
-      5: 'Waning Gibbous', 🌖
-      6: 'Last Quarter',   🌗
-      7: 'Waning Crescent' 🌘
-=cut
-
-	my @moonarray = ('🌑 uusikuu', '🌒 kuun kasvava sirppi', '🌓 kuun ensimmäinen neljännes', '🌔 kasvava kuperakuu', '🌕 täysikuu', '🌖 laskeva kuperakuu', '🌗 kuun viimeinen neljännes', '🌘 kuun vähenevä sirppi');
-	return $moonarray[$r] .", ikä: $age vrk.";
-}
 
 Irssi::signal_add_last('message public', 'pubmsg');

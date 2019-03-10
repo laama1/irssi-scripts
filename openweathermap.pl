@@ -159,10 +159,10 @@ sub get_sun_moon {
 	if (is_sun_up($sunrise, $sunset)) {
 		return '🌞';
 	}
-	return conway();
+	return omaconway();
 }
 
-sub conway {
+sub omaconway {
 	# John Conway method
 	#my ($y,$m,$d);
 	chomp(my $y = `date +%Y`);
@@ -404,7 +404,7 @@ sub getSayLine {
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $temp;
 	if ($tempmin != $tempmax) {
-		$temp = "($tempmin..$tempmax) °C"
+		$temp = "($tempmin..$tempmax)°C"
 	} else {
 		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
 	}
@@ -413,7 +413,7 @@ sub getSayLine {
 	my $sky = '';
 	if (is_sun_up() == 0) {
 		#$sky = ' --> '.get_sun_moon($json->{sys}->{sunrise}, $json->{sys}->{sunset});
-		$sky = ' --> '. conway();
+		$sky = ' --> '. omaconway();
 	}
 	if ($apptemp) {
 		$apptemp = ', (~ '.$fi->format_number($apptemp, 1).'°C)';
