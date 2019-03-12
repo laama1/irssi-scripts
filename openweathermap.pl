@@ -32,7 +32,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190303';
+$VERSION = '20190310';
 %IRSSI = (	
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -47,7 +47,7 @@ my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 my $myname = 'openweathermap.pl';
@@ -403,7 +403,7 @@ sub getSayLine {
 	my $tempmin = $fi->format_number($json->{main}->{temp_min}, 1);
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $temp;
-	if ($tempmin != $tempmax) {
+	if ($tempmin ne $tempmax) {
 		$temp = "($tempmin..$tempmax)°C"
 	} else {
 		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
@@ -496,7 +496,7 @@ use constant TRANSMISSIONCOEFFICIENTCLOUDY => 0.62;
 # $timestamp = unixtime
 sub getApparentTemperature {
 	my ($dryBulbTemperature, $humidity, $windSpeed, $cloudiness, $latitude, $timestamp, @rest) = @_;
-	da(__LINE__.': getApparentTemperature params:', @_);
+	#da(__LINE__.': getApparentTemperature params:', @_);
 	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
 	my $cosOfZenithAngle = getCosOfZenithAngle(deg2rad($latitude), $timestamp);
 	dp('cosOfZenithAngle: '.$cosOfZenithAngle);
@@ -548,5 +548,6 @@ Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message private', 'sig_msg_priv');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
 Irssi::print("$myname v. $VERSION loaded.");
-Irssi::print("\nNew commands:");
+Irssi::print('New commands:');
 Irssi::print('/set openweathermap_enabled_channels #1 #2');
+Irssi::print("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));

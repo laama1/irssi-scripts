@@ -60,7 +60,7 @@ $VERSION = '2018-12-26';
 	changed     => $VERSION
 );
 
-my $tsfile = Irssi::get_irssi_dir().'/scripts/ts';
+
 my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
 my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
@@ -69,9 +69,9 @@ my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 my $howManyDrunk = 0;
 my $dontprint = 0;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+my $DEBUG_decode = 1;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -87,7 +87,7 @@ $newUrlData->{md5} = '';			# hash of the page that was fetched
 $newUrlData->{fetchurl} = '';		# which url to actually fetch
 $newUrlData->{shorturl} = '';		# shortened url for the link
 
-my $shortModeEnabled = 0;
+my $shortModeEnabled = 0;			# don't print that much garbage
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -95,7 +95,6 @@ unless (-e $db) {
 		die;
 	}
 	close FILE;
-	#createDB();
 	createFstDB();
 	Irssi::print("$myname: Database file created.");
 }
@@ -105,11 +104,9 @@ my $cookie_jar = HTTP::Cookies->new(
 	file => $cookie_file,
 	autosave => 1,
 );
-
 my $max_size = 262144;		# bytes
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0';
-
 my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
@@ -117,16 +114,13 @@ my %headers = (
 	#'ssl_opts' => ['verify_hostname' => 0],			# disable cert checking
 	'protocols_allowed' => ['http', 'https', 'ftp'],
 	'protocols_forbidden' => [ 'file', 'mailto'],
-	'timeout' => 3,									# default 180 seconds
+	'timeout' => 4,									# default 180 seconds
 	'cookie_jar' => $cookie_jar,
 	#'default_headers' => 
 	#'requests_redirectable' => ['GET', 'HEAD'],		# defaults GET HEAD
 	#'parse_head' => 1,
 );
-
 my $ua = LWP::UserAgent->new(%headers);
-
-
 # Try to disable cert checking (lwp versions > 5.837)
 eval {
 	$ua->ssl_opts('verify_hostname' => 0);
@@ -136,14 +130,14 @@ eval {
 };
 
 # new headers for youtube and mixcloud etc.
-sub setHeaders {
+sub set_headers {
 	my ($choice, @rest) = @_;
 	if ($choice == 1) {
 		$ua->agent($useragentOld);
 	} elsif ($choice == 2) {
 		$ua->agent($useragentNew);
 	}
-	dp('Agent: '. $ua->agent);
+	dp('current User Agent: '. $ua->agent);
 }
 
 # Strip and html-decode title or get size from url. Params: url
@@ -165,7 +159,7 @@ sub fetch_title {
 	#da($response);
 
 	if ($response->is_success) {
-		Irssi::print("$myname: Successfully fetched $url, ".$response->content_type.", ".$response->status_line.", size: ".$size.", redirects: ".$response->redirects);
+		Irssi::print("$myname: Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
 		if ($finalURI ne '' && $finalURI ne $url) {
 			$url = $finalURI;
@@ -214,10 +208,10 @@ sub fetch_title {
 
 	if ($response->content_type !~ /(text)|(xml)/) {
 		if ($shortModeEnabled == 1) {
-			dd('Short mode enabled = 1');
+			dp('Short mode enabled = 1');
 			return '', 0 , 0, $md5hex;
 		} else {
-			return 'File: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other file
+			return 'File: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
 		}
 	}
 
@@ -237,30 +231,30 @@ sub getTitle {
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
 	#da('header OG: ',$response->header('property'));
-	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph
+	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
-	dd("\ngetTitle response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
-	dd('og:title: '.$ogtitle);
+	dd("\ngetTitle:\nresponse header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
+	#dd('og:title: '.$ogtitle);
 
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
-	dd('geTitle Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
-	dd('geTitle Header description found: '. $response->header('Description')) if $response->header('Description');
+	dd('getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
+	dd('getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
 	#dp('HEADER: ');
-	dd("geTitle newtitle: $newtitle, newdescription: $newdescription");
+	dd("getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
-		dp('geTitle script filtered..') if $DEBUG1;
+		dp('getTitle script filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
-		dp ('geTitle style filtered..') if $DEBUG1;
+		dp('getTitle style filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
-		dp('geTitle comment filtered..') if $DEBUG1;
+		dp('getTitle comment filtered..') if $DEBUG1;
 	}
 	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
 
@@ -310,24 +304,10 @@ sub get_channel_title {
 	return $chanrec->{topic};
 }
 
-sub getChannelTitle {
-	my ($channel, @rest) = @_;
-	my @windows = Irssi::windows();
-	foreach my $window (@windows) {
-		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
-		if($window->{active}->{name} eq $channel) {
-			return $window->{active}->{topic};
-		}
-	}
-}
-
-### Encode to UTF8. Params. $string, $charset
+### Encode to UTF8. Params: $string, $charset
 sub etu {
 	my ($string, $charset, @rest) = @_;
 	dd("etu function. charset: $charset string before: $string");
-	#return encode("UTF-8", $string);
-	#return encode("UTF8", $string);
 	Encode::from_to($string, $charset, 'utf8') if $charset && $string;
 	dd("etu function, string after: $string");
 	return $string;
@@ -456,7 +436,6 @@ sub replace_non_url_chars {
 		}
 		dd("replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
 	}
-	
 
 	#if ($row) {
 	$row =~ s/ä/a/g;
@@ -504,29 +483,6 @@ sub createFstDB {
 							CHANNEL,
 							MD5HASH););
 
-	my $rv = $dbh->do($stmt);
-	if($rv < 0) {
-   		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
-	} else {
-   		Irssi::print("$myname: Table $db created successfully");
-	}
-	$dbh->disconnect();
-}
-
-# Create DB and table links
-sub createDB {
-
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-
-	my $stmt = qq(CREATE TABLE LINKS
-      (NICK         TEXT,
-       PVM          INT,
-       URL        	TEXT,
-       TITLE        TEXT,
-	   DESCRIPTION  TEXT,
-	   CHANNEL		TEXT,
-	   MD5HASH		TEXT););
-	
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
    		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
@@ -592,9 +548,9 @@ sub checkForPrevEntry {
 	else { return @elements };
 }
 
-sub apiConversion {
+sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp("apiConversion") if $DEBUG1;
+	dp("api_conversion") if $DEBUG1;
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
 		
@@ -612,7 +568,7 @@ sub apiConversion {
 
 	# set newer headers if mixcloud
 	if ($param =~ /mixcloud\.com/i) {
-		setHeaders(2);
+		set_headers(2);
 	}
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
@@ -637,9 +593,7 @@ sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');
-	# Check we have an enabled channel
-	#my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
-	#my @enabled = split / /, $enabled_raw;
+
 	$dontprint = 0;
 	# TODO if searching for old link..
 	if ($msg =~ /\!url ?(.*)$/i) {
@@ -663,7 +617,7 @@ sub sig_msg_pub {
 	} else {
 		return;
 	}
-	setHeaders(1);			# set default user agent
+	set_headers(1);			# set default user agent
 	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
@@ -678,7 +632,6 @@ sub sig_msg_pub {
 	# check if flooding too many times in a row
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
-		#if (getChannelTitle($target) =~ /np\:/i) {
 		if (get_channel_title($server, $target) =~ /np\:/i) {
 			dp('np FOUND from channel title');
 			$dontprint = 1;
@@ -706,7 +659,7 @@ sub sig_msg_pub {
 		$shortModeEnabled = 0;
 	}
 
-	$newUrlData->{fetchurl} = apiConversion($newUrlData->{url}, $server, $target);	#
+	$newUrlData->{fetchurl} = api_conversion($newUrlData->{url}, $server, $target);	#
 	
 	if ($newUrlData->{fetchurl} eq '') {
 		#return;
@@ -756,7 +709,7 @@ sub msg_to_channel {
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
 
-	if ($title =~ /(.{240}).*/s) {
+	if ($title =~ /(.{260}).*/s) {
 		$title = $1 . '...';
 	}
 	dp('msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
@@ -1069,3 +1022,4 @@ Irssi::print('/set urltitle_wanha_disabled 0/1');
 Irssi::print('/set urltitle_dont_save_urls_channels #1 #2');
 Irssi::print('/set urltitle_shortmode_channels #1 #2');
 Irssi::print('/set urltitle_enable_descriptions 0/1.');
+Irssi::print('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));

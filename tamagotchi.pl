@@ -5,7 +5,7 @@ use Irssi;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '0.5';
+$VERSION = "20190312";
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
@@ -18,6 +18,7 @@ $VERSION = '0.5';
 
 my $levelpoints = 25;	# how many points between levels
 my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra');
+my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
 my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams');
@@ -41,7 +42,7 @@ my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska');
 #my @hateanswer_words = ('');
 my $hatecounter = 0;
 my $hatelevel = 0;
-my @hatenicks = ('satan', 'devil');
+my @hatenicks = ('satan_', 'devil_');
 
 my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy');
 my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi');
@@ -71,10 +72,20 @@ sub msg_random {
 	return;
 }
 
+sub if_nick_in_use {
+	my ($server, $nick, @rest) = @_;
+	da('whois1:', $server->send_raw("whois $nick"));
+	da('who2:', $server->send_raw("who :$nick"));
+	return;
+}
+
 sub change_nick {
 	my ($server, $newnick, @rest) = @_;
+	#if_nick_in_use($server, $newnick);
+	$newnick .= $nicktail;
 	Irssi::print('tamagotchi.pl change_nick: '. $newnick);
 	$server->command("NICK $newnick");
+	return;
 }
 
 # return $level (current level number) if levelup
