@@ -131,14 +131,14 @@ sub readTextFile {
 # add one line of text to a file given in param
 sub addLineToFile {
 	my ($filename, $textToWrite, @rest) = @_;
-    #open (OUTPUT, ">>$filename") || return -1;
+	#open (OUTPUT, ">>$filename") || return -1;
 	open OUTPUT, '>>:utf8', $filename || return -1;
-    print OUTPUT $textToWrite ."\n";
-    close OUTPUT || return -2;
+	print OUTPUT $textToWrite ."\n";
+	close OUTPUT || return -2;
 	return 0;
 }
 
-# add content to new file
+# add content to new file or overwrite existing
 sub writeToFile {
 	my ($filename, $textToWrite, @rest) = @_;
 	open (OUTPUT, '>:utf8', $filename) || return -1;
@@ -176,7 +176,7 @@ sub floodCheck {
 	return 0;
 }
 
-# Return true if flooding too many (urls) in a row
+# Return 1 if flooding too many (urls) in a row
 sub Drunk {
 	my ($nick, @rest) = @_;
 	if ($nick eq $floodernick) {
@@ -238,24 +238,24 @@ sub replaceWeird {
 	$text =~ s/(&#039\;)+/'/g;	# '
 	
 	# ASCII encoded
-    $text =~ s/\%20/ /g;        # asciitable.com
-    $text =~ s/\%3A/:/gi;		# :
-    $text =~ s/\%2C/,/gi;		# ,
-    $text =~ s/\%2F/\//gi;       # /
-    $text =~ s/\%3F/\?/gi;       # ?
-    $text =~ s/\%26/&/g;		# &
+	$text =~ s/\%20/ /g;        # asciitable.com
+	$text =~ s/\%3A/:/gi;		# :
+	$text =~ s/\%2C/,/gi;		# ,
+	$text =~ s/\%2F/\//gi;       # /
+	$text =~ s/\%3F/\?/gi;       # ?
+	$text =~ s/\%26/&/g;		# &
 	$text =~ s/\%23/#/g;		# #
-    $text =~ s/Ã¨/é/g;			# é
+	$text =~ s/Ã¨/é/g;			# é
 	$text =~ s/Ã¤/ä/g;			# ä
 	$text =~ s/Ã¶/ö/g;			# ö
 	$text =~ s/Ã¥/å/g;			# å
 	$text =~ s/õ/ä/g;			# ä
-    $text =~ s/Õ/Ä/g;			# Ä
-    $text =~ s/÷/ö/g;			# ö
+	$text =~ s/Õ/Ä/g;			# Ä
+	$text =~ s/÷/ö/g;			# ö
 	
 
 	# UTF encoded
-    $text =~ s/\%C3\%96/Ö/gi;	# Ö
+	$text =~ s/\%C3\%96/Ö/gi;	# Ö
 	$text =~ s/\%C3\%A4/ä/gi;	# ä
 	$text =~ s/\%C3\%84/Ä/gi;	# Ä
 	$text =~ s/\%C3\%B6/ö/gi;	# ö
@@ -276,9 +276,9 @@ sub replaceWeird {
 	$text =~ s/[\t]+//g;		# remove tabs within..
 	$text =~ s/[\n\r]+//g;		# remove line feeds
 
-	$text =~ s/\x10//g;
-	$text =~ s/\x13//g;
-	$text =~ s/\x97/-/g;		# convert long dash to normal
+	$text =~ s/\\x10//g;			# \n
+	$text =~ s/\\x13//g;			# \r
+	$text =~ s/\\x97/-/g;		# convert long dash to normal
 
 	$text =~ s/\\x\{e4\}/ä/g;	# ä, JSON tms.
 	
@@ -320,7 +320,7 @@ sub writeToOpenDB {
 
 sub writeToDB {
 	my ($db, $string) = @_;
-    my $dbh = connectSqlite($db);
+	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 
 	my $rv = $dbh->do($string);
@@ -418,9 +418,9 @@ sub getJSON {
 }
 
 sub dp {
-    return unless $DEBUG == 1;
-    #Irssi::print("$myname-debug: @_");
-    print("debug: @_");
+	return unless $DEBUG == 1;
+	#Irssi::print("$myname-debug: @_");
+	print("debug: @_");
 }
 
 
@@ -450,14 +450,14 @@ sub conway {
 	$r = 7/30 * $r + 1;
 
 =pod
-      0: 'New Moon'        🌑
-      1: 'Waxing Crescent' 🌒
-      2: 'First Quarter',  🌓
-      3: 'Waxing Gibbous', 🌔
-      4: 'Full Moon',      🌕
-      5: 'Waning Gibbous', 🌖
-      6: 'Last Quarter',   🌗
-      7: 'Waning Crescent' 🌘
+	  0: 'New Moon'        🌑
+	  1: 'Waxing Crescent' 🌒
+	  2: 'First Quarter',  🌓
+	  3: 'Waxing Gibbous', 🌔
+	  4: 'Full Moon',      🌕
+	  5: 'Waning Gibbous', 🌖
+	  6: 'Last Quarter',   🌗
+	  7: 'Waning Crescent' 🌘
 =cut
 
 	my @moonarray = ('🌑 uusikuu', '🌒 kuun kasvava sirppi', '🌓 kuun ensimmäinen neljännes', '🌔 kasvava kuperakuu', '🌕 täysikuu', '🌖 laskeva kuperakuu', '🌗 kuun viimeinen neljännes', '🌘 kuun vähenevä sirppi');
