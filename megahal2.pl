@@ -482,5 +482,5 @@ dp("Loading settings next..");    # LAama1
 #Irssi::settings_set_str('megahal_brain', '/home/laama/.cpan/build/AI-MegaHAL-0.08-TSMTQK/');
 Irssi::settings_set_str('megahal_brain', '/home/laama/.irssi/scripts/');
 #dp(Irssi::settings_get_str('megahal_brain'));
-Irssi::print("");
+Irssi::print('');
 load_settings();

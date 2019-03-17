@@ -22,6 +22,7 @@ $VERSION = '0.50';
 my $DEBUG = 1;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
+#my $db = $ENV{HOME}. '/.irssi/scripts/newauroras.db';
 my @channels = ('#salamolo', '#botti', '#kaaosradio');
 
 sub getHelp {
@@ -30,7 +31,7 @@ sub getHelp {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return unless ($msg =~ /$serverrec->{nick}/i);
+	#return unless ($msg =~ /$serverrec->{nick}/i);
 	return unless ($target ~~ @channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(!help)/gi) {
@@ -48,7 +49,7 @@ sub pubmsg {
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $outputstring = KaaosRadioClass::conway();
 		Irssi::print("auroras.pl: $keyword request from $nick on channel $target");
-		$serverrec->command("MSG $target Kuun vaihe: $outputstring");
+		$serverrec->command("MSG $target Kuun vaihe: $outputstring") if $outputstring;
 	}
 }
 

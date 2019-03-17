@@ -381,11 +381,10 @@ sub grepKeyword {
 		$rimpsu =~ s/$monthlocal/\$month/gi;
 	}
 
-	#my $season = checkSeason($month, 0);
+	my $season = checkSeason($month, 0);
 	#my $seasongen = checkSeason($month, 1);			# genetiivi muoto?
 	#my $seasonob = checkSeason($month, 2);				# objektiivimuoto?
-	#my $moonphase = KaaosRadioClass::conway();
-
+	my $moonphase = KaaosRadioClass::conway();			# VAROITUS
 
 	$rimpsu =~ s/$tomorrowak/\$tomorrowak/gi;
 
@@ -396,11 +395,13 @@ sub grepKeyword {
 	$rimpsu =~ s/$nextmonth/\$nextmonth/gi;
 
 	$rimpsu =~ s/$curmonth/\$month/gi;
+	$rimpsu =~ s/$month/\$month/gi;
 
 	$rimpsu =~ s/$curseason/\$season/gi;
+	$rimpsu =~ s/$season/\$season/gi;
 	#$rimpsu =~ s/\$seasongen/$seasongen/g;
 	#$rimpsu =~ s/\$seasonob/$seasonob/g;
-	#$rimpsu =~ s/\$moonphase/$moonphase/g;
+	$rimpsu =~ s/$moonphase/\$moonphase/g;
 	$rimpsu =~ s/täysikuu\b/\$moonphase/gi;
 
 	return $rimpsu;

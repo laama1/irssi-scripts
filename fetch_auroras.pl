@@ -13,7 +13,7 @@ use JSON;
 
 use DBI qw(:sql_types);
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'fetch_auroras.pl';
 #my $auroraurl = 'http://www.aurora-service.eu/aurora-forecast/';
 my $auroraurl = 'http://www.aurora-service.org/aurora-forecast/';
