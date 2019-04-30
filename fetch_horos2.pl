@@ -10,7 +10,7 @@ use vars qw($VERSION);
 
 $VERSION = 0.4;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
@@ -109,11 +109,6 @@ sub grepAstro {
 	
 	foreach my $currentURl (@astrourls) {
 		dp("\n\ngrepAstro index: ". $index);
-		#if ($index >= 1 && $DEBUG1) {
-			#return;
-		#	dp("\n premature return from foreach loop because debug enabled. \n");
-		#	last;
-		#}
 		dp("grepAstro current url: $currentURl");
 		my $page = KaaosRadioClass::fetchUrl($currentURl, 0);
 		my $sign;
@@ -121,10 +116,7 @@ sub grepAstro {
 		if ($page =~ /\<div id="entireWeek"(.*?)script/si) {
 			$page = $1;
 			$page =~ s/<img.*?>//gi;	# clean the debug a bit
-			#dp("parse this div entireWeek: $page");
-			#dp("page: ".$page);
 		} else {
-			#return;
 			dp("div entireWeek not found! ($index)");
 			next;
 		}
@@ -134,7 +126,7 @@ sub grepAstro {
 		grepAstroHoro($page, $currentURl);
 		$index++;
 	}
-	$logtext = 'grep astro horo done.';
+	$logtext = "grep astro horo done. ($index)";
 	logmsg($logtext);
 }
 
@@ -160,9 +152,10 @@ sub grepAstroHoro {
 	}
 	if ($index == 0) {
 		dp('grepAstroHoro regex failed!');
+	} else {
+		saveHoroToFile($skoopit);
+		logmsg("astroHORO done ($index)");
 	}
-	#dp("grepAstroHoro Skoopit: ". $skoopit);
-	saveHoroToFile($skoopit);
 }
 
 sub grepAstrosaa {
@@ -183,7 +176,7 @@ sub grepAstrosaa {
 
 		dp("grepAstrosaa ($index): ".$horo);
 		
-		if (defined($horo) && $horo ne '') {
+		if (defined $horo && $horo ne '') {
 			saveHoroToDB($horo, $url, 'Astrosää');
 			$horo = filterKeyword($horo);
 			$astrosaas .= $horo . "\n" if $horo;
@@ -192,9 +185,11 @@ sub grepAstrosaa {
 
 	if ($index == 0) {
 		dp('grepAstrosaa regex failed!');
+	} else {
+		logmsg("astroSää done ($index)");
+		saveHoroToFile($astrosaas);
 	}
-	saveHoroToFile($astrosaas);
-	#return $returnvalue;
+
 }
 
 sub grepIltis {
@@ -296,7 +291,7 @@ sub grepMenaiset {
 		my $localsign = '';
 		#my $horoscope = "";
 		print("menaiset BLOB FOUND! index: $index") if $DEBUG1;
-		logmsg('menaiset BLOBL found!');
+		dp('menaiset BLOBL found!');
 		while ($newdata =~ /<h3>(.*?)<\/p>/sgi) {
 			my $horodata = $1;
 			my $localdata = '';
@@ -321,7 +316,7 @@ sub grepMenaiset {
 	} else {
 		saveHoroToFile($allHoros);
 		#logmsg("allhoros: $allHoros");
-		$logtext .= 'grepMenaiset regex success!';
+		$logtext .= "grepMenaiset regex success! ($index)";
 	}
 	logmsg($logtext);
 }
@@ -474,7 +469,7 @@ sub parseComments {
 		$i++;
 	}
 	$data =~ s/<head>(.*?)<\/head>//si;
-	logmsg("comments etc. elements parsed: $i");
+	dp("comments etc. elements parsed: $i");
 	return $data;
 }
 

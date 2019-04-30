@@ -26,8 +26,9 @@ my $DEBUG = 0;
 
 # debug print array
 sub da {
+	return unless $DEBUG == 1;
 	Irssi::print("fifi-remote-handler: ");
-	Irssi::print(Dumper(@_)) if $DEBUG == 1;
+	Irssi::print(Dumper(@_));
 }
 
 sub sayit {
@@ -51,8 +52,12 @@ sub parse_remote_msg {
 	} elsif ($msg =~ /^(icecast): (.*)$/) {
 		my $command = $1;
 		my $data = $2;
-		printit('icecast:', $data);
+		printit($command . ':', $data);
 	} elsif ($msg =~ /^(stream\d?): (.*)$/) {
+		my $command = $1;
+		my $data = $2;
+		printit($command . ':', $data);
+	} elsif ($msg =~ /^(chill): (.*)$/) {
 		my $command = $1;
 		my $data = $2;
 		printit($command . ':', $data);

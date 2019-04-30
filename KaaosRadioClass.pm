@@ -7,7 +7,7 @@ binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
 
 use Exporter;
-use DBI;
+use DBI;			# https://metacpan.org/pod/DBI
 use LWP::UserAgent;
 use HTTP::Cookies;
 use HTML::Entities qw(decode_entities);
@@ -25,23 +25,24 @@ use Data::Dumper;
 # date changed: 17.9.2016, 21.9.2016, 29.7.2017, 9.10.2017, 21.10.2017
 # date changed: 6.11.2017, 17.12.2017, 18.12.2017, 3.2.2018, 20.7.2018
 # date changed: 9.9.2018, added ktrim function
+# date changed 30.4.2019, sqlite stuff
 
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.02;
+$VERSION = 1.03;
 @ISA = qw(Exporter);
 @EXPORT = ();
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
 
 #$currentDir = cwd();
-my $currentDir = $ENV{HOME}.'/.irssi/scripts';
+my $currentDir = $ENV{HOME}.'/.irssi/scripts/irssi-scripts';
 # tsfile, time span.. save value of current time there. For flood protect.
 my $tsfile = "$currentDir/ts";	# ????
 my $djlist = "$currentDir/dj_list.txt";
-my $database;
+#my $database_handle;
 
 #my $myname = $0;
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
 my $floodernick;
@@ -53,7 +54,7 @@ sub readLastLineFromFilename {
 	my ($file, @rest) = @_;
 
 	my $readline = '';
-	if (-e $file) {
+	if (defined $file && -e $file) {
 		open (INPUT, "<$file:utf8") || return -1;
 		while (<INPUT>)	{
 			chomp;
@@ -68,26 +69,17 @@ sub readLastLineFromFilename {
 
 sub readLinesFromDataBase {
 	my ($db, $string, @rest) = @_;
-	dp("Reading lines from DB.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
-	my $sth = $dbh->prepare($string) or return DBI::errstr;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
 	my @returnArray;
 	my @line;
 	my $index = 0;
 	while(@line = $sth->fetchrow_array) {
-		dp("--fetched a line--");
-		dp(Dumper @line);
-		#push @{ $returnArray[$index] }, @line;
-		#push @returnArray, \@line;
 		$returnArray[$index] = @line;
-		#push @{ $Hits[$i] }, $i;
-		dp("Index: $index \n");
 		$index++;
 	}
-	dp('return array:');
-	dp(Dumper(@returnArray));
 	$dbh->disconnect();
 	return @returnArray;
 }
@@ -97,7 +89,7 @@ sub readLineFromDataBase {
 	dp("Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
-	my $sth = $dbh->prepare($string) or return DBI::errstr;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
 
 	if(my @line = $sth->fetchrow_array) {
@@ -112,6 +104,22 @@ sub readLineFromDataBase {
 	$dbh->disconnect();
 	#return @returnArray, "jee", $db, $string;
 	return;
+}
+
+sub bindSQL {
+	my ($db, $sql, @params, @rest) = @_;
+	my $dbh = connectSqlite($db);							# DB handle
+	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
+	$sth->execute(@params) or return $dbh->errstr;
+	my @results;
+	my $idx = 0;
+	while(@row = $sth->fetchrow_array) {
+		$results[$idx] = @row;
+		$idx++;
+	}
+	$sth->finish();
+	$dbh->disconnect();
+	return @results;
 }
 
 sub readTextFile {
@@ -303,7 +311,7 @@ sub connectSqlite {
 	unless (-e $dbfile) {
 		return -1;						# return error
 	}
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1});
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1, AutoCommit => 1});
 	return $dbh if $dbh;
 	return -2;
 }
@@ -312,8 +320,8 @@ sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
 	if ($rv < 0) {
-		dp('KaaosRadioClass.pm, DBI Error: '.DBI::errstr);
-   		return DBI::errstr;
+		dp('KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+   		return $dbh->errstr;
 	}
 	return 0;
 }
@@ -325,8 +333,8 @@ sub writeToDB {
 
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
-		dp('KaaosRadioClass.pm, DBI Error: '.DBI::errstr);
-   		return DBI::errstr;
+		dp('KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+   		return $dbh->errstr;
 	}
 	$dbh->disconnect();
 	return 0;
@@ -341,7 +349,7 @@ sub closeDB {
 # get month based on integer 1-12. Optional parameter: lowercase enabled or not
 sub getMonthString {
 	my ($month, $lowercase, @rest);
-	($month, $lowercase, @rest) = @_
+	($month, $lowercase, @rest) = @_;
 	if ($month > 12 || $month < 1) return;
 	my @months = qw(Tammikuu Helmikuu Maaliskuu Huhtikuu Toukokuu Kesäkuu Heinäkuu Elokuu Syyskuu Lokakuu Marraskuu Joulukuu);
 	if ($lowercase == 1) {
