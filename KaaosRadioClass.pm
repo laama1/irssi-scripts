@@ -125,14 +125,15 @@ sub bindSQL {
 sub readTextFile {
 	my ($file, @rest) = @_;
 	my @returnArray;
-	open(INPUT, "<$file:utf8") || do {
-		return -1;
-	};
+	#open(INPUT, "<$file:utf8") || do {
+	open INPUT '<:encoding(UTF8)', $file or return "Could not open $file $!";
+	#	return -1;
+	#};
 	while(<INPUT>) {
 		chomp;
 		push @returnArray, $_;
 	}
-	close (INPUT) || return -1;
+	close (INPUT) || return -2;
 	return (\@returnArray);
 }
 

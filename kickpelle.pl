@@ -9,7 +9,7 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '2019-01-22';
+$VERSION = '2019-05-08';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -23,7 +23,6 @@ $VERSION = '2019-01-22';
 # config
 my $DEBUG = 1;
 my $votelimit = 3;		# how many votes needed to kick someone
-my $channels = '#kaaosradio';
 my $myname = 'kickpelle.pl';
 my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
 
@@ -33,13 +32,13 @@ my @badwords = ();
 
 GETBADWORDLIST();
 
-my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea.
-Operaattorit voivat käyttää myös !kick #kanava <nick>, jolloin henkilö lähtee ensimmäisestä osumasta!';
+my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea. 
+Operaattorit voivat käyttää myös privassa !kick #kanava <nick>, jolloin henkilö lähtee ensimmäisestä osumasta!';
 
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp('Printing help..');
+	dp(__LINE__.' Printing help..');
 	sayit($server, $target, $helptext);
 	return 0;
 }
@@ -60,8 +59,7 @@ sub sayit {
 }
 
 sub getStats {
-	#da(@$publicvotes);
-	da('getStats:',$publicvotes);
+	da(__LINE__.': getStats:', $publicvotes);
 	return;
 }
 
@@ -69,9 +67,10 @@ sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
 	# TODO: Check that badsword does not allready exist
 	if ($badsword ~~ @badwords) {
+		dp(__LINE__.': '.$badsword.' allready in list.');
 		return -1;
 	}
-	dp('adding badword to list');
+	dp(__LINE__.': adding badword to list');
 	KaaosRadioClass::addLineToFile($badwordfile, $badsword);
 	push @badwords, $badsword;
 	return 0;
@@ -97,21 +96,23 @@ sub DELBADWORD {
 	}
 
 	if ($found == 1) {
-		KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
+		#KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
+		SAVEBADWORDLIST();
 	}
 	return;
 }
 
 sub GETBADWORDLIST {
 	my @rest = @_;
-	dp("bad word file: $badwordfile");
+	dp(__LINE__.": bad word file: $badwordfile");
 	@badwords = KaaosRadioClass::readTextFile($badwordfile);
+	da(@badwords);
 	if ($badwords[0] == -1) {
-		dp('no bad words!');
+		dp(__LINE__.': no bad words!');
 		@badwords = ('____', 'russiancup');
 		SAVEBADWORDLIST();
 	}
-	da('bad words loaded:',@badwords);
+	da(__LINE__.': bad words loaded:',@badwords);
 	return;
 }
 
@@ -131,10 +132,10 @@ sub kickPerson {
 	$publicvotes->{$nick}->{$channel}->{reason} = $reason;
 
 	my $howmany = $publicvotes->{$nick}->{$channel}->{votecount};
-	dp('kickPerson count: '.$howmany. ', modulo: '.($howmany % $votelimit));
+	dp(__LINE__.': kickPerson count: '.$howmany. ', modulo: '.($howmany % $votelimit));
 
 	if ($howmany > 1 && $howmany % $votelimit == 0) {
-		dp('kickPerson KICK-KING!');
+		dp(__LINE__.': kickPerson KICK-KING!');
 		doKick($server, $channel, $nick, $publicvotes->{$nick}->{$channel}->{reason});
 		$publicvotes->{$nick}->{bootcount} += 1;
 	} else {
@@ -145,7 +146,6 @@ sub kickPerson {
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
 	$server->send_raw("kick $channel $nick :*BOOT $reason*");
-	#Irssi::signal_stop();
 	return;
 }
 
@@ -154,24 +154,24 @@ sub event_privmsg {
 	#if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
 	if($data =~ /^!kick (#[^\s]*) ([^\s]*)/gi) {
 		#dp("event_privmsg: $1 $2 $3");
-		dp("event_privmsg params: $1 $2");
+		dp(__LINE__.": event_privmsg params: $1 $2");
 		my $kickchannel = $1;
 		my $kicknick = $2;
 		#my $kickreason = $3 || '';
 		my $kickreason = 'dat ass';
 		if (get_nickrec($server, $kickchannel, $kicknick)) {
-			dp('event_privmsg, get_nickrec found');
+			dp(__LINE__.': event_privmsg, get_nickrec found');
 			if (ifop2($server, $kickchannel, $nick)) {
 				#kickPerson($server, $kickchannel, $kicknick, $kickreason);
-				dp("event_privmsg, $nick is op.");
+				dp(__LINE__.": event_privmsg, $nick is op.");
 				doKick($server, $kickchannel, $kicknick, $kickreason);
 				msgit($server, $nick, "Kicked $kicknick off $kickchannel!");
 			} else {
-				dp("event_privmsg, $nick is NOT op.");
+				dp(__LINE__.": event_privmsg, $nick is NOT op.");
 				msgit($server, $nick, "You don't have operator status on $kickchannel!");
 			}
 		} else {
-			dp("event_privmsg, no $kicknick on $kickchannel.");
+			dp(__LINE__.": event_privmsg, no $kicknick on $kickchannel.");
 			msgit($server, $nick, "No nick $kicknick on $kickchannel!");
 		}
 	}
@@ -181,7 +181,6 @@ sub event_privmsg {
 sub badWordFilter {
 	my ($msg, @rest) = @_;
 	foreach my $badword (@badwords) {
-		#dp('badWordFilter badword: '.$badword);
 		return 1 if $msg =~ m/$badword/i;
 	}
 	return 0;
@@ -195,6 +194,7 @@ sub get_nickrec {
 	return $chanrec ? $chanrec->nick_find($nick) : undef;
 }
 
+# if $nick is OP or VOICE or HALFOP
 sub ifop2 {
 	my ($server, $channel, $nick) = @_;
 	my $nickrec = get_nickrec($server, $channel, $nick);
@@ -204,16 +204,16 @@ sub ifop2 {
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 
-    my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
-    my @enabled = split / /, $enabled_raw;
-    return unless grep /$target/, @enabled;
+	my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
+	my @enabled = split / /, $enabled_raw;
+	return unless grep /$target/, @enabled;
 
 	if ($msg =~ /^!help kick\b/i || $msg =~ /^!kick$/i) {
 		print_help($server, $target);
 		return;
 	}
 	if (badWordFilter($msg)) {
-		dp('badword found!');
+		dp(__LINE__.': badword found!');
 		doKick($server, $target, $nick, 'Bad words!');
 		return;
 	}
@@ -222,27 +222,28 @@ sub event_pubmsg {
 		return;
 	}
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{
+		dp(__LINE__.": msg: $msg");
 		my $kicknick = $1;		# nick to kick
 		my $reason = $2;
 		if (get_nickrec($server, $target, $nick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
-		#dp("msg: $msg");
+		dp(__LINE__.": msg: $msg");
 		my $kicknick = $1;
 		my $reason = '';		# no reason, just for kicks
 		if (get_nickrec($server, $target, $kicknick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
-		dp('adding a bad word');
+		dp(__LINE__.': adding a bad word: '.$1);
 		if (ADDBADWORD($1) == 0) {
 			sayit($server, $target, "Added $1 to list.");
 		} else {
 			sayit($server, $target, 'Allready found or error.');
 		}
 	} elsif ($msg =~ /^!badwords$/gi) {
-		dp('listing bad words');
+		dp(__LINE__. ': listing bad words');
 		my $string = 'Bad words: ';
 		foreach my $badword (@badwords) {
 			$string .= "$badword, ";
