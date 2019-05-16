@@ -133,6 +133,9 @@ sub replace_with_emoji {
 	$string =~ s/snow/❄️ /ui;
 	$string =~ s/clear sky/$sunmoon /ui;
 	$string =~ s/Sky is Clear/$sunmoon /ui;
+	$string =~ s/Clear/$sunmoon /ui;		# short desc
+	$string =~ s/Clouds/☁️ /u;				# short desc
+	$string =~ s/Rain/🌧️ /u;
 	my $sunup = is_sun_up($sunrise, $sunset);
 	if ($sunup == 1) {
 		$string =~ s/overcast clouds/🌥️ /ui;
@@ -244,7 +247,7 @@ sub FINDWEATHER {
 	return $json;
 }
 
-sub findWeatherForecast {
+sub FINDFORECAST {
 	my ($searchword, @rest) = @_;
 	my $returnstring = "\002klo\002 ";
 	# TODO my $json;
@@ -252,7 +255,7 @@ sub findWeatherForecast {
 	
 	if ($data < 0) {
 		# retry with search word
-		da('findWeatherForecast failed data:',$data) if $DEBUG1;
+		da(__LINE__.': FINDFORECAST failed data:',$data) if $DEBUG1;
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$data = KaaosRadioClass::fetchUrl($forecastUrl.$name.'&units=metric&appid='.$apikey, 0);
 		return 0 if ($data < 0);
@@ -269,13 +272,16 @@ sub findWeatherForecast {
 			# max 8 items: 8x 3h = 24h
 			last;
 		}
-		dp('item Temp: '.$item->{main}->{temp}) if $DEBUG1;
+		#dp(__LINE__.': item Temp: '.$item->{main}->{temp}) if $DEBUG1;
+		#da(__LINE__.': item: ', $item) if $DEBUG1;
+		my $weathericon = replace_with_emoji($item->{weather}[0]->{main});
+		#da(__LINE__.': main: ', $item->{weather}[0]->{main});
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
-		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
+		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
 		$index++;
 	}
 	
-	dp("findWeatherForecast returnstring: $returnstring") if $DEBUG1;
+	dp(__LINE__.": FINDFORECAST returnstring: $returnstring") if $DEBUG1;
 	return $returnstring;
 }
 
@@ -460,7 +466,7 @@ sub sig_msg_pub {
 sub filter {
 	my ($msg, @rest) = @_;
 	my $returnstring;
-	if ($msg =~ /\!(sää |saa |s )(.*)$/i) {
+	if ($msg =~ /\!(sää |saa |s )(.*)$/ui) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
@@ -470,7 +476,7 @@ sub filter {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
-		$returnstring = findWeatherForecast($city);
+		$returnstring = FINDFORECAST($city);
 		$dbh = KaaosRadioClass::closeDB($dbh);
 	} elsif ($msg =~ /\!(sa )(.*)$/i) {
 		return if KaaosRadioClass::floodCheck() > 0;

@@ -71,7 +71,7 @@ my $dontprint = 0;
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -323,7 +323,7 @@ sub checkAndEtu {
 		if ($string =~ /Ã/) {
 			dd("most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
 			$returnString = etu($string, $charset);
-		} elsif ($string =~ /[ÄäÖöÅå]/) {
+		} elsif ($string =~ /[ÄäÖöÅå]/u) {
 			dd("UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
 			$returnString = $string;
 		} else {
@@ -335,7 +335,7 @@ sub checkAndEtu {
 		if ($string =~ /Ã/) {
 			dd("ISO CHARS FOUND, INCORRECT! (reported as $charset)");
 			$returnString = etu($string, $charset) || "";		
-		} elsif ($string =~ /[ÄäÖöÅå]/) {
+		} elsif ($string =~ /[ÄäÖöÅå]/u) {
 			dd("UTF-8 CHARS FOUND, CORRECT! (reported as $charset)");
 			$returnString = $string;
 		} else {
@@ -438,10 +438,10 @@ sub replace_non_url_chars {
 	}
 
 	#if ($row) {
-	$row =~ s/ä/a/g;
-	$row =~ s/Ä/a/g;
-	$row =~ s/ö/o/g;
-	$row =~ s/Ö/o/g;
+	$row =~ s/ä/a/ug;
+	$row =~ s/Ä/a/ug;
+	$row =~ s/ö/o/ug;
+	$row =~ s/Ö/o/ug;
 	$row =~ s/Ã¤/a/g;
 	$row =~ s/Ã¶/o/g;
 	#$row =~ s/\s+/ /gi;
