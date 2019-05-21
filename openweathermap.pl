@@ -47,7 +47,7 @@ my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 my $myname = 'openweathermap.pl';
@@ -127,6 +127,7 @@ unless (-e $db) {
 
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, @rest) = @_;
+	dp('replace_with_emoji:'.__LINE__.": string: $string");
 	my $sunmoon = get_sun_moon($sunrise, $sunset);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
@@ -135,7 +136,7 @@ sub replace_with_emoji {
 	$string =~ s/Sky is Clear/$sunmoon /ui;
 	$string =~ s/Clear/$sunmoon /ui;		# short desc
 	$string =~ s/Clouds/☁️ /u;				# short desc
-	$string =~ s/Rain/🌧️ /u;
+	$string =~ s/Rain/🌧️ /u;				# short desc
 	my $sunup = is_sun_up($sunrise, $sunset);
 	if ($sunup == 1) {
 		$string =~ s/overcast clouds/🌥️ /ui;
@@ -228,11 +229,11 @@ sub CREATEDB {
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
-	da('FINDWEATHER DATA:',$data);
+	da(__LINE__.': FINDWEATHER DATA:',$data) if $DEBUG1;
 	if ($data < 0) {
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
-		da('FINDWEATHER data:',$data);
+		da(__LINE__.': FINDWEATHER data:',$data);
 		if ($data < 0) {
 			return 0;
 		}
@@ -288,16 +289,16 @@ sub FINDFORECAST {
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
 	my ($lat, $lon, $name) = GETCITYCOORDS($city);	# find existing city from DB by search word
-	FINDWEATHER($city) unless ($lat && $lon);		# find city from API
-	($lat, $lon, $name) = GETCITYCOORDS($city);		# find existing city again from DB
-	return 'City not found from API or DB.' unless ($lat && $lon);
+	FINDWEATHER($city) unless ($lat && $lon);		# find city from API if not found from DB
+	($lat, $lon, $name) = GETCITYCOORDS($city) unless ($lat && $lon);		# find existing city again from DB
+	return 'City not found from DB or API.' unless ($lat && $lon);
 
 	my $searchurl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($searchurl, 0);
-	
-	da('FINDAREAWEATHER URL', $searchurl,'DATA',$data) if $DEBUG1;
+
+	da(__LINE__.': FINDAREAWEATHER URL', $searchurl,'DATA',$data) if $DEBUG1;
 	if ($data < 0) {
-		dp('FINDAREAWEATHER failed data:',$data);
+		dp(__LINE__.': FINDAREAWEATHER failed data:',$data);
 		return 0;
 	}
 
@@ -307,8 +308,8 @@ sub FINDAREAWEATHER {
 		# TODO: get city coords from API and save to DB
 		$sayline .= getSayLine2($city) . '. ';
 	}
-	da('FINDAREAWEATHER decoded JSON:',$json);
-	da('FINDAREAWEATHER SAYLINE', $sayline);
+	da(__LINE__.': FINDAREAWEATHER decoded JSON:',$json);
+	da(__LINE__.': FINDAREAWEATHER SAYLINE', $sayline);
 	return $sayline;
 }
 
@@ -318,7 +319,7 @@ sub GETCITYCOORDS {
 	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
 
-	da('GETCITYCOORDS Result:',@results, 'SQL:', $sql);
+	da(__LINE__.': GETCITYCOORDS Result:',@results);
 	return $results[0], $results[1], $results[2];
 }
 
@@ -328,7 +329,6 @@ sub SAVECITY {
 	my $now = time;
 	# TODO: bind params
 	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
-	#dp('save City stmt: '.$sql);
 	return KaaosRadioClass::writeToOpenDB($dbh, $sql);
 }
 
@@ -377,14 +377,14 @@ sub da {
 sub getSayLine2 {
 	my ($json, @rest) = @_;
 	if ($json == 0) {
-		dp('getSayLine2 json = 0');
+		dp(__LINE__.': getSayLine2 json = 0');
 		return;
 	}
 
 	my $weatherdesc = '';
 	my $index = 1;
 	foreach my $item (@{$json->{weather}}) {
-		da('getSayLine2 weather:', $item) if $DEBUG1;
+		da(__LINE__.': getSayLine2 weather:', $item) if $DEBUG1;
 		if ($index > 1) {
 			$weatherdesc .= ', ';
 		}
@@ -444,7 +444,7 @@ sub getSayLine {
 		$weatherdesc .= $item->{description};
 		$index++;
 	}
-	da('weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather});
+	da(__LINE__.': weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset});
 	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.$newdesc.'. '.$sunrise.', '.$sunset.', '.$wind.$sky.$apptemp;
 	return $returnvalue;
@@ -505,7 +505,7 @@ sub getApparentTemperature {
 	#da(__LINE__.': getApparentTemperature params:', @_);
 	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
 	my $cosOfZenithAngle = getCosOfZenithAngle(deg2rad($latitude), $timestamp);
-	dp('cosOfZenithAngle: '.$cosOfZenithAngle);
+	dp(__LINE__.': cosOfZenithAngle: '.$cosOfZenithAngle) if $DEBUG1;
 	my $secOfZenithAngle = 1/ $cosOfZenithAngle;
 	my $transmissionCoefficient = TRANSMISSIONCOEFFICIENTCLEARDAY - (TRANSMISSIONCOEFFICIENTCLEARDAY - TRANSMISSIONCOEFFICIENTCLOUDY) * ($cloudiness/100.0);
 	my $calculatedIrradiation = 0;
@@ -544,7 +544,7 @@ sub sig_msg_priv {
 
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
-	dp('own public');
+	dp(__LINE__.': own public');
 	sig_msg_pub($server, $msg, $server->{nick}, "", $target);
 }
 

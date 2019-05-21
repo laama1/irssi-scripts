@@ -138,24 +138,24 @@ sub IFURL {
 # delete korvamato or one info
 sub del_mato {
 	my ($searchword, $id, @rest) = @_;
-	my $string = '';
-	dp(__LINE__.": del_mato: $searchword");
-	if ($searchword =~ /link1\:?/gi || $searchword =~ /url\:?/gi) {
+	my $string;
+	dp(__LINE__.": del_mato searchword: $searchword");
+	if ($searchword =~ /link1/gi || $searchword =~ /url/gi) {
 		$string = "UPDATE korvamadot set LINK1 = '' where rowid = $id";
-	} elsif ($searchword =~ /link2\:?/gi) {
+	} elsif ($searchword =~ /link2/gi) {
 		$string = "UPDATE korvamadot set LINK2 = '' where rowid = $id";
-	} elsif ($searchword =~ /info1\:?/gi) {
+	} elsif ($searchword =~ /info1/gi) {
 		$string = "UPDATE korvamadot set INFO1 = '' where rowid = $id";
-	} elsif ($searchword =~ /info2\:?/gi) {
+	} elsif ($searchword =~ /info2/gi) {
 		$string = "UPDATE korvamadot set INFO2 = '' where rowid = $id";
-	} elsif ($searchword =~ /artist\:?/gi) {
+	} elsif ($searchword =~ /artist/gi) {
 		$string = "UPDATE korvamadot set ARTIST = '' where rowid = $id";
-	} elsif ($searchword =~ /title\:?/gi) {
+	} elsif ($searchword =~ /title/gi) {
 		$string = "UPDATE korvamadot set TITLE = '' where rowid = $id";
 	} else {
 		$string = "UPDATE korvamadot set DELETED = 1 where rowid = $id";
 	}
-	
+
 	if ($string ne '') {
 		return updateDB($string);
 	}
@@ -375,10 +375,10 @@ sub if_korvamato {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
 			if ($sayline ne '') {
-				return substr $sayline, 0, 270;
+				return substr $sayline, 0, 370;
 			}
 			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
-		} elsif ($command =~ /^etsi\:?/gi) {
+		} elsif ($command =~ /^etsi/gi) {
 			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
 		}
 
@@ -435,7 +435,6 @@ sub if_korvamato {
 				$link2 = parseAwayKeywords($1);
 				dp(__LINE__.": Link2: $link2") if $link2;
 			}
-
 			if ($newcommand =~ /\blyrics\:? (.*)/i) {
 				$lyrics = parseAwayKeywords($1);
 				dp(__LINE__.": Lyrics: $lyrics") if $lyrics;
@@ -602,37 +601,35 @@ sub createAnswerFromResultsor {
 	my $rowid = $resultarray[0] || '';
 	if ($rowid ne '') { $string .= "ID ${rowid}: "; }
 
-	my $nickster = $resultarray[1] || '';					# who added
+	my $nickster = $resultarray[1] || '';									# who added
+	my $when = $resultarray[2] || '';										# when added
+	my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || '-';		# lyrics
 
-	my $when = $resultarray[2] || '';						# when added
-
-	my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || '-';						# lyrics
-	#my $quote = $resultarray[3] || '-';						# lyrics
 	if ($quote ne '-') { $string .= "Lyrics: $quote, "; }
 	else { return 'Ei löytynyt'; }
-	#dp ("string ### $string");
+
 	my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || '';
 	if ($info1 ne '') { $string .= "Info1: $info1, "; }
 
 	my $info2 = KaaosRadioClass::replaceWeird($resultarray[5]) || '';
 	if ($info2 ne '') { $string .= "Info2: $info2, "; }
-	
+
 	my $channelresult = $resultarray[6] || '';
-	
+
 	my $artist = KaaosRadioClass::replaceWeird($resultarray[7]) || '-';
-	if ($artist ne "-") { $string .= "Artist: $artist, "; }
-	
+	if ($artist ne '-') { $string .= "Artist: $artist, "; }
+
 	my $title = KaaosRadioClass::replaceWeird($resultarray[8]) || '-';
-	if ($title ne "-") { $string .= "Title: $title, "; }
-	#dp ("string ## $string");
+	if ($title ne '-') { $string .= "Title: $title, "; }
+
 	my $link1 = $resultarray[9] || '-';
-	if ($link1 ne "-") { $string .= "URL: $link1, "; }
-	
+	if ($link1 ne '-') { $string .= "URL: $link1, "; }
+
 	my $link2 = $resultarray[10] || '';
 	if ($link2 ne '') { $string .= "Link2: $link2"; }
-	
+
 	my $deleted = $resultarray[11];
-	#dp ("string ### $string");
+
 	if ($rowid) {
 		# commented out for debugging other functions.. Irssi::print("$myname: Found: ID: $rowid, nick: $nickster, when: $when, Lyrics: $quote, info1: $info1, info2: $info2, channel: $channelresult, artist: $artist, title: $title link1: $link1, link2: $link2, deleted: $deleted");
 	}
@@ -693,13 +690,14 @@ sub search_url_from_db {
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
 	$sth->execute();
-	
+
 	my @line = ();
 	my $index = 0;
 	my @resultarray = ();
 	while(@line = $sth->fetchrow_array) {
 		push @{ $resultarray[$index]}, @line;
 		$index++;
+		last if $index > 10;
 	}
 
 	dp(__LINE__.': URL Search Dump:');
