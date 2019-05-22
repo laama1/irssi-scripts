@@ -58,6 +58,7 @@ sub grepData {
 sub grepJSON {
 	my $params = '?type=ace&data=all';
 	my $json = KaaosRadioClass::getJSON($aurorasliveurl . $params);
+	# TODO: sanity check
 	my $kp = $json->{kp};
 	my $kp1 = $json->{kp1hour};
 	my $bz = $json->{bz};

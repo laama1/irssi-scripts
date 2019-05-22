@@ -6,12 +6,12 @@ use vars qw($VERSION %IRSSI);
 
 $VERSION = '0.32';
 %IRSSI = (
-        authors     => "LAama1",
+        authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
-        name        => "Oraakkeli",
-        description => "Kysyy lintukodon oraakkelilta ja kertoo vastauksen.",
-        license     => "BSD",
-        url         => "http://www.lintukoto.net/viihde/oraakkeli",
+        name        => 'Oraakkeli',
+        description => 'Kysyy lintukodon oraakkelilta ja kertoo vastauksen.',
+        license     => 'BSD',
+        url         => 'http://www.lintukoto.net/viihde/oraakkeli',
         changed     => $VERSION
 );
 
@@ -21,13 +21,15 @@ sub pubmsg {
 	return if $nick eq 'kaaosradio';			# ignore this nick
 	my @targets = split(/ /, Irssi::settings_get_str('oraakkeli_enabled_channels'));
     return unless $target ~~ @targets;
-	if (index($msg, $serverrec->{nick}) >= 0 && $msg =~ /\?$/gi )	{
+	my $nickindex = index($msg, $serverrec->{nick});
+	if ($nickindex >= 0 && $msg =~ /\?$/gi )	{
 		return if KaaosRadioClass::floodCheck() == 1;			# return if flooding
-		my $stats = KaaosRadioClass::fetchUrl("http://www.lintukoto.net/viihde/oraakkeli/index.php?html=0&kysymys=${msg}",0);
-		sleep(2); # take a nap before answering
+		my $querystr = substr $msg, ((length $serverrec->{nick}) +2);
+		my $stats = KaaosRadioClass::fetchUrl("http://www.lintukoto.net/viihde/oraakkeli/index.php?html=0&kysymys=${querystr}",0);
+		#sleep(2); # take a nap before answering
 		$serverrec->command("MSG $target $nick: ${stats}");
-		Irssi::print("!oraakkeli request from $nick on channel $target: $msg");
-	}	
+		Irssi::print("!oraakkeli request from $nick on channel $target: $querystr, answer: $stats");
+	}
 }
 
 Irssi::settings_add_str('Oraakkeli', 'oraakkeli_enabled_channels', '');
@@ -35,4 +37,4 @@ Irssi::signal_add_last('message public', 'pubmsg');
 #Irssi::signal_add_last('message irc action', 'pubmsg');
 
 Irssi::print("Oraakkeli v. $VERSION loaded");
-Irssi::print("Enabled channels: ". Irssi::settings_get_str('oraakkeli_enabled_channels'));
+Irssi::print('Enabled channels: '. Irssi::settings_get_str('oraakkeli_enabled_channels'));

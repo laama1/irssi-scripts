@@ -32,7 +32,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190310';
+$VERSION = '20190522';
 %IRSSI = (	
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -137,11 +137,15 @@ sub replace_with_emoji {
 	$string =~ s/Clear/$sunmoon /ui;		# short desc
 	$string =~ s/Clouds/☁️ /u;				# short desc
 	$string =~ s/Rain/🌧️ /u;				# short desc
+	$string =~ s/thunderstorm/⚡ /u;
+	$string =~ s/shower rain/🌧️ /u;
+	#$string =~ s/light intensity shower rain//u;
 	my $sunup = is_sun_up($sunrise, $sunset);
 	if ($sunup == 1) {
 		$string =~ s/overcast clouds/🌥️ /ui;
 		$string =~ s/broken clouds/⛅ /ui;
 		$string =~ s/few clouds/🌤️ /ui;
+		$string =~ s/light intensity shower rain/🌦️ /u;
 	} elsif ($sunup == 0) {
 
 	}
@@ -240,8 +244,8 @@ sub FINDWEATHER {
 	}
 	
 	my $json = decode_json($data);
-	da('JSON:',$json);
-	da('JSON-temp: ', $json->{main}->{temp});
+	da(__LINE__.': JSON:',$json) if $DEBUG1;
+	da(__LINE__.': JSON-temp: ', $json->{main}->{temp});
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
@@ -308,7 +312,7 @@ sub FINDAREAWEATHER {
 		# TODO: get city coords from API and save to DB
 		$sayline .= getSayLine2($city) . '. ';
 	}
-	da(__LINE__.': FINDAREAWEATHER decoded JSON:',$json);
+	da(__LINE__.': FINDAREAWEATHER decoded JSON:',$json) if $DEBUG1;
 	da(__LINE__.': FINDAREAWEATHER SAYLINE', $sayline);
 	return $sayline;
 }
