@@ -351,27 +351,27 @@ sub insert_into_db {
 
 sub if_korvamato {
 	my ($msg, $nick, $target, @rest) = @_;
-	
-	if($msg =~ /^!korvamato:?\s(.{1,470})/gi)
+
+	if($msg =~ /^!korvamato:?\s(.{1,470})/gi || $msg =~ /^!km:?\s(.{1,470})/gi)
 	{
 		my $command = $1;		# command the user has entered
 		my $url = '';			# song possible url
 		my $id = -1;			# artist ID (rowid in DB)
-		
+		my $searchword = '';
+
 		if (IFURL($command) > 0) {
 			return "URL löytyi $1 kertaa. Koita !korvamato etsi <url>";
 			# TODO: print ID's
 		}
+		dp(__LINE__.': command: '. $command);
 
-		if ($command =~ s/\bid\:? (\d+)\b//gi) {			# search and replace from $command
+		if ($command =~ s/^\bid\:? (\d+)\b//gi || $command =~ s/^(\d+)\b//gi) {			# search and replace from $command
 			$id = $1;
-			dp(__LINE__.": $myname ID: $id, command: $command");
+			#dp(__LINE__.": $myname ID: $id, command: $command");
 		} elsif ($command =~ /\bid\:?/gi) {
 			return 'En tajunnut! Kokeile esim. !korvamato id: 123';
-		}
-		
-		my $searchword = '';
-		if ($command =~ /^etsi\:? ?(.*)$/gi) {
+
+		} elsif ($command =~ /^etsi\:? ?(.*)$/gi) {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
 			if ($sayline ne '') {
@@ -385,15 +385,20 @@ sub if_korvamato {
 		my ($string, $oldstring) = parse_keyword_return_sql($id, $command);
 
 		if ($string ne '') {
-			my $oldvalue = KaaosRadioClass::readLineFromDataBase($db, $oldstring) || '<tyhjä>';
+			#my ($oldvalue) = &KaaosRadioClass::readLineFromDataBase($db, $oldstring) || '<tyhjä>';
+			my $oldvalue = readDB($oldstring);
 			# HACK:
 			dp(__LINE__.': oldvalue: '. $oldvalue);
-			if ($oldvalue == 1) {
+			#da(__LINE__.': oldvalue: ',@oldvalue);
+			#print @oldvalue;
+			#dp(__LINE__.': oldstring: ' . $oldstring);
+			if (not $oldvalue) {
 				$oldvalue = '<tyhjä>';
 			}
 			my $returnvalue = updateDB($string);
 			if ($returnvalue == 0) {
 				return "Päivitetty. Oli: $oldvalue";
+				#return;
 			}
 		}
 
@@ -458,7 +463,6 @@ sub if_korvamato {
 			da(@results);
 			$returnstring = createAnswerFromResultsor(@results);
 			return 'Löytyi '.$returnstring;
-			#return "Found $returnstring";
 		}
 
 
@@ -492,18 +496,18 @@ sub event_privmsg {
 	return if ($nick eq $server->{nick});		# self-test
 
 	#dp("msg: $msg");
-	if ($msg =~ /^!help\b/i || $msg =~ /^\!korvamato$/i) {
+	if ($msg =~ /^!help\b/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {
 		msgit($server, $nick, $helptext);
 		msgit($server, $nick, get_statistics());
 		return;
-	} elsif ($msg =~ /^!korvamato random/i) {
+	} elsif ($msg =~ /^!korvamato random/i || $msg =~ /^!km random/i) {
 		dp(__LINE__.': random!');
 		my $sayline = search_random_from_db();
 		msgit($server, $nick, $sayline);
 		return;
 	}
 
-	if ($msg =~ /^!korvamato/) {
+	if ($msg =~ /^!korvamato/ || $msg =~ /^!km/) {
 		my $newReturnString = if_korvamato($msg, $nick, "PRIV");
 		if ($newReturnString ne '') {
 			dp(__LINE__.": YES priv");
@@ -523,10 +527,10 @@ sub event_pubmsg {
     my @enabled = split / /, $enabled_raw;
     return unless grep /^$target$/, @enabled;
 
-	if ($msg =~ /^[\.\!]help korvamato\b/i || $msg =~ /^!korvamato$/i) {
+	if ($msg =~ /^[\.\!]help korvamato\b/i || $msg =~ /^!korvamato$/i || $msg =~ /^!km$/i) {
 		print_help($server, $target);
 		return;
-	} elsif ($msg =~ /^!korvamato random/i) {
+	} elsif ($msg =~ /^!korvamato random/i || $msg =~ /^!km random/i) {
 		dp(__LINE__.': random!');
 		my $sayline = search_random_from_db();
 		sayit($server, $target, $sayline);
@@ -589,6 +593,31 @@ sub updateDB {
 	return KaaosRadioClass::writeToDB($db, $string);
 }
 
+sub readDB {
+	my ($string, @rest) = @_;
+	dp("Reading lines from DB $db.");
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$db",'','', {RaiseError => 1, AutoCommit => 1});
+	return if ($dbh < 0);
+	#my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	my $sth = $dbh->prepare($string) or return;
+	$sth->execute();
+
+	if(my @line = $sth->fetchrow_array) {
+		#dp(__LINE__.': --fetched a result--');
+		#dp($line[0]);
+		#dp(Dumper @line);
+		$sth->finish();
+		$dbh->disconnect();
+		return $line[0];
+	}
+	dp(__LINE__.': -- Did not find a result');
+	$sth->finish();
+	$dbh->disconnect();
+	#return @returnArray, "jee", $db, $string;
+	return;
+
+}
+
 # Create one line from one result!
 sub createAnswerFromResultsor {
 	my @resultarray = @_;
@@ -645,16 +674,19 @@ sub createAnswerFromResultsor {
 # search rowid = artist ID from database
 sub search_id_from_db {
 	my ($id, @rest) = @_;
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
-	my $sth = $dbh->prepare('SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0') or die DBI::errstr;
-	$sth->bind_param(1, $id);
-	$sth->execute();
-	my @result = ();
-	@result = $sth->fetchrow_array();
-	$sth->finish();
-	$dbh->disconnect();
-	#dp("SEARCH ID Dump:");
-	#da(@result);
+	#my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
+	#my $sth = $dbh->prepare('SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0') or die DBI::errstr;
+	#$sth->bind_param(1, $id);
+	#$sth->execute();
+	my $sql = 'SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0';
+	my @params = ($id);
+	my @result = KaaosRadioClass::bindSQL($db, $sql, @params);
+	#my @result = ();
+	#@result = $sth->fetchrow_array();
+	#$sth->finish();
+	#$dbh->disconnect();
+	dp("SEARCH ID Dump:");
+	da(@result);
 	return @result;
 }
 

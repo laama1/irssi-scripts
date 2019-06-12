@@ -15,20 +15,20 @@ use HTML::Entities qw(decode_entities);
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "2018-05-11";
+$VERSION = '2018-05-11';
 %IRSSI = (
-	authors     => "LAama1",
-	contact     => "ircnet: LAama1",
-	name        => "killahoe RSS-feed",
-	description => "Fetch new data from killahoe.fi",
-	license     => "Public Domain",
-	url         => "http://www.killahoe.fi",
+	authors     => 'LAama1',
+	contact     => 'ircnet: LAama1',
+	name        => 'killahoe RSS-feed',
+	description => 'Fetch new data from killahoe.fi RSS-feed',
+	license     => 'Public Domain',
+	url         => 'http://www.killahoe.fi',
 	changed     => $VERSION
 );
 
 my $DEBUG = 1;
-my $myname = "killahoe_rss.pl";
-my $db = Irssi::get_irssi_dir() . "/scripts/killahoe.sqlite";
+my $myname = 'killahoe_rss.pl';
+my $db = Irssi::get_irssi_dir() . '/scripts/killahoe.sqlite';
 
 my $dbh;		# database handle
 
@@ -61,7 +61,7 @@ sub da {
 
 sub print_help {
 	my ($server, $targe, @rest) = @_;
-	my $help = "Killahoe_rss -skripti hakee ajoittain uusimmat uutiset sivulta killahoe.fi.";
+	my $help = 'Killahoe_RSS-feed -skripti hakee ajoittain uusimmat uutiset sivulta killahoe.fi.';
 }
 
 sub sig_msg_pub {
@@ -71,7 +71,7 @@ sub sig_msg_pub {
     my @enabled = split(/ /, $enabled_raw);
     return unless grep(/$target/, @enabled);
 
-	if ($msg =~ /^[\.\!]help\b/i) {
+	if ($msg =~ /^[\.\!]help kill/i) {
 		print_help($server, $target);
 		return;
 	}
@@ -79,7 +79,6 @@ sub sig_msg_pub {
 	if($msg =~ /^!killahoe/gi) {
 		getXML();
 	}
-
 }
 
 sub msg_to_channel {
@@ -90,9 +89,9 @@ sub msg_to_channel {
 
 	#if (defined($desc) && length($desc) > 150) {
 	#	$desc = substr($desc, 0, 150);
-	#	$desc .= "...";
+	#	$desc .= '...';
 	#} else {
-		#$desc = "";
+		#$desc = '';
 	#}
 	#my $sayline = "$title: ($date) $link $desc";
 	#my $sayline = "$title: $link ($forumlink)";
@@ -100,18 +99,18 @@ sub msg_to_channel {
 
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
-		next if $window->{name} eq "(status)";
-		next unless $window->{active}->{type} eq "CHANNEL";
+		next if $window->{name} eq '(status)';
+		next unless $window->{active}->{type} eq 'CHANNEL';
 		if($window->{active}->{name} ~~ @enabled) {
 			dp("Found! $window->{active}->{name}");
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
-			dp("");
+			dp('');
 		}
 	}
 }
 
 sub open_database_handle {
-	$dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	$dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 }
 
 sub close_database_handle {
@@ -120,11 +119,10 @@ sub close_database_handle {
 
 sub read_from_DB {
 	my ($link, @rest) = @_;
-	my $sth = $dbh->prepare("SELECT * from killahoe where LINK = ?");
+	my $sth = $dbh->prepare('SELECT * FROM killahoe WHERE link = ?');
 	$sth->bind_param(1, $link);
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
-		#da(@line);
 		$sth->finish();
 		return 1;			# item allready found
 	}
@@ -135,8 +133,8 @@ sub read_from_DB {
 # Save new item to sqlite DB
 sub saveToDB {
 	my ($title, $link, $date, $desc, $forumlink, $guid, @rest) = @_;
-	my $pvm = time();
-	my $sth = $dbh->prepare("INSERT INTO killahoe VALUES(?,?,?,?,?,?,?,0)") or die DBI::errstr;
+	my $pvm = time;
+	my $sth = $dbh->prepare('INSERT INTO killahoe VALUES(?,?,?,?,?,?,?,0)') or die DBI::errstr;
 	$sth->bind_param(1, $pvm);
 	$sth->bind_param(2, $title);
 	$sth->bind_param(3, $link);
@@ -154,7 +152,7 @@ sub createDB {
 	open_database_handle();
 
 	# Using FTS (full-text search)
-	my $stmt = "CREATE VIRTUAL TABLE killahoe using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, FORUMLINK, GUID int, DELETED int default 0)";
+	my $stmt = 'CREATE VIRTUAL TABLE killahoe using fts4(PVM int,TITLE,LINK,PUBDATE,DESCRIPTION, FORUMLINK, GUID int, DELETED int default 0)';
 
 	my $rv = $dbh->do($stmt);		# return value
 	if($rv < 0) {
@@ -169,7 +167,7 @@ sub searchDB {
 	my $searchword = shift;
 	open_database_handle();
 	dp($searchword);
-	my $stmt = "SELECT rowid,title,description FROM killahoe where TITLE like ? or DESCRIPTION like ?";
+	my $stmt = 'SELECT rowid,title,description FROM killahoe where TITLE like ? or DESCRIPTION like ?';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -181,7 +179,7 @@ sub searchDB {
 	
 	while(@line = $sth->fetchrow_array) {
 		#push @{ $resultarray[$index]}, @line;
-		#$resultarray->{$index} = "kakka";#@line;
+		#$resultarray->{$index} = 'kakka';#@line;
 		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[3]};
 		$index++;
 		da(@line);
@@ -210,32 +208,30 @@ sub parseForumLinkFromDescription {
 }
 
 sub getXML {
-	my $xmlFile = KaaosRadioClass::fetchUrl("https://www.killahoe.fi/feed");
+	my $xmlFile = KaaosRadioClass::fetchUrl('https://www.killahoe.fi/feed/');
 	$parser->parse($xmlFile);
 	#da($parser->{'items'});
 	my $index = 0;
 	open_database_handle();
 	foreach my $item (@{$parser->{items}}) {
-		dp("item $index:");
-		#da($item);
-		#my $havaintoid = parseIDfromLink($item->{'link'});
-		dp("item title: ". decode_entities($item->{'title'}));
-		dp("item link: ". $item->{'link'});
-		dp("item pubDate: ". $item->{'pubDate'});
-		dp("item description: ". decode_entities($item->{'description'}));
-		#dp("item guid: ". $item->{guid});
-		my $id = parseIDfromGuid($item->{guid});
-		dp("item guid: ". $id);
-		my $forumlink = parseForumLinkFromDescription($item->{'description'});
-		dp("item forum link: ".$forumlink);
-		my $desc = decode_entities($item->{'description'});
-		$desc =~ s/Lisää(.*)$//i;
-		dp("item description: ".$desc);
-
-		my $desc = decode_entities($item->{'description'} =~ s/Lisää(.*)$//i);
-		$index++;
 		if (read_from_DB($item->{'link'}) == 0) {
-			dp("^new item $index");
+			dp("item index $index");
+			dp('item title: '. decode_entities($item->{'title'}));
+			dp('item link: '. $item->{'link'});
+			dp('item pubDate: '. $item->{'pubDate'});
+			dp('item description: '. decode_entities($item->{'description'}));
+			my $id = parseIDfromGuid($item->{guid});
+			dp('item guid: '. $id);
+			my $forumlink = parseForumLinkFromDescription($item->{'description'});
+			dp('item forum link: '.$forumlink);
+			my $desc = decode_entities($item->{'description'});
+			dp('item description: '.$desc);
+			$desc =~ s/Lisää(.*)$//i;
+
+			my $desc = decode_entities($item->{'description'} =~ s/Lisää(.*)$//i);
+			$index++;
+			
+			#dp("new item $index");
 			#Irssi::print("$myname New item: $item->{title}");
 			saveToDB(decode_entities($item->{'title'}), $item->{'link'}, $item->{'pubDate'}, $desc, $forumlink, $id);
 			#msg_to_channel(decode_entities($item->{'title'}), $item->{'link'}, $item->{'pubDate'}, $desc, $forumlink);
@@ -243,7 +239,6 @@ sub getXML {
 		}
 	}
 	close_database_handle();
-
 }
 
 # get all from RSS-feed

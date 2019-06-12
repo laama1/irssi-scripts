@@ -33,7 +33,7 @@ use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '20190522';
-%IRSSI = (	
+%IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1',
 	name        => 'openweathermap',
@@ -132,9 +132,9 @@ sub replace_with_emoji {
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
 	$string =~ s/snow/❄️ /ui;
-	$string =~ s/clear sky/$sunmoon /ui;
-	$string =~ s/Sky is Clear/$sunmoon /ui;
-	$string =~ s/Clear/$sunmoon /ui;		# short desc
+	$string =~ s/clear sky/$sunmoon /u;
+	$string =~ s/Sky is Clear/$sunmoon /u;
+	$string =~ s/Clear/$sunmoon /u;			# short desc
 	$string =~ s/Clouds/☁️ /u;				# short desc
 	$string =~ s/Rain/🌧️ /u;				# short desc
 	$string =~ s/thunderstorm/⚡ /u;
@@ -142,12 +142,13 @@ sub replace_with_emoji {
 	#$string =~ s/light intensity shower rain//u;
 	my $sunup = is_sun_up($sunrise, $sunset);
 	if ($sunup == 1) {
+		#dp('sun is up');
 		$string =~ s/overcast clouds/🌥️ /ui;
 		$string =~ s/broken clouds/⛅ /ui;
 		$string =~ s/few clouds/🌤️ /ui;
 		$string =~ s/light intensity shower rain/🌦️ /u;
 	} elsif ($sunup == 0) {
-
+		#dp('sun is down');
 	}
 	return $string;
 }
@@ -164,9 +165,11 @@ sub is_sun_up {
 
 sub get_sun_moon {
 	my ($sunrise, $sunset, $tz, @rest) = @_;
-	if (is_sun_up($sunrise, $sunset)) {
+	if (is_sun_up($sunrise, $sunset) == 1) {
+		dp(__LINE__.': sun is up');
 		return '🌞';
 	}
+	dp(__LINE__.': sun is down');
 	return omaconway();
 }
 
@@ -320,7 +323,7 @@ sub FINDAREAWEATHER {
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
 	# TODO: Bind params
-	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
+	my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
 
 	da(__LINE__.': GETCITYCOORDS Result:',@results);

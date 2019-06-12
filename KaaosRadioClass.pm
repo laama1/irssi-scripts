@@ -42,7 +42,7 @@ my $djlist = "$currentDir/dj_list.txt";
 #my $database_handle;
 
 #my $myname = $0;
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
 my $floodernick;
@@ -113,7 +113,7 @@ sub bindSQL {
 	$sth->execute(@params) or return $dbh->errstr;
 	my @results;
 	my $idx = 0;
-	while(@row = $sth->fetchrow_array) {
+	while(my @row = $sth->fetchrow_array) {
 		$results[$idx] = @row;
 		$idx++;
 	}
@@ -126,7 +126,7 @@ sub readTextFile {
 	my ($file, @rest) = @_;
 	my @returnArray;
 	#open(INPUT, "<$file:utf8") || do {
-	open INPUT '<:encoding(UTF8)', $file or return "Could not open $file $!";
+	open INPUT, '<:encoding(UTF8)', $file or return "Could not open $file $!";
 	#	return -1;
 	#};
 	while(<INPUT>) {
@@ -424,6 +424,12 @@ sub getJSON {
 
 	$json = decode_json($response);
 	return $json;
+}
+
+sub getXML {
+	my ($url, @rest) = @_;
+    #my $url = 'http://www.hamqsl.com/solarxml.php';
+    #return XML::LibXML->load_xml(location => $url);
 }
 
 sub dp {

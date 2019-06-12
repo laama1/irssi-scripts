@@ -5,3 +5,6 @@
 Requires extra modules:
 openweathermap.pl:
 - Number::Format
+
+hamqsl-pl:
+- XML::LibXML
