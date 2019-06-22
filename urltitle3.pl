@@ -150,11 +150,7 @@ sub fetch_title {
 	my $size = 0;						# content size
 	my $md5hex = '';					# md5 of the page
 
-	#my $responsetime = Time::HiRes::time();
 	my $response = $ua->get($url);
-	#$responsetime = Time::HiRes::time() - $responsetime;
-	#my $responseString = sprintf("%.3f",$responsetime);
-	#Irssi::print("$myname: Response time: ${responseString}s");
 	dd('fetch_title: content charset: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
 	#da($response);
 
@@ -462,7 +458,7 @@ sub shortenURL {
     my $content = $s->content();
 	if ($content =~ /RATE-LIMIT/) { return "(error, rate-limit)"; }
 	if ($content =~ /(http\:\/\/[^\s]+)/) {
-		dp("shortenurl: $url, short: $1");
+		dp(__LINE__.": shortenurl: $url, short: $1");
 		return $1;
 	}
 	return '';
@@ -495,8 +491,8 @@ sub createFstDB {
 # Save to sqlite DB
 sub saveToDB {
 	my ($nick, $url, $title, $description, $channel, $md5hex, @rest) = @_;
-	dp('saveToDB') if $DEBUG1;
-	my $pvm = time();
+	dp(__LINE__.': saveToDB') if $DEBUG1;
+	my $pvm = time;
 	my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_dont_save_urls_channels'));
     return -1 if $channel ~~ @dontsave;
     

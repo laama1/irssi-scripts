@@ -1,10 +1,10 @@
-use Encode qw/encode decode/;
-
-my $DEBUG = 1;
-use Irssi;
-use DBI qw(:sql_types);
 use warnings;
 use strict;
+use Encode qw/encode decode/;
+use Irssi;
+use Data::Dumper;
+use DBI qw(:sql_types);
+
 use utf8;
 binmode(STDOUT, ":utf8");
 binmode(STDIN, ":utf8");
@@ -14,6 +14,7 @@ my $myname = 'addquote.pl';
 my $tiedosto = '/var/www/html/quotes/quotes.txt';
 my $publicurl = 'http://lamaz.bot.nu/quotes.txt';
 my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
+my $DEBUG = 1;
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '20190121';
@@ -45,6 +46,28 @@ sub event_privmsg {
 	parseQuote($msg, $nick, 'priv', $server);
 }
 
+#sub sayit {
+	#my ($server, $target, $msg) = @_;
+	#my $server = server_find_chatnet('IRCNet'); #->channel_find('kaaosradio');
+#	my $server = Irssi::window_find_item('kaaosradio')->active_server;
+	#$server->command("MSG $target $msg");
+#	$server->command("MSG #kaaosradio :)");
+#}
+
+
+sub sayit {
+	my ($msg) = @_;
+	#my $server = server_find_chatnet('IRCNet'); #->channel_find('kaaosradio');
+	my $window = Irssi::window_find_item('#salamolo'); #->active_server;
+	#dp('window:');
+	#da($window);
+	my $server = $window->{active_server};
+	#dp('server:');
+	#da($server);
+	#$server->command("MSG $target $msg");
+	$server->command("MSG #salamolo $msg");
+}
+
 sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
 	if($msg =~ /^!aq\s(.{1,470})/gi)
@@ -58,6 +81,7 @@ sub parseQuote {
 			saveToDB($nick, $uusiquote, $target);
 			Irssi::print("$myname: $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
+			sayit(':)');
 		} else {
 			Irssi::print("$myname: $msg request from $nick (too long!)");
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
@@ -103,6 +127,12 @@ sub saveToDB {
 sub dp {
 	return unless $DEBUG == 1;
 	Irssi::print("$myname debug: @_");
+}
+
+sub da {
+	return unless $DEBUG == 1;
+	Irssi::print('addquote: ');
+	Irssi::print(Dumper(@_));
 }
 
 Irssi::signal_add('message public', 'event_pubmsg');
