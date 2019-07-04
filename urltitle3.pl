@@ -512,7 +512,7 @@ sub saveToDB {
 	$sth->execute;
 	$sth->finish();
 	$dbh->disconnect();
-	if ($DEBUG1) { Irssi::print("Tsilirimpsis!3"); }
+
 	Irssi::print("$myname: URL from $channel saved to database.");
 	return 0;
 }
@@ -580,6 +580,11 @@ sub api_conversion {
 		Irssi::print("Taivaanvahti signal emited!! $1");
 		# Irssi::signal_stop();
 		$dontprint = 1;
+	}
+
+	# lamaz.bot.nu
+	if ($param =~ s/lamaz.bot.nu/localhost/gi) {
+		Irssi::print('lamaz-bot-nu conversion');
 	}
 	return $param;
 
