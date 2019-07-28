@@ -1,11 +1,13 @@
 use warnings;
 use strict;
 use Irssi;
-use utf8;
+use utf8;		# allow utf8 in regex
+use Encode;
 use JSON;
 use DateTime;
 use POSIX;
 use Time::Piece;
+use feature 'unicode_strings';
 
 #use Number::Format qw('format_number' :vars);
 use Number::Format qw(:subs :vars);
@@ -27,7 +29,6 @@ binmode(STDERR, ':utf8');
 #use open ':std', ':encoding(utf8)';
 
 use Data::Dumper;
-#use Encode;
 
 use KaaosRadioClass;				# LAama1 13.11.2016
 
@@ -40,7 +41,7 @@ $VERSION = '20190522';
 	description => 'Fetches weather data from openweathermap.org',
 	license     => 'Fublic Domain',
 	url         => 'http://kaaosradio.fi',
-	changed     => $VERSION
+	changed     => $VERSION,
 );
 
 my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
@@ -472,6 +473,8 @@ sub sig_msg_pub {
 
 sub filter {
 	my ($msg, @rest) = @_;
+	$msg = decode('UTF-8', $msg);
+
 	my $returnstring;
 	if ($msg =~ /\!(sää |saa |s )(.*)$/ui) {
 		return if KaaosRadioClass::floodCheck() > 0;

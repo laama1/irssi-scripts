@@ -583,7 +583,7 @@ sub api_conversion {
 	}
 
 	# lamaz.bot.nu
-	if ($param =~ s/lamaz.bot.nu/localhost/gi) {
+	if ($param =~ s/lamaz\.bot\.nu/localhost/gi) {
 		Irssi::print('lamaz-bot-nu conversion');
 	}
 	return $param;
@@ -594,6 +594,7 @@ sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');
+	return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');
 
 	$dontprint = 0;
 	# TODO if searching for old link..

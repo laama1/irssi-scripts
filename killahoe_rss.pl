@@ -5,7 +5,6 @@ use utf8;
 use KaaosRadioClass;		# LAama1 9.5.2018
 use XML::RSS;
 use LWP::Simple;
-#use XML::RSS::Parser;
 use Data::Dumper;
 use DBI;
 use HTTP::Date;
@@ -23,7 +22,7 @@ $VERSION = '2018-05-11';
 	description => 'Fetch new data from killahoe.fi RSS-feed',
 	license     => 'Public Domain',
 	url         => 'http://www.killahoe.fi',
-	changed     => $VERSION
+	changed     => $VERSION,
 );
 
 my $DEBUG = 1;
@@ -195,6 +194,7 @@ sub parseIDfromGuid {
 	if ($url =~ /\/\?p=(\d+)/) {	# .fi/?p=3369
 		return $1;
 	}
+	return;
 }
 
 sub parseForumLinkFromDescription {

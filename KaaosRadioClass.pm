@@ -122,6 +122,17 @@ sub bindSQL {
 	return @results;
 }
 
+sub insertSQL {
+	my ($db, $sql, @params, @rest) = @_;
+	my $dbh = connectSqlite($db);							# DB handle
+	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
+	my $rv = $sth->execute(@params) or return $dbh->errstr;
+
+	$sth->finish();
+	$dbh->disconnect();
+	return $rv
+}
+
 sub readTextFile {
 	my ($file, @rest) = @_;
 	my @returnArray;
@@ -208,7 +219,7 @@ sub Drunk {
 # get stream2 !nytsoi value
 sub getNytsoi24h {
 	my $rimpsu = '';
-	$rimpsu = `/home/kaaosradio/stream/meta_stream2.sh nytsoi`;
+	$rimpsu = `/home/kaaosradio/stream/stream2_meta.sh nytsoi`;
 	chomp $rimpsu;
 	return $rimpsu;
 }

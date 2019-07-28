@@ -1,3 +1,6 @@
+use strict;
+use warnings;
+use Encode;
 use Irssi;
 use Irssi::Irc;
 use LWP::UserAgent;
@@ -5,8 +8,6 @@ use LWP::Simple;
 use utf8;
 use Data::Dumper;
 use KaaosRadioClass;		# LAama1 16.2.2017
-use strict;
-use warnings;
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '0.34';
@@ -23,7 +24,7 @@ $VERSION = '0.34';
 my $helpmessage = '!horo <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horo vkl. Toimii myös privassa. Kokeile myös: !kuu, !aurora';
 
 # my $mynick = 'kaaos';
-my $debug = 0;
+my $debug = 1;
 
 my @weekdays = ('maanantain', 'tiistain', 'keskiviikon', 'torstain', 'perjantain', 'lauantain', 'sunnuntain');
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
@@ -55,7 +56,9 @@ sub event_priv_msg {
 sub event_pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return unless ($target ~~ @channels);
-	if ($msg =~ /\!help/i) $server->command("msg -channel $target $helpmessage");
+	if ($msg =~ /\!help/i) {
+		$serverrec->command("msg -channel $target $helpmessage");
+	}
 
 	return unless ($msg =~ /\!horo/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
@@ -64,7 +67,7 @@ sub event_pub_msg {
 		return;
 	}
 
-	Irssi::print("$nick sanoi: $msg, kanavalla $target");
+	print("horos2.pl> $nick sanoi: $msg, kanavalla $target");
 
 	filterKeyword($msg);
 	return unless (-e $infofile);
@@ -100,10 +103,13 @@ LINE: for (@information) {
 
 sub filterKeyword {
 	my ($msg, @rest) = @_;
+	$msg = decode('UTF-8', $msg);
 	dp("filterKeyword: $msg");
 	if	($msg =~ /(\bjussi.*)|(juhannus)/i)	{($infofile) = glob $irssidir . 'horoskooppeja_juhannus.txt'; }
-	elsif	($msg =~ /\b(kes..)|(kesä)/ui)	{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
-	elsif	($msg =~ /\b(kev..t)|(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
+	#elsif	($msg =~ /\b(kes..)|(kesä)/ui)	{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
+	elsif	($msg =~ /(kesä)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
+	#elsif	($msg =~ /\b(kev..t)|(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
+	elsif	($msg =~ /(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
 	elsif	($msg =~ /\b(talvi)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_talvi.txt'; }
 	elsif	($msg =~ /(viikonl|vkl)/i)		{($infofile) = glob $irssidir . 'horoskooppeja_vkl.txt'; }
 	elsif	($msg =~ /(vappu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_vappu.txt'; }
@@ -115,9 +121,11 @@ sub filterKeyword {
 	elsif	($msg =~ /\b(test)\b/i)			{($infofile) = glob $irssidir . 'horoskooppeja_for_testing.txt'; }
 	elsif	($msg =~ /(rakkaus)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_rakkaus.txt';}
 	elsif	($msg =~ /(maanant)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_maanantai.txt';}
-	elsif	($msg =~ /(p....si..)|(p..si.i)|pääsiäi/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
+	#elsif	($msg =~ /(p....si..)|(p..si.i)|pääsiäi/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
+	elsif	($msg =~ /(pääsiäi)/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
 	else 						{($infofile) = glob $irssidir . 'horoskooppeja.txt';}
-	dp("horos2.pl: $& matched infofile: $infofile");
+	#dp("horos2.pl: $& matched file: $infofile");
+	print("horos2.pl> $& matched file: $infofile");
 }
 
 sub grepKeyword {
