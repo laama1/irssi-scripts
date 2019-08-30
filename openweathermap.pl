@@ -33,7 +33,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190522';
+$VERSION = '20190807';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -48,7 +48,7 @@ my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 my $myname = 'openweathermap.pl';
@@ -128,6 +128,7 @@ unless (-e $db) {
 
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, @rest) = @_;
+	# TODO: scattered clouds, light intensity rain
 	dp('replace_with_emoji:'.__LINE__.": string: $string");
 	my $sunmoon = get_sun_moon($sunrise, $sunset);
 	$string =~ s/fog|mist/🌫️ /ui;
@@ -138,8 +139,10 @@ sub replace_with_emoji {
 	$string =~ s/Clear/$sunmoon /u;			# short desc
 	$string =~ s/Clouds/☁️ /u;				# short desc
 	$string =~ s/Rain/🌧️ /u;				# short desc
+	$string =~ s/light rain/☔ /u;
 	$string =~ s/thunderstorm/⚡ /u;
-	$string =~ s/shower rain/🌧️ /u;
+	$string =~ s/scattered clouds/☁ /u;
+	#$string =~ s/shower rain/🌧️ /u;
 	#$string =~ s/light intensity shower rain//u;
 	my $sunup = is_sun_up($sunrise, $sunset);
 	if ($sunup == 1) {
@@ -148,8 +151,10 @@ sub replace_with_emoji {
 		$string =~ s/broken clouds/⛅ /ui;
 		$string =~ s/few clouds/🌤️ /ui;
 		$string =~ s/light intensity shower rain/🌦️ /u;
+		$string =~ s/shower rain/🌧️ /u;
 	} elsif ($sunup == 0) {
 		#dp('sun is down');
+		$string =~ s/shower rain/🌧️ /u;
 	}
 	return $string;
 }
@@ -275,16 +280,18 @@ sub FINDFORECAST {
 	}
 
 	my $json = decode_json($data);
+	#da($json, __LINE__.': JSON');
 	my $index = 0;
 	foreach my $item (@{$json->{list}}) {
-		if ($index > 8) {
+		if ($index >= 7) {
 			# max 8 items: 8x 3h = 24h
 			last;
 		}
-		#dp(__LINE__.': item Temp: '.$item->{main}->{temp}) if $DEBUG1;
-		#da(__LINE__.': item: ', $item) if $DEBUG1;
+		if ($index == 0) {
+			#$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}.': '.$returnstring;
+		}
+
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main});
-		#da(__LINE__.': main: ', $item->{weather}[0]->{main});
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
 		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
 		$index++;

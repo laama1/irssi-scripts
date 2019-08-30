@@ -22,7 +22,7 @@ $VERSION = '20181110';
 	description => 'Lisää ja etsii korvamatoja.',
 	license     => 'Public Domain',
 	url         => '#kaaosradio',
-	changed     => $VERSION
+	changed     => $VERSION,
 );
 
 
@@ -326,10 +326,6 @@ sub insert_into_db {
 	dp(__LINE__.": insert_into_db Pituus: $pituus");
 	if ($pituus < 470 && $pituus > 5)
 	{
-		#my $returnvalue = KaaosRadioClass::addLineToFile($tiedosto, $command);
-		#if ($returnvalue < 0) {
-		#	Irssi::print("$myname: Error when saving to textfile: $tiedosto");
-		#}
 		saveToDB($nick, $command, $info1, $info2, $target, $artist, $title, $link1, $link2);
 		Irssi::print("$myname: \"$command\" request from $nick\n");
 		my @resultarray = search_from_db($command);
@@ -352,7 +348,7 @@ sub insert_into_db {
 sub if_korvamato {
 	my ($msg, $nick, $target, @rest) = @_;
 
-	if($msg =~ /^!korvamato:?\s(.{1,470})/gi || $msg =~ /^!km:?\s(.{1,470})/gi)
+	if($msg =~ /^!korvamato:?\s(.{1,470})/ugi || $msg =~ /^!km:?\s(.{1,470})/ugi)
 	{
 		my $command = $1;		# command the user has entered
 		my $url = '';			# song possible url
@@ -365,12 +361,10 @@ sub if_korvamato {
 		}
 		dp(__LINE__.': command: '. $command);
 
-		if ($command =~ s/^\bid\:? (\d+)\b//gi || $command =~ s/^(\d+)\b//gi) {			# search and replace from $command
+		if ($command =~ s/^\bid\:? (\d+)\b//gi || $command =~ s/^(\d+)$//gi) {			# search and replace from $command
 			$id = $1;
-			#dp(__LINE__.": $myname ID: $id, command: $command");
 		} elsif ($command =~ /\bid\:?/gi) {
 			return 'En tajunnut! Kokeile esim. !korvamato id: 123';
-
 		} elsif ($command =~ /^etsi\:? ?(.*)$/gi) {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
@@ -385,20 +379,16 @@ sub if_korvamato {
 		my ($string, $oldstring) = parse_keyword_return_sql($id, $command);
 
 		if ($string ne '') {
-			#my ($oldvalue) = &KaaosRadioClass::readLineFromDataBase($db, $oldstring) || '<tyhjä>';
 			my $oldvalue = readDB($oldstring);
 			# HACK:
-			dp(__LINE__.': oldvalue: '. $oldvalue);
-			#da(__LINE__.': oldvalue: ',@oldvalue);
-			#print @oldvalue;
-			#dp(__LINE__.': oldstring: ' . $oldstring);
+			dp(__LINE__.': oldvalue: '. $oldvalue.' oldstring: '.$oldstring);
+
 			if (not $oldvalue) {
 				$oldvalue = '<tyhjä>';
 			}
 			my $returnvalue = updateDB($string);
 			if ($returnvalue == 0) {
 				return "Päivitetty. Oli: $oldvalue";
-				#return;
 			}
 		}
 
@@ -549,18 +539,9 @@ sub event_pubmsg {
 }
 
 sub createDB {
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
-
 	# Using FTS (full-text search)
-	my $stmt = 'CREATE VIRTUAL TABLE korvamadot using fts4(NICK,PVM,QUOTE,INFO1,INFO2,CHANNEL,ARTIST,TITLE,LINK1,LINK2,DELETED)';
-
-	my $rv = $dbh->do($stmt);
-	if($rv < 0) {
-   		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
-	} else {
-   		Irssi::print "$myname: Table created successfully";
-	}
-	$dbh->disconnect();
+	my $sql = 'CREATE VIRTUAL TABLE korvamadot using fts4(NICK,PVM,QUOTE,INFO1,INFO2,CHANNEL,ARTIST,TITLE,LINK1,LINK2,DELETED)';
+	KaaosRadioClass::writeToDB($db, $sql);
 	return;
 }
 
@@ -603,9 +584,6 @@ sub readDB {
 	$sth->execute();
 
 	if(my @line = $sth->fetchrow_array) {
-		#dp(__LINE__.': --fetched a result--');
-		#dp($line[0]);
-		#dp(Dumper @line);
 		$sth->finish();
 		$dbh->disconnect();
 		return $line[0];
@@ -613,7 +591,6 @@ sub readDB {
 	dp(__LINE__.': -- Did not find a result');
 	$sth->finish();
 	$dbh->disconnect();
-	#return @returnArray, "jee", $db, $string;
 	return;
 
 }

@@ -109,7 +109,7 @@ sub filterKeyword {
 	#elsif	($msg =~ /\b(kes..)|(kesä)/ui)	{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
 	elsif	($msg =~ /(kesä)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
 	#elsif	($msg =~ /\b(kev..t)|(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
-	elsif	($msg =~ /(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
+	elsif	($msg =~ /(kevät)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
 	elsif	($msg =~ /\b(talvi)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_talvi.txt'; }
 	elsif	($msg =~ /(viikonl|vkl)/i)		{($infofile) = glob $irssidir . 'horoskooppeja_vkl.txt'; }
 	elsif	($msg =~ /(vappu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_vappu.txt'; }

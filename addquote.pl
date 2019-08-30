@@ -21,7 +21,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $DEBUG = 1;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190703';
+$VERSION = '20190801';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -70,7 +70,7 @@ sub parseQuote {
 	if($msg =~ /^!aq\s(.{1,470})/gi)
 	{
 		#dp("parseQuote nick: $nick");
-		my $uusiquote = $1;
+		my $uusiquote = decode('UTF-8', $1);
 		my $pituus = length $uusiquote;
 		if ($pituus < 470) {
 			return if KaaosRadioClass::floodCheck();

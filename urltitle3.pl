@@ -425,7 +425,7 @@ sub replace_non_url_chars {
 	my ($row, @rest) = @_;
 	#dd("replace non url chars row: $row");
 
-	my $debugString = "";
+	my $debugString = '';
 	if ($DEBUG1 == 1) {
 		foreach my $char (split //, $row) {
 			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
@@ -440,6 +440,7 @@ sub replace_non_url_chars {
 	$row =~ s/Ö/o/ug;
 	$row =~ s/Ã¤/a/g;
 	$row =~ s/Ã¶/o/g;
+	$row =~ s/ //g;		# no-break space nbsp
 	#$row =~ s/\s+/ /gi;
 	#$row =~ s/\’//g;
 	#}
