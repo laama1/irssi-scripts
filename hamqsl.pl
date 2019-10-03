@@ -59,7 +59,7 @@ sub parse_hams_data {
     my $electronflux = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/electonflux'));
     my $solarwind = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/solarwind'));
     my $magfield = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/magneticfield'));
-    return "SFl: $solarflux, A: $aindex, K: $kindex, X: $xray, Sun sp: $sunspots, PtnFl: $protonflux, EFl: $electronflux, SW: $solarwind km/s";
+    return "Solar Flux: $solarflux, Aind: $aindex, Kind (kp): $kindex, Xray: $xray, Sun sp: $sunspots, Proton Flux: $protonflux, Elec Flux: $electronflux, Sol Wind: $solarwind km/s";
     Irssi::print(Dumper($solarflux));
 }
 

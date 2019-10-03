@@ -48,9 +48,9 @@ my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 0;
-my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+my $DEBUG = 1;
+my $DEBUG1 = 1;
+my $DEBUG_decode = 1;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -334,8 +334,8 @@ sub GETCITYCOORDS {
 	my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
 	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
 
-	da(__LINE__.': GETCITYCOORDS Result:',@results);
-	return $results[0], $results[1], $results[2];
+	da(__LINE__.': GETCITYCOORDS Result:', @results);
+	return $results[0], $results[1], decode('UTF-8', $results[2]);
 }
 
 # save new city to database if it does not exist
@@ -538,7 +538,6 @@ sub getCosOfZenithAngle {
 	my $declination = deg2rad(-23.44 * cos(deg2rad((360.0/365.0) * (9 + getDayOfYear($timestamp)))));
 	my $hourAngle = ((12 * 60) - getMinuteOfDay($timestamp)) * 0.25;
 	return sin $latitude * sin $declination + (cos $latitude * cos $declination * cos deg2rad($hourAngle));
-
 }
 
 sub getDayOfYear {

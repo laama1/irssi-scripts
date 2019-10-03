@@ -584,9 +584,14 @@ sub api_conversion {
 	}
 
 	# lamaz.bot.nu
-	if ($param =~ s/lamaz\.bot\.nu/localhost/gi) {
-		Irssi::print('lamaz-bot-nu conversion');
+	#if ($param =~ s/lamaz\.bot\.nu/localhost/gi) {
+	if ($param =~ s/lamaz\.bot\.nu:12345\/?/\[\:\:1\]\:80\//gi) {
+		Irssi::print('lamaz-bot-nu conversion2: '. $param);
 	}
+	if ($param =~ s/lamaz\.bot\.nu\//\[\:\:1\]\:81\//gi) {
+		Irssi::print('lamaz-bot-nu conversion: '. $param);
+	}
+
 	return $param;
 
 }
