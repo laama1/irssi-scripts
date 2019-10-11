@@ -17,7 +17,7 @@ $VERSION = "20191003";
 );
 
 my $levelpoints = 25;	# how many points between levels
-my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra', 'moar', 'god');
+my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra', 'moar_', 'god_');
 my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
@@ -26,19 +26,19 @@ my $foodcounter = 0;
 my $foodlevel = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
 
-my @loves = ('ihq', 'rakas', '*purr*', 'mieletön', '<3', 'pr0n', 'pron', 'hyvää', 'chill');
+my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'hyvää', 'chill', 'siisti', 'elin', 'koodi');
 my @loveanswer_words = ('*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3');
 my $lovecounter = 0;
 my $lovelevel = 0;
 my @lovenicks = ('luvdisc', 'pikatsu', 'pantisy', 'soul');
 
 my @drugs = ('kalja', 'bisse', 'hiisi', 'pieru', 'viina', 'heroiini', 'bongi', 'juoppo', 'kahvi');
-my @druganswer_words = ('^_^', '-_-', 'o_O', 'O_o', '._.', '8-)');
+my @druganswer_words = ('^_^', '-_-', 'o_O', 'O_o', '._.', '8-)', '(--8', 'i need');
 my $drugcounter = 0;
 my $druglevel = 0;
 my @drugnicks = ('psyduck', 'golduck', 'spoink', 'grumpig', 'kamatotsy');
 
-my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska', 'jumal');
+my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska', 'jumal', 'kapitalismi', 'raha');
 #my @hateanswer_words = ('');
 my $hatecounter = 0;
 my $hatelevel = 0;
