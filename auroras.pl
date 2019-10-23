@@ -27,7 +27,7 @@ my $db = $ENV{HOME}.'/public_html/auroras.db';
 #my @channels = ('#salamolo', '#botti', '#kaaosradio');
 
 sub getHelp {
-	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon.	Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä.	!kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
+	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
 }
 
 sub pubmsg {
@@ -35,7 +35,7 @@ sub pubmsg {
 	#return unless ($msg =~ /$serverrec->{nick}/i);
 	#return unless ($target ~~ @channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help)/gi) {
+	if ($msg =~ /(!help aurora)/gi) {
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $help = getHelp();
 		$serverrec->command("MSG $target $help");

@@ -32,7 +32,6 @@ $VERSION = '20190801';
 	changed     => $VERSION,
 );
 
-
 unless (-e $db) {
 	unless(open FILE, '>', $db) {
 		Irssi::print($IRSSI{name}. ": Unable to create file: $db");

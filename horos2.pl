@@ -8,16 +8,19 @@ use LWP::Simple;
 use utf8;
 use Data::Dumper;
 use KaaosRadioClass;		# LAama1 16.2.2017
+use POSIX qw(strftime);
+use POSIX qw(locale_h);	# necessary?
+use locale;	# necessary??
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '0.34';
+$VERSION = '0.35';
 %IRSSI = (
     authors	=> 'LAama1',
     contact	=> '#kaaosradio@ircnet',
     name	=> 'horos2',
     description	=> 'Skripti kertoo horoskoopin.',
     license	=> 'BSD',
-    changed	=> '24.03.2019',
+    changed	=> '23.10.2019',
     url		=> 'http://www.kaaosradio.fi'
 );
 
@@ -33,11 +36,11 @@ my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
 my $infofile;
 my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe');
 
-my $enableChannels = {};
-$enableChannels->{'nerv'}->{'#salamolo'};
-$enableChannels->{'IRCnet'}->{'#mobiilisauna'};
-$enableChannels->{'QuakeNet'}->{'#killahoe'};
-$enableChannels->{'freenode'}->{'#kaaosradio'};
+#my $enableChannels = {};
+#$enableChannels->{'nerv'}->{'#salamolo'};
+#$enableChannels->{'IRCnet'}->{'#mobiilisauna'};
+#$enableChannels->{'QuakeNet'}->{'#killahoe'};
+#$enableChannels->{'freenode'}->{'#kaaosradio'};
 
 my $myname = 'horos2.pl';
 
@@ -74,7 +77,7 @@ sub event_pub_msg {
 
 	my $rand = checkIfAllreadyDone($address);					# check if flooding... get old $rand and $infofile
 
-	open(UF,"$infofile") || die("can't open $infofile: $!");    # get info from the files.
+	open(UF,'<:encoding(UTF-8)',"$infofile") || die("can't open $infofile: $!");    # get info from the files.
 	my @information = <UF>;
 	close(UF);                                                  # close all open files
 	return unless @information;
@@ -97,7 +100,7 @@ LINE: for (@information) {
 			last;
 		}
 	}
-	
+
 	Irssi::signal_stop();
 }
 
@@ -122,22 +125,30 @@ sub filterKeyword {
 	elsif	($msg =~ /(rakkaus)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_rakkaus.txt';}
 	elsif	($msg =~ /(maanant)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_maanantai.txt';}
 	#elsif	($msg =~ /(p....si..)|(p..si.i)|pääsiäi/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
-	elsif	($msg =~ /(pääsiäi)/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
-	else 						{($infofile) = glob $irssidir . 'horoskooppeja.txt';}
+	elsif	($msg =~ /(pääsiäi)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
+	else 									{($infofile) = glob $irssidir . 'horoskooppeja.txt';}
 	#dp("horos2.pl: $& matched file: $infofile");
 	print("horos2.pl> $& matched file: $infofile");
 }
 
 sub grepKeyword {
 	my ($rimpsu, $nick, @rest) = @_;
-	chomp (my $weekday = `LC_ALL=fi_FI.utf-8; date +%A 2>>horosstderr.txt`);
-	
-	chomp (my $weekdak = @weekdays[`date +%u` -1]);		#genetiivi(?)muoto
-	chomp (my $tomorrow = `LC_ALL=fi_FI.utf-8; date +%A --date="tomorrow" 2>>horosstderr.txt`);
+	my $dateseconds = (60*60*24);
+	my $currenttime = time;
+	#my $oldlocale = setlocale(LC_TIME, 'fi_FI.utf-8');
+	#chomp (my $weekday = `LANG=fi_FI.utf-8; date +%A 2>>horosstderr.txt`);
+	my $weekday = strftime "%A", localtime ($currenttime);
+	Irssi::print("test locale1 today: $weekday");
+	Irssi::print("test locale2 today ". strftime "%A", localtime($currenttime));
+	my $weekdak = @weekdays[`date +%u` -1];				#genetiivi(?)muoto
+	#chomp (my $tomorrow = `LANG=fi_FI.utf-8; date +%A --date="tomorrow" 2>>horosstderr.txt`);
+	my $tomorrow = strftime "%A", localtime($currenttime + $dateseconds);
 	chomp (my $tomorrowak = @weekdays[`date +%u`]);
 
-	chomp (my $month = `LC_ALL=fi_FI.utf-8; date +%B 2>>horosstderr.txt`);
-	chomp (my $nextmonth = `LC_ALL=fi_FI.utf-8; date +%B --date="next month" 2>>horosstderr.txt`);
+	#chomp (my $month = `LC_ALL=fi_FI.utf-8; date +%B 2>>horosstderr.txt`);
+	my $month = strftime "%B", localtime $currenttime;
+	Irssi::print("tset locale 3 tomorrow: $tomorrow month: $month");
+	chomp (my $nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month" 2>>horosstderr.txt`);
 	my $season = checkSeason($month, 0);
 	my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
 	my $seasonob = checkSeason($month, 2);				# objektiivimuoto?

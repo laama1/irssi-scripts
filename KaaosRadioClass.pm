@@ -42,7 +42,7 @@ my $djlist = "$currentDir/dj_list.txt";
 #my $database_handle;
 
 #my $myname = $0;
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
 my $floodernick;

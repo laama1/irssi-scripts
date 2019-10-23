@@ -26,9 +26,9 @@ use HTML::Entities qw(decode_entities);
 #use RDF::RDFa::Parser;
 use utf8;
 #use open ':std', ':encoding(UTF-8)';
-binmode STDIN,  ':utf8';
-binmode STDOUT, ':utf8';
-binmode STDERR, ':utf8';
+#binmode STDIN,  ':utf8';
+#binmode STDOUT, ':utf8';
+#binmode STDERR, ':utf8';
 #binmode STDOUT, ":encoding(utf8)";
 #binmode STDIN, ":encoding(utf8)";
 #binmode STDERR, ":encoding(utf8)";
@@ -88,6 +88,7 @@ $newUrlData->{fetchurl} = '';		# which url to actually fetch
 $newUrlData->{shorturl} = '';		# shortened url for the link
 
 my $shortModeEnabled = 0;			# don't print that much garbage
+my  $shortenUrl = 0;				# enable shorten url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -213,7 +214,11 @@ sub fetch_title {
 
 	my ($titteli, $description, $titleInUrl) = getTitle($response, $url);
 
-	return 'Title: '.$titteli, $description, $titleInUrl, $md5hex;
+	if (length $titteli > 0) {
+		return 'Title: '.$titteli, $description, $titleInUrl, $md5hex;
+	} else {
+		return '', $description, $titleInUrl, $md5hex;
+	}
 }
 
 # getTitle params. useragent response
@@ -660,11 +665,11 @@ sub sig_msg_pub {
 		clearUrlData();
 		return;
 	}
-	my @short_raw = split(/ /, Irssi::settings_get_str('urltitle_shortmode_channels'));
+	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shortmode_channels');
 	if ($target ~~ @short_raw) {
-		$shortModeEnabled = 1;
+		$shortenUrl = 1;
 	} else {
-		$shortModeEnabled = 0;
+		$shortenUrl = 0;
 	}
 
 	$newUrlData->{fetchurl} = api_conversion($newUrlData->{url}, $server, $target);	#
@@ -679,7 +684,7 @@ sub sig_msg_pub {
 
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 	
-	print "$myname: Shortening url a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
+	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
 	dp("$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
@@ -688,7 +693,7 @@ sub sig_msg_pub {
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
 		
-		dp('sig_msg_pub new title: ' .$title) if $DEBUG1;
+		dp(__LINE__.': sig_msg_pub new title: ' .$title) if $DEBUG_decode;
 	}
 
 	if ($shortModeEnabled == 0 && length($newUrlData->{url}) >= 70) {
@@ -700,7 +705,7 @@ sub sig_msg_pub {
 		if ($drunk && $howManyDrunk < 1) {
 			msg_to_channel($server, $target, 'tl;dr');
 			$howManyDrunk++;
-		} elsif ($drunk == 0) {
+		} elsif ($drunk == 0 && $title ne '') {
 			msg_to_channel($server, $target, $title);
 			$howManyDrunk = 0;
 		}
@@ -987,6 +992,7 @@ sub dp {
 	}
 }
 
+# debug decode messages
 sub dd {
 	my ($string, @rest) = @_;
 	if ($DEBUG_decode == 1) {
