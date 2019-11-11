@@ -32,7 +32,6 @@ $json->allow_blessed(1);
 
 # OMDB api
 my $apikey = 'a06b4d3f';
-#&apikey=4d66421a
 
 sub print_help {
 	my ($server, $target) = @_;
@@ -50,17 +49,16 @@ sub do_imdb {
 	
 	if ($msg =~ /^!help imdb/i || $msg =~ /^!imdb$/i) {
 		print_help($server, $target);
-		return 0;
+		return;
 	}
 	
-	return 0 unless ($msg =~ /^!imdb\b/i);
-	return 0 if KaaosRadioClass::floodCheck() == 1;
+	return unless ($msg =~ /^!imdb\b/i);
+	return if KaaosRadioClass::floodCheck() == 1;
 	my $param = 't';		# title search
-	my $query;
-	my $year;
+	my $query;				# search query
+	my $year;				# year search
 
-	#Irssi::print("Boingk! $msg do_imdb") if $DEBUG;
-	if ($msg =~ /\!imdb (.*)$/) {		#if search word found
+	if ($msg =~ /\!imdb (.*)$/) {		# if search words found
 		$query = lc $1;
 	} else {
 		return 0;
@@ -77,7 +75,7 @@ sub do_imdb {
 	if ($query =~ /(\s?search\s?)/i) {
 		$param = 's';
 		$query =~ s/$1//;
-	} elsif ($query =~ /(tt\d{4,8})/) {
+	} elsif ($query =~ /(tt\d{4,10})/) {
 		$param = 'i';
 		$query = $1;
 	} elsif ($query =~ /(\s?leffa\s?|\s?movie\s?)/i) {

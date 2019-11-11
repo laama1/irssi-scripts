@@ -183,7 +183,7 @@ sub fetch_title {
 		$size = $response->content_length || 0;
 		
 		if ($datasize > 0) {
-			$md5hex = md5_hex(encode_utf8($page));
+			$md5hex = md5_hex(Encode::encode_utf8($page));
 		} else {
 			Irssi::print("$myname warning: Couldn't get size of the document!");
 		}
@@ -499,8 +499,8 @@ sub saveToDB {
 	my ($nick, $url, $title, $description, $channel, $md5hex, @rest) = @_;
 	dp(__LINE__.': saveToDB') if $DEBUG1;
 	my $pvm = time;
-	my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_dont_save_urls_channels'));
-    return -1 if $channel ~~ @dontsave;
+	#my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_shorten_url_channels'));
+    #return if $channel ~~ @dontsave;
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm . "; " . $nick . "; " . $url . "; " . $title . "; " .$description);
 	
@@ -665,7 +665,7 @@ sub sig_msg_pub {
 		clearUrlData();
 		return;
 	}
-	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shortmode_channels');
+	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shorten_url_channels');
 	if ($target ~~ @short_raw) {
 		$shortenUrl = 1;
 	} else {
@@ -1015,7 +1015,7 @@ sub sig_msg_pub_own {
 
 Irssi::settings_add_str('urltitle', 'urltitle_enabled_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_disabled', '0');
-Irssi::settings_add_str('urltitle', 'urltitle_shortmode_channels', '');
+Irssi::settings_add_str('urltitle', 'urltitle_shorten_url_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_dont_save_urls_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
 
@@ -1034,6 +1034,6 @@ Irssi::print("\nNew commands:");
 Irssi::print('/set urltitle_enabled_channels #1 #2');
 Irssi::print('/set urltitle_wanha_disabled 0/1');
 Irssi::print('/set urltitle_dont_save_urls_channels #1 #2');
-Irssi::print('/set urltitle_shortmode_channels #1 #2');
+Irssi::print('/set urltitle_shorten_url_channels #1 #2');
 Irssi::print('/set urltitle_enable_descriptions 0/1.');
 Irssi::print('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));

@@ -8,13 +8,13 @@ binmode(STDIN, ':utf8');
 #use Irssi::Irc;
 use DBI;
 use DBI qw(:sql_types);
-#use ENCODE;
+use Encode;
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20181110';
+$VERSION = '20191111';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -31,7 +31,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/korvamadot.db';
 my @channels = ('#salamolo2', '#kaaosradio');
 my $myname = 'korvamato.pl';
 my $DEBUG = 1;
-my $DEBUG1 = 0;
+my $DEBUG1 = 1;
 
 my $helptext = 'Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.';
 
@@ -238,50 +238,84 @@ sub get_position {
     return (@-);
 }
 
+sub UPDATECOLUMN {
+	my ($id, $column, $value, @rest) = @_;
+	my $sqlstr1 = "SELECT $column from korvamadot where rowid = ?";
+	my $sqlstr2 = "UPDATE korvamadot SET $column = ? WHERE rowid = ?";
+	my $dbh = KaaosRadioClass::connectSqlite($db);
+	#my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 }) or die DBI::errstr;
+	my $sth1 = $dbh->prepare($sqlstr1) or return; #die DBI::errstr;
+	$sth1->bind_param(1, $id, { TYPE => SQL_INTEGER });
+	
+	my $sth2 = $dbh->prepare($sqlstr2) or die DBI::errstr;
+	$sth2->bind_param(1, $value);
+	$sth2->bind_param(2, $id, { TYPE => SQL_INTEGER });
+	$sth2->execute;
+	$sth2->finish();
+	$dbh->disconnect();
+	return 1;
+}
 
-sub parse_keyword_return_sql {
+sub IFUPDATE {
 	my ($id, $command, @rest) = @_;
 	my $updatestring = '';			#$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 	my $selectoldstring = '';
 	return ($updatestring, $selectoldstring) unless $id > 0;
 			# TODO: sanitize with bind_param
 			# Don't delete deleted.
+	my $suffix = 'UPDATE korvamadot set';
 	if ($command =~ /link1:? ?(.*)/gi || $command =~ /url:? ?(.*)/gi) {
 		my $link1 = $1;
 		Irssi::print("$myname Add link1: $link1");
-		$updatestring = "UPDATE korvamadot set link1 = \"$link1\" where rowid = $id and DELETED = 0;";
+		return UPDATECOLUMN($id, 'link1', $1);
+		return 1;
+		#$updatestring = "$suffix link1 = \"$link1\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /link2:? ?(.*)/gi) {
 		my $link2 = $1;
 		Irssi::print("$myname Add link2: $link2");
-		$updatestring = "UPDATE korvamadot set link2 = \"$link2\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix link2 = \"$link2\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info1?:? ?(.*)/gi) {
 		my $info1 = $1;
 		Irssi::print("$myname Add info1: $info1");
-		$updatestring = "UPDATE korvamadot set info1 = \"$info1\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix info1 = \"$info1\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info2:? ?(.*)/gi) {
 		my $info2 = $1;
 		Irssi::print("$myname Add info2: $info2");
-		$updatestring = "UPDATE korvamadot set info2 = \"$info2\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix info2 = \"$info2\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
 		my $artist = $1;
 		Irssi::print("$myname Add Artist: $artist");
-		$updatestring = "UPDATE korvamadot set artist = \"$artist\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix artist = \"$artist\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
 	} elsif ($command =~ /title:? ?(.*)/gi) {
 		my $title = $1;
-		$updatestring = "UPDATE korvamadot set title = \"$title\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix title = \"$title\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT title from korvamadot where rowid = $id";
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
 		my $lyrics = $1;
-		$updatestring = "Update korvamadot set quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
+		$updatestring = "$suffix quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
 	}
 
-	return ($updatestring, $selectoldstring);
+	if ($updatestring ne '') {
+			my $oldvalue = KaaosRadioClass::readLineFromDataBase($selectoldstring);
+			# HACK:
+			dp(__LINE__.': oldvalue: '. $oldvalue.' oldstring: '.$selectoldstring);
+
+			if (not $oldvalue) {
+				$oldvalue = '<tyhjä>';
+			}
+			#my $returnvalue = updateDB($string);
+			#if ($returnvalue == 0) {
+				return "Päivitetty. Oli: $oldvalue";
+			#}
+		}
+
+	return; #($updatestring, $selectoldstring);
 }
 
 sub check_if_exists {
@@ -295,7 +329,7 @@ sub check_if_exists {
 		my $idstring;
 		my @idarray = ();
 		foreach my $result (@results) {
-			$idstring .= @$result[0] .", ";	# add result id's to one and same string
+			$idstring .= @$result[0] .", ";	# add result rowid
 			push @idarray, @$result[0];
 		}
 		if ($amount == 1) {
@@ -352,20 +386,21 @@ sub if_korvamato {
 	{
 		my $command = $1;		# command the user has entered
 		my $url = '';			# song possible url
-		my $id = -1;			# artist ID (rowid in DB)
+		my $id = -1;			# korvamato ID (rowid in DB)
 		my $searchword = '';
 
 		if (IFURL($command) > 0) {
 			return "URL löytyi $1 kertaa. Koita !korvamato etsi <url>";
 			# TODO: print ID's
 		}
-		dp(__LINE__.': command: '. $command);
+		#dp(__LINE__.': command: '. $command);
 
-		if ($command =~ s/^\bid\:? (\d+)\b//gi || $command =~ s/^(\d+)$//gi) {			# search and replace from $command
+		if ($command =~ s/^id:? (\d+)\b//gi || $command =~ s/^(\d+)$//gi) {			# search and replace from $command
 			$id = $1;
-		} elsif ($command =~ /\bid\:?/gi) {
+			#dp(__LINE__.': id: '.$id);
+		} elsif ($command =~ /^id\:?/gi) {
 			return 'En tajunnut! Kokeile esim. !korvamato id: 123';
-		} elsif ($command =~ /^etsi\:? ?(.*)$/gi) {
+		} elsif ($command =~ /^etsi:?\s(.*)$/gi) {
 			$searchword = $1;
 			my $sayline = find_mato($searchword);
 			if ($sayline ne '') {
@@ -376,21 +411,11 @@ sub if_korvamato {
 			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
 		}
 
-		my ($string, $oldstring) = parse_keyword_return_sql($id, $command);
-
-		if ($string ne '') {
-			my $oldvalue = readDB($oldstring);
-			# HACK:
-			dp(__LINE__.': oldvalue: '. $oldvalue.' oldstring: '.$oldstring);
-
-			if (not $oldvalue) {
-				$oldvalue = '<tyhjä>';
-			}
-			my $returnvalue = updateDB($string);
-			if ($returnvalue == 0) {
-				return "Päivitetty. Oli: $oldvalue";
-			}
+		#my ($string, $oldstring) =
+		if (IFUPDATE($id, $command)) {
+			return $1;
 		}
+
 
 		if (check_if_delete($command, $id) > 0) {
 			return "Deletoitu. ID: $id";
@@ -441,7 +466,7 @@ sub if_korvamato {
 			if ($searchword eq '') {
 				return 'Nyt skarppiutta! Ei mennyt ihan oikein.';
 			} else {
-				($returnstring, $amount) = check_if_exists($searchword);			
+				($returnstring, $amount) = check_if_exists($searchword);
 			}
 
 			Irssi::print("$myname: \"$searchword\" request from $nick.");
@@ -449,8 +474,8 @@ sub if_korvamato {
 		} elsif ($id != -1) {
 			# TODO: search korvamato '!korvamato id 55'
 			my @results = search_id_from_db($id);
-			dp(__LINE__.': Search results DUMPER:');
-			da(@results);
+			#dp(__LINE__.': Search results DUMPER:');
+			#da(@results);
 			$returnstring = createAnswerFromResultsor(@results);
 			return 'Löytyi '.$returnstring;
 		}
@@ -574,27 +599,6 @@ sub updateDB {
 	return KaaosRadioClass::writeToDB($db, $string);
 }
 
-sub readDB {
-	my ($string, @rest) = @_;
-	dp("Reading lines from DB $db.");
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$db",'','', {RaiseError => 1, AutoCommit => 1});
-	return if ($dbh < 0);
-	#my $sth = $dbh->prepare($string) or return $dbh->errstr;
-	my $sth = $dbh->prepare($string) or return;
-	$sth->execute();
-
-	if(my @line = $sth->fetchrow_array) {
-		$sth->finish();
-		$dbh->disconnect();
-		return $line[0];
-	}
-	dp(__LINE__.': -- Did not find a result');
-	$sth->finish();
-	$dbh->disconnect();
-	return;
-
-}
-
 # Create one line from one result!
 sub createAnswerFromResultsor {
 	my @resultarray = @_;
@@ -609,23 +613,27 @@ sub createAnswerFromResultsor {
 
 	my $nickster = $resultarray[1] || '';									# who added
 	my $when = $resultarray[2] || '';										# when added
-	my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || '-';		# lyrics
-
+	#my $quote = KaaosRadioClass::replaceWeird($resultarray[3]) || '-';		# lyrics
+	my $quote = decode_utf8($resultarray[3]) || '-';		# lyrics
 	if ($quote ne '-') { $string .= "Lyrics: $quote, "; }
 	else { return 'Ei löytynyt'; }
 
-	my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || '';
+	#my $info1 = KaaosRadioClass::replaceWeird($resultarray[4]) || '';
+	my $info1 = decode_utf8($resultarray[4]) || '';
 	if ($info1 ne '') { $string .= "Info1: $info1, "; }
 
-	my $info2 = KaaosRadioClass::replaceWeird($resultarray[5]) || '';
+	#my $info2 = KaaosRadioClass::replaceWeird($resultarray[5]) || '';
+	my $info2 = decode_utf8($resultarray[5]) || '';
 	if ($info2 ne '') { $string .= "Info2: $info2, "; }
 
 	my $channelresult = $resultarray[6] || '';
 
-	my $artist = KaaosRadioClass::replaceWeird($resultarray[7]) || '-';
+	#my $artist = KaaosRadioClass::replaceWeird($resultarray[7]) || '-';
+	my $artist = decode_utf8($resultarray[7]) || '-';
 	if ($artist ne '-') { $string .= "Artist: $artist, "; }
 
-	my $title = KaaosRadioClass::replaceWeird($resultarray[8]) || '-';
+	#my $title = KaaosRadioClass::replaceWeird($resultarray[8]) || '-';
+	my $title = decode_utf8($resultarray[8]) || '-';
 	if ($title ne '-') { $string .= "Title: $title, "; }
 
 	my $link1 = $resultarray[9] || '-';
@@ -648,22 +656,11 @@ sub createAnswerFromResultsor {
 
 }
 
-# search rowid = artist ID from database
+# search rowid = korvamato ID from database
 sub search_id_from_db {
 	my ($id, @rest) = @_;
-	#my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
-	#my $sth = $dbh->prepare('SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0') or die DBI::errstr;
-	#$sth->bind_param(1, $id);
-	#$sth->execute();
-	my $sql = 'SELECT rowid,* FROM korvamadot where rowid = ? and DELETED = 0';
-	my @params = ($id);
-	my @result = KaaosRadioClass::bindSQL($db, $sql, @params);
-	#my @result = ();
-	#@result = $sth->fetchrow_array();
-	#$sth->finish();
-	#$dbh->disconnect();
-	dp("SEARCH ID Dump:");
-	da(@result);
+	my $sql = "SELECT rowid,* FROM korvamadot where rowid = $id and DELETED = 0";
+	my @result = KaaosRadioClass::readLineFromDataBase($db, $sql);
 	return @result;
 }
 
