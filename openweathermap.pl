@@ -16,7 +16,7 @@ use Number::Format qw(:subs :vars);
 my $fi = new Number::Format(-decimal_point => ',');
 
 use Math::Trig; # for apparent temp
-use URI::Escape;
+#use URI::Escape;
 use Data::Dumper;
 
 #use Switch 'Perl6';
@@ -35,7 +35,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190807';
+$VERSION = '20191112';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1',
@@ -244,13 +244,13 @@ sub CREATEDB {
 # param: searchword, returns json answer or 0
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
-	$searchword = uri_escape($searchword);
+	$searchword = stripc($searchword);
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
-	if ($data < 0) {
+	if ($data eq "-1") {
 		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		dp(__LINE__.": lat: $lat lon: $lon name: $name");
-		return unless defined $name;
+		return 0 unless defined $name;
 		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
 		return 0 if ($data eq "-1");
 	}
@@ -268,7 +268,7 @@ sub FINDFORECAST {
 	my ($searchword, @rest) = @_;
 	my $returnstring = "\002klo\002 ";
 	# TODO my $json;
-	$searchword = uri_escape($searchword);
+	$searchword = stripc($searchword);
 	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
 	
 	if ($data < 0) {
@@ -307,16 +307,16 @@ sub FINDFORECAST {
 
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
-	my ($lat, $lon, $name) = GETCITYCOORDS($city);	# find existing city from DB by search word
-	FINDWEATHER($city) unless ($lat && $lon);		# find city from API if not found from DB
-	($lat, $lon, $name) = GETCITYCOORDS($city) unless ($lat && $lon);		# find existing city again from DB
+	my ($lat, $lon, $name) = GETCITYCOORDS($city);                                  # find existing city from DB by search word
+	FINDWEATHER($city) unless ($lat && $lon && $name);                              # find city from API if not found from DB
+	($lat, $lon, $name) = GETCITYCOORDS($city) unless ($lat && $lon && $name);      # find existing city again from DB
 	return 'City not found from DB or API.' unless ($lat && $lon && $name);
 
 	my $searchurl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($searchurl, 0);
 
 	da(__LINE__.':FINDAREAWEATHER URL', $searchurl,'DATA',$data) if $DEBUG1;
-	if ($data < 0) {
+	if ($data eq "-1") {
 		dp(__LINE__.':FINDAREAWEATHER failed data:',$data);
 		return 0;
 	}
@@ -328,23 +328,18 @@ sub FINDAREAWEATHER {
 		$sayline .= getSayLine2($city) . '. ';
 	}
 	da(__LINE__.':FINDAREAWEATHER decoded JSON:',$json) if $DEBUG1;
-	da(__LINE__.':FINDAREAWEATHER SAYLINE', $sayline);
+	da(__LINE__.':FINDAREAWEATHER SAYLINE', $sayline) if $DEBUG1;
 	return $sayline;
 }
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
-	# TODO: Bind params
 	$city = "%${city}%";
-	#my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
-	#my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ?;";
-	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like ?;";
-	#my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
+	my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ?;";
 	#my @results = KaaosRadioClass::bindSQL($db, $sql, ($city));
 	my @results = bindaaSQL($sql, $city);
-	
-	#da(__LINE__.':GETCITYCOORDS Results for city: '.$city, @results);
-	dp(__LINE__.': city: '.$city. ' ') if $DEBUG1;
+
+	dp(__LINE__.':GETCITYCOORDS city: '.$city. ' ') if $DEBUG1;
 	da(@results) if $DEBUG1;
 	dp(__LINE__) if $DEBUG1;
 	return $results[0], $results[1], decode('UTF-8', $results[2]);
@@ -353,6 +348,7 @@ sub GETCITYCOORDS {
 # save new city to database if it does not exist
 sub SAVECITY {
 	my ($json, @rest) = @_;
+	#dp(__LINE__.':SAVECITY city: '.$city);
 	my $now = time;
 	# TODO: bind params
 	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
@@ -386,6 +382,7 @@ sub SAVEDATA {
 	#my $stmt = "INSERT INTO DATA (CITY, PVM, COUNTRY, CITYID, SUNRISE, SUNSET, DESCRIPTION, WINDSPEED, WINDDIR, TEMPMAX, TEMP, HUMIDITY, PRESSURE, TEMPMIN, LAT, LON)
 	# VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	#my @params = ($name, $now, $country, $id, $sunrise, $sunset, $weatherdesc, $windspeed, $winddir, $tempmax, $temp, $humidity, $pressure, $tempmin, $lat, $long);
+	dp(__LINE__.':SAVEDATA name: '.$name);
 	return KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 }
 
@@ -406,6 +403,12 @@ sub bindaaSQL {
 	#da(@results);
 	#print Dumper(@results);
 	return @results;
+}
+
+sub stripc {
+	my ($word, @rest) = @_;
+	$word =~ s/['~"`;]//g;
+	return $word;
 }
 
 # debug print
@@ -454,7 +457,7 @@ sub getSayLine2 {
 # format the message
 sub getSayLine {
 	my ($json, @rest) = @_;
-	if ($json == 0) {
+	if ($json eq "0") {
 		dp('getSayLine json = 0');
 		return 0;
 	}

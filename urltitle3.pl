@@ -70,8 +70,8 @@ my $howManyDrunk = 0;
 my $dontprint = 0;
 
 my $DEBUG = 0;
-my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+my $DEBUG1 = 1;
+my $DEBUG_decode = 1;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -174,10 +174,10 @@ sub fetch_title {
 		}
 
 		if ($datasize > $max_size) {
-			dd("fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
+			dd(__LINE__.": fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
 			$page = substr $page, 0, $max_size;
 			$datasize = length $page;
-			dd("fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
+			dd(__LINE__.": fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
 		}
 
 		$size = $response->content_length || 0;
@@ -235,7 +235,7 @@ sub getTitle {
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
-	dd("\ngetTitle:\nresponse header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
+	dd(__LINE__.": \ngetTitle:\nresponse header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
 	#dd('og:title: '.$ogtitle);
 
 	# get Title and Description
@@ -244,7 +244,7 @@ sub getTitle {
 	dd('getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
 	dd('getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
 	#dp('HEADER: ');
-	dd("getTitle newtitle: $newtitle, newdescription: $newdescription");
+	dd(__LINE__.": getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
@@ -285,13 +285,13 @@ sub getTitle {
 		}
 
 	} elsif ($newtitle) {
-		dd("getTitle: title = newtitle! $newtitle");
+		dd(__LINE__.": getTitle: title = newtitle! $newtitle");
 		$title = decode_entities($newtitle);
 	}
 
 	my $titleInUrl = 0;
 	if ($title ne '') {
-		dd("getTitle undecoded title: $title") if $DEBUG1;
+		dd(__LINE__.": getTitle undecoded title: $title") if $DEBUG1;
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
 	return $title, decode_entities($newdescription), $titleInUrl;
@@ -308,39 +308,39 @@ sub get_channel_title {
 ### Encode to UTF8. Params: $string, $charset
 sub etu {
 	my ($string, $charset, @rest) = @_;
-	dd("etu function. charset: $charset string before: $string");
+	dd(__LINE__.": etu function. charset: $charset string before: $string");
 	Encode::from_to($string, $charset, 'utf8') if $charset && $string;
-	dd("etu function, string after: $string");
+	dd(__LINE__.": etu function, string after: $string");
 	return $string;
 }
 
 ### Check if charset is utf8 or not, and convert. Params: 1) String to convert 2) source charset.
 sub checkAndEtu {
 	my ($string, $charset, @rest) = @_;
-	dd("checkAndEtu, charset: $charset, string: $string");
+	dd(__LINE__.": checkAndEtu, charset: $charset, string: $string");
 	my $returnString = "";
 	if ($charset !~ /utf-8/i && $charset !~ /utf8/i) {
-		dd("charset is reported different from utf8");
+		dd(__LINE__.": charset is reported different from utf8");
 		if ($string =~ /Ã/) {
-			dd("most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
+			dd(__LINE__.": most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
 			$returnString = etu($string, $charset);
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
-			dd("UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
+			dd(__LINE__.": UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
 			$returnString = $string;
 		} else {
-			dd("Didn't found any special characters. Converting..'");
+			dd(__LINE__.": Didn't found any special characters. Converting..'");
 			$returnString = etu($string, $charset);
 		}
 	} elsif ($charset =~ /UTF8/i || $charset =~ /UTF-8/i) {
-		dd("charset reported as utf8");
+		dd(__LINE__.": charset reported as utf8");
 		if ($string =~ /Ã/) {
-			dd("ISO CHARS FOUND, INCORRECT! (reported as $charset)");
+			dd(__LINE__.": ISO CHARS FOUND, INCORRECT! (reported as $charset)");
 			$returnString = etu($string, $charset) || "";		
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
-			dd("UTF-8 CHARS FOUND, CORRECT! (reported as $charset)");
+			dd(__LINE__.": UTF-8 CHARS FOUND, CORRECT! (reported as $charset)");
 			$returnString = $string;
 		} else {
-			dd("Didn't find any special characters. Not converting.");
+			dd(__LINE__.": Didn't find any special characters. Not converting.");
 			$returnString = $string;
 		}
 	}
@@ -352,13 +352,13 @@ sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
 	my ($samewords, $titlewordCount) = countSameWords($url, $title);
-	dd("checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
+	dd(__LINE__.": checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
 
 	if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
-		dd("checkIfTitleInUrl bling1! title wordcount: $titlewordCount same words: $samewords");
+		dd(__LINE__.": checkIfTitleInUrl bling1! title wordcount: $titlewordCount same words: $samewords");
 		return 1;
 	} elsif ($samewords == $titlewordCount) {
-		dd("checkIfTitleInUrl bling2! samewords = title words = $samewords");
+		dd(__LINE__.": checkIfTitleInUrl bling2! samewords = title words = $samewords");
 		return 1;
 	}
 	dd('checkIfTitleInUrl: title not found from url!');
@@ -374,68 +374,69 @@ sub countWords {
 	my $count = 0;
 	foreach my $val (@array) {
 		$count++;
-		dd("countWords: $val, count: $count") if $DEBUG1;
+		dd(__LINE__.": countWords: $val, count: $count") if $DEBUG1;
 	}
 	return $#array +1;
 }
 
 sub countSameWords {
 	my ($url, $title, @rest) = @_;
-	dd("countSameWords url: $url, \n\t title: $title") if $DEBUG1;
+	dd(__LINE__.": countSameWords url: $url, \n title: $title") if $DEBUG1;
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-	dd("countSameWords titlewordCount: $titlewordCount");
+	#dd(__LINE__.": countSameWords titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
-		#dd("countSameWords: $item, count: $count1") if $DEBUG1;
-		if ($item ~~ @rows1) {
-		#if (grep /^$item/, @rows1 ) {
+		#dd(__LINE__.": countSameWords: $item, count: $count1") if $DEBUG1;
+		#if ($item ~~ @rows1) {
+		if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dd("countSameWords: $item, count: $count1") if $DEBUG1;
+			dd(__LINE__.": countSameWords: $item, count: $count1") if $DEBUG1;
 			if ($count1 == $titlewordCount) {
-				dd("countSameWords: bingo!") if $DEBUG1;
+				dd(__LINE__.": countSameWords: bingo!") if $DEBUG1;
 				return $count1, $titlewordCount;
 			}
 			
 		}
 	}
-	dd(">   same words: $count1");
+	#dd(__LINE__.": >   same words: $count1");
 	return $count1, $titlewordCount;
 }
 
 # lowercase, remove weird chars. return formatted words
 sub split_row_to_array {
 	my ($row, @rest) = @_;
-	dd("split_row_to_array before: $row") if $DEBUG1;
+	#dd(__LINE__.": split_row_to_array before: $row") if $DEBUG1;
 	print ("poks") if $row =~ /\”/;
 	print ("poks2") if $row =~ /\–/;
 	print ("poks3") if $row =~ /\+/;
 	#$row =~ s/[”\|:\"\+\,\!\(\)\–]//g;
 
 	$row = replace_non_url_chars($row);
-	$row =~ s/[^\w\s\-\.\/\+\#]//g;
+	#$row =~ s/[^\w\s\-\.\/\+\#]//g;
 	$row =~ s/\s+/ /g;
+	#$row = KaaosRadioClass::ktrim($row);
 	$row = lc($row);
 	
-	dd("split_row_to_array after: $row") if $DEBUG1;
+	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
 	#my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	dd('split_row_to_array words: ' . ($#returnArray+1)) if $DEBUG1;
-
+	da(@returnArray);
 	return @returnArray;
 }
 
 sub replace_non_url_chars {
 	my ($row, @rest) = @_;
-	#dd("replace non url chars row: $row");
+	dd(__LINE__.": replace non url chars row: $row");
 
 	my $debugString = '';
-	if ($DEBUG1 == 1) {
+	if ($DEBUG1 == 1 && 0) {
 		foreach my $char (split //, $row) {
 			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
 		}
-		dd("replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
+		dd(__LINE__.": replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
 	}
 
 	#if ($row) {
@@ -445,11 +446,11 @@ sub replace_non_url_chars {
 	$row =~ s/Ö/o/ug;
 	$row =~ s/Ã¤/a/g;
 	$row =~ s/Ã¶/o/g;
-	$row =~ s/ //g;		# no-break space nbsp
+	$row =~ s/ / /g;		# no-break space nbsp
 	#$row =~ s/\s+/ /gi;
 	#$row =~ s/\’//g;
 	#}
-	dd("replace non url chars row after: $row") if $DEBUG1;
+	dd(__LINE__.": replace non url chars row after: $row") if $DEBUG1;
 	return $row;
 }
 
@@ -545,7 +546,7 @@ sub checkForPrevEntry {
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
-	dd("$count previous elements found!");# if $DEBUG1;
+	dd(__LINE__.": $count previous elements found!");# if $DEBUG1;
 	if ($count == 0)	{ return; }
 	else { return @elements };
 }
@@ -915,7 +916,7 @@ sub createAnswerFromResults {
 	$returnstring .= "url: $url, ";
 	my $title = $resultarray[4];
 	$returnstring .= "title: $title, ";
-	dd("title: $title");
+	dd(__LINE__.": title: $title");
 	my $desc = $resultarray[5];
 	$returnstring .= "desc: $desc, ";
 	my $channel = $resultarray[6];
