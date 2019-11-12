@@ -21,7 +21,7 @@ my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra', 'moar_', 'god_');
 my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
-my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams');
+my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams', 'nam', 'kelpaa');
 my $foodcounter = 0;
 my $foodlevel = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
@@ -49,6 +49,7 @@ my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite');
 
 sub da {
 	print Dumper(@_);
+	return;
 }
 
 sub match_word {
@@ -103,18 +104,17 @@ sub count_level {
 }
 
 sub evolve {
-	my ($server, $target, $level, @nicks, @rest) = @_;
+	my ($server, $target, $level, $trigger, @nicks, @rest) = @_;
 	my $newnick = '';
 	#Irssi::print(__LINE__.':tamagotchi.pl newnick count: '. ($level % scalar(@nicks)));
-	$newnick = @nicks[($level % scalar(@nicks))-1];
+	$newnick = @nicks[($level % scalar @nicks)-1];
 
-	if ($level > scalar(@nicks)) {
-		Irssi::print(__LINE__.':tamagotchi.pl extralevel float: '. (($level-1) / scalar(@nicks)));
-		#my $extralevel = int($level / scalar(@nicks));
-		my $extralevel = int(($level-1) / scalar(@nicks));
+	if ($level > scalar @nicks ) {
+		Irssi::print(__LINE__.':tamagotchi.pl extralevel float: '. (($level-1) / scalar @nicks ));
+		my $extralevel = int(($level-1) / scalar @nicks );
 		$newnick = $ybernicks[($extralevel-1)] . $newnick;
 	}
-	msg_channel($server, $target, '*EvolVing*');
+	msg_channel($server, $target, "*${trigger}ing*");
 	change_nick($server, $newnick);
 	return;
 }
@@ -137,25 +137,25 @@ sub pubmsg {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
 		my $curlevel = count_level($foodcounter, @foodnicks);
-		evolve($serverrec, $target, $curlevel, @foodnicks) if($curlevel > 0);
+		evolve($serverrec, $target, $curlevel, 'FooD', @foodnicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter\n");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
 		my $curlevel = count_level($drugcounter, @drugnicks);
-		evolve($serverrec, $target, $curlevel, @drugnicks) if ($curlevel > 0);
+		evolve($serverrec, $target, $curlevel, 'dRuGg', @drugnicks) if ($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter\n");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
 		my $curlevel = count_level($lovecounter, @lovenicks);
-		evolve($serverrec, $target, $curlevel, @lovenicks) if($curlevel > 0);
+		evolve($serverrec, $target, $curlevel, 'LovE', @lovenicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter\n");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
 		my $curlevel = count_level($hatecounter, @hatenicks);
-		evolve($serverrec, $target, $curlevel, @hatenicks) if($curlevel > 0);
+		evolve($serverrec, $target, $curlevel, 'HaT', @hatenicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter\n");
 	}
 }
@@ -165,4 +165,4 @@ Irssi::signal_add_last('message public', 'pubmsg');
 #Irssi::signal_add_last('message irc action', 'pubmsg');
 
 Irssi::print("tamagotchi v. $VERSION loaded");
-Irssi::print("Enabled channels: ". Irssi::settings_get_str('tamagotchi_enabled_channels'));
+Irssi::print('Enabled channels: '. Irssi::settings_get_str('tamagotchi_enabled_channels'));

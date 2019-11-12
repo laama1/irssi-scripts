@@ -86,20 +86,20 @@ sub readLinesFromDataBase {
 
 sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
-	dp("Reading lines from DB $db.");
+	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
 
 	if(my @line = $sth->fetchrow_array) {
-		dp('--fetched a result--');
+		dp(__LINE__.': --fetched a result--');
 		dp(Dumper @line);
 		$sth->finish();
 		$dbh->disconnect();
 		return @line;
 	}
-	dp('-- Did not find a result');
+	dp(__LINE__.': -- Did not find a result');
 	$sth->finish();
 	$dbh->disconnect();
 	#return @returnArray, "jee", $db, $string;
@@ -110,15 +110,17 @@ sub bindSQL {
 	my ($db, $sql, @params, @rest) = @_;
 	my $dbh = connectSqlite($db);							# DB handle
 	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
-	$sth->execute(@params) or return $dbh->errstr;
+	$sth->execute(@params) or return ($dbh->errstr);
 	my @results;
 	my $idx = 0;
 	while(my @row = $sth->fetchrow_array) {
-		$results[$idx] = @row;
+		#$results[$idx] = @row;
+		push @results, @row;
 		$idx++;
 	}
 	$sth->finish();
 	$dbh->disconnect();
+	dp(__LINE__.': -- How many results: '. $idx);
 	return @results;
 }
 
@@ -164,7 +166,7 @@ sub writeToFile {
 	open (OUTPUT, '>:utf8', $filename) || return -1;
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
-	dp('Write done to '. $filename);
+	dp(__LINE__.': Write done to '. $filename);
 	return 0;
 }
 
@@ -178,7 +180,7 @@ sub writeArrayToFile {
 		print $OUTPUT $line . "\n";
 	}
 	close $OUTPUT || return -2;
-	dp('write array done');
+	dp(__LINE__.': write array done');
 	return 0;
 }
 
@@ -241,9 +243,9 @@ sub replaceWeird {
 	my ($text, @rest) = @_;
 	return unless defined $text;
 
-	dp("Text before: $text");
+	dp(__LINE__.": Text before: $text");
 	$text = Encode::decode('utf8', uri_unescape($text));
-	dp("Text before2: $text");
+	dp(__LINE__.": Text before2: $text");
 	# HTML encoded
 	return 0 unless ($text);
 
@@ -304,7 +306,7 @@ sub replaceWeird {
 	
 	#decode_entities($text);
 	#$text = Encode::decode('utf8', uri_unescape($text));
-	dp("Text after: $text");
+	dp(__LINE__.": Text after: $text");
 	return $text;
 }
 
@@ -332,7 +334,7 @@ sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
 	if ($rv < 0) {
-		dp('KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
    		return $dbh->errstr;
 	}
 	return 0;
@@ -345,7 +347,7 @@ sub writeToDB {
 
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
-		dp('KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
    		return $dbh->errstr;
 	}
 	$dbh->disconnect();
@@ -377,7 +379,7 @@ sub readDjList {
 sub fetchUrl {
 	my ($url, $getsize);
 	($url, $getsize) = @_;
-	dp('fetchUrl url: '. $url);
+	dp(__LINE__.': fetchUrl url: '. $url);
 	#$url = decode_entities($url);
 	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
@@ -410,7 +412,7 @@ sub fetchUrl {
 		$finalURI = $response->request()->uri() || '';
 		#Irssi::print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
-		#return("Failure ($url): " . $response->code() . ", " . $response->message() . ", " . $response->status_line);
+		dp("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
 		#return;
 	}
@@ -425,7 +427,7 @@ sub getJSON {
 	my ($url, @rest) = @_;
 	my $response = fetchUrl($url, 0);
 	if ($response && $response eq '-1') {
-		dp('error fetching url!');
+		dp(__LINE__.': error fetching url!');
 		return -1;
 	}
 	return -2 unless $response;
@@ -447,6 +449,7 @@ sub dp {
 	return unless $DEBUG == 1;
 	#Irssi::print("$myname-debug: @_");
 	print("debug: @_");
+	return;
 }
 
 
@@ -454,6 +457,7 @@ sub da {
 	return unless $DEBUG == 1;
 	print('debug array:');
 	print Dumper (@_);
+	return;
 }
 
 sub conway {

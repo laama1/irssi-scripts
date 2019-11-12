@@ -16,6 +16,8 @@ use Number::Format qw(:subs :vars);
 my $fi = new Number::Format(-decimal_point => ',');
 
 use Math::Trig; # for apparent temp
+use URI::Escape;
+use Data::Dumper;
 
 #use Switch 'Perl6';
 #use open ':std', ':encoding(UTF-8)';
@@ -49,7 +51,7 @@ my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $DEBUG = 1;
-my $DEBUG1 = 1;
+my $DEBUG1 = 0;
 my $DEBUG_decode = 1;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
@@ -129,7 +131,7 @@ unless (-e $db) {
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, @rest) = @_;
 	# TODO: scattered clouds, light intensity rain
-	dp('replace_with_emoji:'.__LINE__.": string: $string");
+	dp('replace_with_emoji:'.__LINE__.": string: $string") if $DEBUG1;
 	my $sunmoon = get_sun_moon($sunrise, $sunset);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
@@ -155,6 +157,7 @@ sub replace_with_emoji {
 	} elsif ($sunup == 0) {
 		#dp('sun is down');
 		$string =~ s/shower rain/🌧️ /u;
+		$string =~ s/broken clouds/☁ /u;
 	}
 	return $string;
 }
@@ -172,7 +175,7 @@ sub is_sun_up {
 sub get_sun_moon {
 	my ($sunrise, $sunset, $tz, @rest) = @_;
 	if (is_sun_up($sunrise, $sunset) == 1) {
-		dp(__LINE__.': sun is up');
+		dp(__LINE__.': sun is up') if $DEBUG1;
 		return '🌞';
 	}
 	dp(__LINE__.': sun is down');
@@ -214,7 +217,7 @@ sub omaconway {
 
 sub CREATEDB {
 	$dbh = KaaosRadioClass::connectSqlite($db);
-	my $stmt = qq/CREATE TABLE IF NOT EXISTS CITIES (ID int, NAME TEXT, COUNTRY text, PVM INT, LAT TEXT, LON TEXT, PRIMARY KEY(ID, NAME))/;
+	my $stmt = 'CREATE TABLE IF NOT EXISTS CITIES (ID int, NAME TEXT, COUNTRY text, PVM INT, LAT TEXT, LON TEXT, PRIMARY KEY(ID, NAME))';
 
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 	if($rv != 0) {
@@ -224,8 +227,8 @@ sub CREATEDB {
    		Irssi::print("$myname: Table CITIES created successfully");
 	}
 
-	my $stmt2 = qq/CREATE TABLE IF NOT EXISTS DATA (CITY TEXT primary key, PVM INT, COUNTRY TEXT, CITYID int, SUNRISE int, SUNSET int, DESCRIPTION text, WINDSPEED text, WINDDIR text,
-	TEMPMAX text, TEMP text, HUMIDITY text, PRESSURE text, TEMPMIN text, LAT text, LON text)/;
+	my $stmt2 = 'CREATE TABLE IF NOT EXISTS DATA (CITY TEXT primary key, PVM INT, COUNTRY TEXT, CITYID int, SUNRISE int, SUNSET int, DESCRIPTION text, WINDSPEED text, WINDDIR text,
+	TEMPMAX text, TEMP text, HUMIDITY text, PRESSURE text, TEMPMIN text, LAT text, LON text)';
 	my $rv2 = KaaosRadioClass::writeToOpenDB($dbh, $stmt2);
 	if($rv2 < 0) {
    		Irssi::print ("$myname: DBI Error: $rv2");
@@ -241,20 +244,20 @@ sub CREATEDB {
 # param: searchword, returns json answer or 0
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
+	$searchword = uri_escape($searchword);
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
-	da(__LINE__.': FINDWEATHER DATA:',$data) if $DEBUG1;
 	if ($data < 0) {
+		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
+		dp(__LINE__.": lat: $lat lon: $lon name: $name");
+		return unless defined $name;
 		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
-		da(__LINE__.': FINDWEATHER data:',$data);
-		if ($data < 0) {
-			return 0;
-		}
+		return 0 if ($data eq "-1");
 	}
 	
 	my $json = decode_json($data);
-	da(__LINE__.': JSON:',$json) if $DEBUG1;
-	da(__LINE__.': JSON-temp: ', $json->{main}->{temp});
+	da(__LINE__.':FINDWEATHER JSON', $json) if $DEBUG1;
+	da(__LINE__.':FINDWEATHER JSON-temp', $json->{main}->{temp});
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
@@ -265,13 +268,14 @@ sub FINDFORECAST {
 	my ($searchword, @rest) = @_;
 	my $returnstring = "\002klo\002 ";
 	# TODO my $json;
+	$searchword = uri_escape($searchword);
 	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
 	
 	if ($data < 0) {
 		# retry with search word
-		da(__LINE__.': FINDFORECAST failed data:',$data) if $DEBUG1;
+		da(__LINE__.':FINDFORECAST failed data:',$data) if $DEBUG1;
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
-		$data = KaaosRadioClass::fetchUrl($forecastUrl.$name.'&units=metric&appid='.$apikey, 0);
+		$data = KaaosRadioClass::fetchUrl($forecastUrl.$name.'&units=metric&appid='.$apikey, 0) if defined $name;
 		return 0 if ($data < 0);
 
 		# add city name and country in front of return string when searching city name from db
@@ -297,7 +301,7 @@ sub FINDFORECAST {
 		$index++;
 	}
 	
-	dp(__LINE__.": FINDFORECAST returnstring: $returnstring") if $DEBUG1;
+	dp(__LINE__.":FINDFORECAST returnstring: $returnstring") if $DEBUG1;
 	return $returnstring;
 }
 
@@ -306,14 +310,14 @@ sub FINDAREAWEATHER {
 	my ($lat, $lon, $name) = GETCITYCOORDS($city);	# find existing city from DB by search word
 	FINDWEATHER($city) unless ($lat && $lon);		# find city from API if not found from DB
 	($lat, $lon, $name) = GETCITYCOORDS($city) unless ($lat && $lon);		# find existing city again from DB
-	return 'City not found from DB or API.' unless ($lat && $lon);
+	return 'City not found from DB or API.' unless ($lat && $lon && $name);
 
 	my $searchurl = $areaUrl.$lat."&lon=$lon&units=metric&appid=".$apikey;
 	my $data = KaaosRadioClass::fetchUrl($searchurl, 0);
 
-	da(__LINE__.': FINDAREAWEATHER URL', $searchurl,'DATA',$data) if $DEBUG1;
+	da(__LINE__.':FINDAREAWEATHER URL', $searchurl,'DATA',$data) if $DEBUG1;
 	if ($data < 0) {
-		dp(__LINE__.': FINDAREAWEATHER failed data:',$data);
+		dp(__LINE__.':FINDAREAWEATHER failed data:',$data);
 		return 0;
 	}
 
@@ -323,18 +327,26 @@ sub FINDAREAWEATHER {
 		# TODO: get city coords from API and save to DB
 		$sayline .= getSayLine2($city) . '. ';
 	}
-	da(__LINE__.': FINDAREAWEATHER decoded JSON:',$json) if $DEBUG1;
-	da(__LINE__.': FINDAREAWEATHER SAYLINE', $sayline);
+	da(__LINE__.':FINDAREAWEATHER decoded JSON:',$json) if $DEBUG1;
+	da(__LINE__.':FINDAREAWEATHER SAYLINE', $sayline);
 	return $sayline;
 }
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
 	# TODO: Bind params
-	my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
-	my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
-
-	da(__LINE__.': GETCITYCOORDS Result:', @results);
+	$city = "%${city}%";
+	#my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like '%".$city."%'";
+	#my $sql = "SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ?;";
+	my $sql = "SELECT LAT,LON,NAME from CITIES where NAME Like ?;";
+	#my @results = KaaosRadioClass::readLineFromDataBase($db,$sql);
+	#my @results = KaaosRadioClass::bindSQL($db, $sql, ($city));
+	my @results = bindaaSQL($sql, $city);
+	
+	#da(__LINE__.':GETCITYCOORDS Results for city: '.$city, @results);
+	dp(__LINE__.': city: '.$city. ' ') if $DEBUG1;
+	da(@results) if $DEBUG1;
+	dp(__LINE__) if $DEBUG1;
 	return $results[0], $results[1], decode('UTF-8', $results[2]);
 }
 
@@ -344,6 +356,9 @@ sub SAVECITY {
 	my $now = time;
 	# TODO: bind params
 	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES ($json->{id}, '$json->{name}', '$json->{sys}->{country}', $now, '$json->{coord}->{lat}', '$json->{coord}->{lon}')";
+	#my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON) VALUES (?, ?, ?, ?, ?, ?)";
+	#my @array = ($json->{id}, $json->{name}, $json->{sys}->{country}, $now, $json->{coord}->{lat}, $json->{coord}->{lon});
+	#return KaaosRadioClass::bindSQL($db, $sql, @array);
 	return KaaosRadioClass::writeToOpenDB($dbh, $sql);
 }
 
@@ -368,7 +383,29 @@ sub SAVEDATA {
 									#1	#2	 #2			#4		#5		#6		#7			#8			#9		#10		#11		#12		#13			#14		#15	#16	
 	my $stmt = "INSERT INTO DATA (CITY, PVM, COUNTRY, CITYID, SUNRISE, SUNSET, DESCRIPTION, WINDSPEED, WINDDIR, TEMPMAX, TEMP, HUMIDITY, PRESSURE, TEMPMIN, LAT, LON)
 	 VALUES ('$name', $now, '$country', $id, $sunrise, $sunset, '$weatherdesc', '$windspeed', '$winddir', '$tempmax', '$temp', '$humidity', '$pressure', '$tempmin', '$lat', '$long')";
+	#my $stmt = "INSERT INTO DATA (CITY, PVM, COUNTRY, CITYID, SUNRISE, SUNSET, DESCRIPTION, WINDSPEED, WINDDIR, TEMPMAX, TEMP, HUMIDITY, PRESSURE, TEMPMIN, LAT, LON)
+	# VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+	#my @params = ($name, $now, $country, $id, $sunrise, $sunset, $weatherdesc, $windspeed, $winddir, $tempmax, $temp, $humidity, $pressure, $tempmin, $lat, $long);
 	return KaaosRadioClass::writeToOpenDB($dbh, $stmt);
+}
+
+sub bindaaSQL {
+	my ($sql, @params, @rest) = @_;
+	my $dbh = KaaosRadioClass::connectSqlite($db);							# DB handle
+	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
+	$sth->execute(@params) or return ($dbh->errstr);
+	my @results;
+	my $idx = 0;
+	while(my @row = $sth->fetchrow_array) {
+		push @results, @row;
+		$idx++;
+	}
+	$sth->finish();
+	$dbh->disconnect();
+	#dp(__LINE__.': -- How many results: '. $idx);
+	#da(@results);
+	#print Dumper(@results);
+	return @results;
 }
 
 # debug print
@@ -383,7 +420,7 @@ sub dp {
 # debug print array
 sub da {
 	my (@array, @rest) = @_;
-	Irssi::print("$myname debugarray: ");
+	Irssi::print("$myname debugarray");
 	Irssi::print(Dumper(@array)) if ($DEBUG == 1 || $DEBUG_decode == 1);
 	return;
 }
@@ -561,7 +598,7 @@ sub sig_msg_priv {
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
 	dp(__LINE__.': own public');
-	sig_msg_pub($server, $msg, $server->{nick}, "", $target);
+	sig_msg_pub($server, $msg, $server->{nick}, '', $target);
 }
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
@@ -571,5 +608,5 @@ Irssi::signal_add('message private', 'sig_msg_priv');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
 Irssi::print("$myname v. $VERSION loaded.");
 Irssi::print('New commands:');
-Irssi::print('/set openweathermap_enabled_channels #1 #2');
+Irssi::print('/set openweathermap_enabled_channels #channel1 #channel2');
 Irssi::print("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));
