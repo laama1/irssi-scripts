@@ -70,7 +70,7 @@ my $howManyDrunk = 0;
 my $dontprint = 0;
 
 my $DEBUG = 0;
-my $DEBUG1 = 1;
+my $DEBUG1 = 0;
 my $DEBUG_decode = 1;
 my $myname = 'urltitle3.pl';
 
@@ -107,7 +107,7 @@ my $cookie_jar = HTTP::Cookies->new(
 );
 my $max_size = 262144;		# bytes
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
-my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0';
+my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/65.0';
 my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
@@ -168,9 +168,9 @@ sub fetch_title {
 		$page = $response->decoded_content(charset => 'UTF-8');
 		my $datasize = length $page;
 		if ($page ne $diffpage) {
-			dd('fetch_title: Different charsets presumably not UTF-8!');
+			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			dd('fetch_title: Same charset / content!');
+			dd(__LINE__.':fetch_title: Same charset / content!');
 		}
 
 		if ($datasize > $max_size) {
@@ -224,7 +224,7 @@ sub fetch_title {
 # getTitle params. useragent response
 sub getTitle {
 	my ($response, $url, @rest) = @_;
-	dp('getTitle') if $DEBUG1;
+	dp(__LINE__.':getTitle') if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
 	
@@ -241,37 +241,37 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
-	dd('getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
-	dd('getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
+	dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
+	dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
 	#dp('HEADER: ');
 	dd(__LINE__.": getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
-		dp('getTitle script filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle script filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
-		dp('getTitle style filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle style filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
-		dp('getTitle comment filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle comment filtered..') if $DEBUG1;
 	}
 	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
 
 	#da($response);
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
-		dd('iltis!');
+		dd(__LINE__.':getTitle: iltis!');
 		$newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
 		$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
 	} elsif ($temppage =~ /charset="utf-8"/i) {
-		dd('getTitle utf-8 meta charset tag found manually from source!');
+		dd(__LINE__.':getTitle utf-8 meta charset tag found manually from source!');
 		# LAama 29.12.2017 $newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
 		#$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
-		dd('getTitle testcharset not UTF-8: '. $testcharset);
-		dd('getTitle newtitle again: '. $newtitle);
+		dd(__LINE__.':getTitle testcharset not UTF-8: '. $testcharset);
+		dd(__LINE__.':getTitle newtitle again: '. $newtitle);
 		$newtitle = checkAndEtu($newtitle, $testcharset);
 		$newdescription = checkAndEtu($newdescription, $testcharset);
 	}
@@ -281,11 +281,11 @@ sub getTitle {
 	if ($newtitle eq '') {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
 			$title = decode_entities($1);
-			dp('getTitle backup titlematch: '. $title);
+			dp(__LINE__.':getTitle backup titlematch: '. $title);
 		}
 
 	} elsif ($newtitle) {
-		dd(__LINE__.": getTitle: title = newtitle! $newtitle");
+		dd(__LINE__.": getTitle: title = newtitle! $newtitle") if $DEBUG1;
 		$title = decode_entities($newtitle);
 	}
 
@@ -389,15 +389,14 @@ sub countSameWords {
 	#dd(__LINE__.": countSameWords titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
 		#dd(__LINE__.": countSameWords: $item, count: $count1") if $DEBUG1;
-		#if ($item ~~ @rows1) {
-		if (grep /^$item/, @rows1 ) {
+		if ($item ~~ @rows1) {
+		#if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dd(__LINE__.": countSameWords: $item, count: $count1") if $DEBUG1;
+			dd(__LINE__.":countSameWords item found: $item, count: $count1") if $DEBUG1;
 			if ($count1 == $titlewordCount) {
 				dd(__LINE__.": countSameWords: bingo!") if $DEBUG1;
 				return $count1, $titlewordCount;
 			}
-			
 		}
 	}
 	#dd(__LINE__.": >   same words: $count1");
@@ -418,10 +417,10 @@ sub split_row_to_array {
 	$row =~ s/\s+/ /g;
 	#$row = KaaosRadioClass::ktrim($row);
 	$row = lc($row);
-	
+
 	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
-	#my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#]+/, $row);
-	my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
+	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
+	#my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	dd('split_row_to_array words: ' . ($#returnArray+1)) if $DEBUG1;
 	da(@returnArray);
 	return @returnArray;
@@ -439,17 +438,19 @@ sub replace_non_url_chars {
 		dd(__LINE__.": replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
 	}
 
-	#if ($row) {
 	$row =~ s/ä/a/ug;
 	$row =~ s/Ä/a/ug;
 	$row =~ s/ö/o/ug;
 	$row =~ s/Ö/o/ug;
 	$row =~ s/Ã¤/a/g;
 	$row =~ s/Ã¶/o/g;
+
+	$row =~ s/\(/ /g;
+	$row =~ s/\)/ /g;
+	$row =~ s/"/ /g;
+
 	$row =~ s/ / /g;		# no-break space nbsp
-	#$row =~ s/\s+/ /gi;
-	#$row =~ s/\’//g;
-	#}
+
 	dd(__LINE__.": replace non url chars row after: $row") if $DEBUG1;
 	return $row;
 }
@@ -505,7 +506,7 @@ sub saveToDB {
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm . "; " . $nick . "; " . $url . "; " . $title . "; " .$description);
 	
-	if ($DEBUG1) { Irssi::print("$myname-debug saveToDB: $db, pvm: $pvm, nick: $nick, url: $url, title: $title, description: $description, channel: $channel, md5: $md5hex"); }
+	if ($DEBUG1) { print("$myname-debug saveToDB: $db, pvm: $pvm, nick: $nick, url: $url, title: $title, description: $description, channel: $channel, md5: $md5hex"); }
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
@@ -528,27 +529,27 @@ sub saveToDB {
 sub checkForPrevEntry {
 	my ($url, $newchannel, $md5hex, @rest) = @_;
 	dp("checkForPrevEntry") if $DEBUG1;
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 	#my $sth = $dbh->prepare("SELECT * FROM links WHERE url = ? AND channel = ?") or die DBI::errstr;
 	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ?") or die DBI::errstr;
 	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? and URL = ?) AND channel = ?") or die DBI::errstr;
 	$sth->bind_param(1, $md5hex);
 	$sth->bind_param(2, $url);
 	$sth->bind_param(2, $newchannel);
-	$sth->execute;
+	$sth->execute();
 
 	# build elements into array
 	my @elements;
 	while(my ($nick, $pvm, $url, $title, $description, $channel) = $sth->fetchrow_array) {
-		push (@elements, [$nick, $pvm, $url, $title, $channel]);
+		push @elements, [$nick, $pvm, $url, $title, $channel];
 		if ($DEBUG1) { Irssi::print("urltitle3-debug: nick: $nick, pvm: $pvm, url: $url, channel: $channel"); }
 	}
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
 	dd(__LINE__.": $count previous elements found!");# if $DEBUG1;
-	if ($count == 0)	{ return; }
-	else { return @elements };
+	return if ($count == 0);
+	return @elements;
 }
 
 sub api_conversion {

@@ -367,7 +367,7 @@ sub getMonthString {
 	if ($month > 12 || $month < 1) return;
 	my @months = qw(Tammikuu Helmikuu Maaliskuu Huhtikuu Toukokuu Kesäkuu Heinäkuu Elokuu Syyskuu Lokakuu Marraskuu Joulukuu);
 	if ($lowercase == 1) {
-		return lc $months[$month-1];	
+		return lc $months[$month-1];
 	}
 	return $months[$month-1];
 }
