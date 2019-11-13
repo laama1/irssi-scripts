@@ -138,7 +138,7 @@ sub set_headers {
 	} elsif ($choice == 2) {
 		$ua->agent($useragentNew);
 	}
-	dp('current User Agent: '. $ua->agent);
+	dp(__LINE__.':current User Agent: '. $ua->agent);
 }
 
 # Strip and html-decode title or get size from url. Params: url
@@ -205,7 +205,7 @@ sub fetch_title {
 
 	if ($response->content_type !~ /(text)|(xml)/) {
 		if ($shortModeEnabled == 1) {
-			dp('Short mode enabled = 1');
+			dp(__LINE__.':Short mode enabled = 1');
 			return '', 0 , 0, $md5hex;
 		} else {
 			return 'File: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
@@ -243,7 +243,7 @@ sub getTitle {
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
 	dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
 	dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
-	#dp('HEADER: ');
+	#dp(__LINE__.':HEADER: ');
 	dd(__LINE__.": getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
@@ -352,18 +352,20 @@ sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
 	my ($samewords, $titlewordCount) = countSameWords($url, $title);
-	dd(__LINE__.": checkIfTitleInUrl titlewords: $titlewordCount, samewords: $samewords");
+	dd(__LINE__.": checkIfTitleInUrl titlewordCount: $titlewordCount, samewords: $samewords");
+	#dd(__LINE__.': checkIfTitleInUrl number1: '. ($samewords / $titlewordCount));
+	dd(__LINE__.': checkIfTitleInUrl number2: '. (0.83 * $titlewordCount));
 
-	if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
-		dd(__LINE__.": checkIfTitleInUrl bling1! title wordcount: $titlewordCount same words: $samewords");
+	#if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
+	if ($samewords >= 4 && ($samewords) > (0.83 * $titlewordCount)) {
+		dd(__LINE__.": checkIfTitleInUrl bling1!");
 		return 1;
 	} elsif ($samewords == $titlewordCount) {
-		dd(__LINE__.": checkIfTitleInUrl bling2! samewords = title words = $samewords");
+		dd(__LINE__.": checkIfTitleInUrl bling2!");
 		return 1;
 	}
-	dd('checkIfTitleInUrl: title not found from url!');
+	dd(__LINE__.':checkIfTitleInUrl: title not found from url!');
 	return 0;
-
 }
 
 ## Count words from sentence after special chars are removed. Params.
@@ -528,7 +530,7 @@ sub saveToDB {
 # Check from DB if old
 sub checkForPrevEntry {
 	my ($url, $newchannel, $md5hex, @rest) = @_;
-	dp("checkForPrevEntry") if $DEBUG1;
+	dp(__LINE__.":checkForPrevEntry") if $DEBUG1;
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 	#my $sth = $dbh->prepare("SELECT * FROM links WHERE url = ? AND channel = ?") or die DBI::errstr;
 	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ?") or die DBI::errstr;
@@ -554,7 +556,7 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp("api_conversion") if $DEBUG1;
+	dp(__LINE__.":api_conversion") if $DEBUG1;
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
 		
@@ -617,7 +619,7 @@ sub sig_msg_pub {
 		my $sayline = findUrl($searchWord);
 		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1 .../);
 	
-		dp("sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
+		dp(__LINE__.":sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
 		#$server->command("msg -channel $target $sayline") if grep /$target/, @enabled;
 		msg_to_channel($server, $target, $sayline);
 		clearUrlData();
@@ -648,10 +650,10 @@ sub sig_msg_pub {
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_title($server, $target) =~ /np\:/i) {
-			dp('np FOUND from channel title');
+			dp(__LINE__.'np FOUND from channel title') if $DEBUG1;
 			$dontprint = 1;
 		} else {
-			dp('np NOT FOUND from channel title') if $DEBUG1;
+			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
 		}
 	}
 
@@ -687,10 +689,10 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 	
 	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
-	dp("$myname: NOT JEE") if ($newtitle eq "0");
+	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
-	dp("sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
+	dp(__LINE__.":sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
@@ -727,7 +729,7 @@ sub msg_to_channel {
 	if ($title =~ /(.{260}).*/s) {
 		$title = $1 . '...';
 	}
-	dp('msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
+	dp(__LINE__.':msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
 	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 }
 
@@ -735,15 +737,15 @@ sub msg_to_channel {
 sub checkIfOld {
 	my ($server, $url, $target, $md5hex) = @_;
 	my $wanhadisabled = Irssi::settings_get_str('urltitle_wanha_disabled');
-	dp("checkIfOld") if $DEBUG1;
+	dp(__LINE__.":checkIfOld") if $DEBUG1;
 	if ($wanhadisabled == 1) {
-		dp("Wanha is disabled.") if $DEBUG1;
+		dp(__LINE__.":Wanha is disabled.") if $DEBUG1;
 		return 0;
 	}
 	
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
-	#dp("checkIfOld count: $count");
+	#dp(__LINE__.":checkIfOld count: $count");
 
 	if ($count != 0 && $wanhadisabled != 1 && $howManyDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
@@ -759,7 +761,7 @@ sub checkIfOld {
 sub findUrl {
 	my ($searchword, @rest) = @_;
 	Irssi::print("$myname: etsi request: $searchword");
-	dp("findUrl") if $DEBUG1;
+	dp(__LINE__.":findUrl") if $DEBUG1;
 	my $returnstring;
 	if ($searchword =~ s/^id:? ?//i) {
 		my @results;
@@ -775,7 +777,7 @@ sub findUrl {
 		# print all found entries
 		my @results = searchDB($searchword);
 		$returnstring .= 'Loton oikeat numerot: ';
-		dp('Loton oikeat numerot');
+		dp(__LINE__.':Loton oikeat numerot');
 		my $in = 0;
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
@@ -787,7 +789,7 @@ sub findUrl {
 		# print 1st found item
 		my @results = searchDB($searchword);
 		my $amount = @results;
-		#dp("results:");
+		#dp(__LINE__.":results:");
 		#da(@results);
 
 		if ($amount > 1) {
@@ -809,15 +811,15 @@ sub findUrl {
 		}
 	}
 	#$returnstring = $returnstring.$temp,
-	dp("findUrl returnstring: $returnstring");
-	#dp("temp:". $temp);
+	dp(__LINE__.":findUrl returnstring: $returnstring");
+	#dp(__LINE__.":temp:". $temp);
 	return $returnstring;
 }
 
 # TODO: limit number of search results
 sub searchDB {
 	my ($searchWord, @rest) = @_;
-	dp("searchDB: $searchWord");
+	dp(__LINE__.":searchDB: $searchWord");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ?';
 	my $sth = $dbh->prepare($sqlString) or die DBI::errstr;
@@ -829,16 +831,16 @@ sub searchDB {
 	my @resultarray = ();
 	my @line = ();
 	my $index = 0;
-	#dp("Results: ");
+	#dp(__LINE__.":Results: ");
 	while(@line = $sth->fetchrow_array) {
-		#dp("Line $index:");
+		#dp(__LINE__.":Line $index:");
 		#da(@line);
 		push @{ $resultarray[$index]}, @line;
 		$index++;
 	}
-	#dp("searchDB '$searchWord' Dump:");
+	#dp(__LINE__.":searchDB '$searchWord' Dump:");
 	#da(@resultarray);
-	#dp("searchDB dump end.") if $DEBUG1;
+	#dp(__LINE__.":searchDB dump end.") if $DEBUG1;
 	return @resultarray;
 }
 
@@ -853,7 +855,7 @@ sub searchIDfromDB {
 	@result = $sth->fetchrow_array();
 	$sth->finish();
 	$dbh->disconnect();
-	dp("SEARCH ID Dump:");
+	dp(__LINE__.":SEARCH ID Dump:");
 	da(@result);
 	return @result;
 }
@@ -869,7 +871,7 @@ sub count_db {
 sub createShortAnswerFromResults {
 	my @resultarray = @_;
 	my $amount = @resultarray;
-	dp("create short answer fom results.. how many values: $amount");
+	dp(__LINE__.":create short answer fom results.. how many values: $amount");
 	if ($amount == 0) {
 		return "Ei tuloksia.";
 	}
@@ -890,7 +892,7 @@ sub createShortAnswerFromResults {
 		#Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp("stringi: $returnstring") if $DEBUG1;
+	dp(__LINE__.":stringi: $returnstring") if $DEBUG1;
 	#dp($string);
 	return $returnstring;
 
@@ -898,11 +900,11 @@ sub createShortAnswerFromResults {
 
 # Create one line from one result!
 sub createAnswerFromResults {
-	dp("createAnswerFromResults") if $DEBUG1;
+	dp(__LINE__.":createAnswerFromResults") if $DEBUG1;
 	my @resultarray = @_;
 
 	my $amount = @resultarray;
-	dp(" #### create answer from results.. how many values: $amount") if $DEBUG1;
+	dp(__LINE__.": #### create answer from results.. how many values: $amount") if $DEBUG1;
 	da(@resultarray) if $DEBUG1;
 	if ($amount == 0) {
 		return "Ei tuloksia.";
@@ -933,7 +935,7 @@ sub createAnswerFromResults {
 		Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp("string: $returnstring");
+	dp(__LINE__.":string: $returnstring");
 	#dp($string);
 	return $returnstring;
 
@@ -1008,10 +1010,9 @@ sub da {
 	Irssi::print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
 }
 
-
 sub sig_msg_pub_own {
 	my ($server, $msg, $target) = @_;
-	dp('own public');
+	dp(__LINE__.':own public');
 	sig_msg_pub($server, $msg, $server->{nick}, '', $target);
 }
 
