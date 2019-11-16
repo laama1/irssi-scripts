@@ -44,12 +44,10 @@ use Digest::MD5 qw(md5_hex);		# LAama1 28.4.2017
 #use Encode qw(encode_utf8);
 use Encode;
 
-#use lib '/home/laama/Mount/kiva/.irssi/scripts';
-#use lib '/usr/lib64/perl5/vendor_perl/';
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2018-12-26';
+$VERSION = '2019-11-14';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -57,7 +55,7 @@ $VERSION = '2018-12-26';
 	description => 'Fetches urls and prints their title and does other shit also.',
 	license     => 'Fublic Domain',
 	url         => 'http://kaaosradio.fi',
-	changed     => $VERSION
+	changed     => $VERSION,
 );
 
 
@@ -69,9 +67,9 @@ my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 my $howManyDrunk = 0;
 my $dontprint = 0;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -138,7 +136,8 @@ sub set_headers {
 	} elsif ($choice == 2) {
 		$ua->agent($useragentNew);
 	}
-	dp(__LINE__.':current User Agent: '. $ua->agent);
+	dp(__LINE__.':current User Agent: '. $ua->agent) if $DEBUG1;
+	return;
 }
 
 # Strip and html-decode title or get size from url. Params: url
@@ -281,7 +280,7 @@ sub getTitle {
 	if ($newtitle eq '') {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
 			$title = decode_entities($1);
-			dp(__LINE__.':getTitle backup titlematch: '. $title);
+			dp(__LINE__.':getTitle backup titlematch: '. $title) if $DEBUG1;
 		}
 
 	} elsif ($newtitle) {
@@ -409,9 +408,9 @@ sub countSameWords {
 sub split_row_to_array {
 	my ($row, @rest) = @_;
 	#dd(__LINE__.": split_row_to_array before: $row") if $DEBUG1;
-	print ("poks") if $row =~ /\”/;
-	print ("poks2") if $row =~ /\–/;
-	print ("poks3") if $row =~ /\+/;
+	print ("poks lainausmerkkiväkänen") if $row =~ /\”/;
+	print ("poks ajatusviiva") if $row =~ /\–/;
+	print ("poks plussa") if $row =~ /\+/;
 	#$row =~ s/[”\|:\"\+\,\!\(\)\–]//g;
 
 	$row = replace_non_url_chars($row);
@@ -424,7 +423,7 @@ sub split_row_to_array {
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
 	#my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	dd('split_row_to_array words: ' . ($#returnArray+1)) if $DEBUG1;
-	da(@returnArray);
+	da(@returnArray) if $DEBUG1;
 	return @returnArray;
 }
 
@@ -437,7 +436,7 @@ sub replace_non_url_chars {
 		foreach my $char (split //, $row) {
 			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
 		}
-		dd(__LINE__.": replace_non_url_chars debugstring: ".$debugString) if $DEBUG1;
+		dd(__LINE__.": replace_non_url_chars debugstring: ".$debugString);
 	}
 
 	$row =~ s/ä/a/ug;
@@ -459,17 +458,21 @@ sub replace_non_url_chars {
 
 sub shortenURL {
 	my ($url, @rest) = @_;
+	dp(__LINE__.":shortenUrl: $url");
     my $ua2 = new LWP::UserAgent;
     $ua2->agent($useragentOld);
 	$ua2->max_size(32768);
-	$ua2->timeout(3);
+	$ua2->timeout(5);
     my $request = new HTTP::Request GET => "http://42.pl/url/?auto=1&url=$url";
+	#my $request = new HTTP::Request GET => "http://42.pl/u/?auto=1&url=$url";
     my $s = $ua2->request($request);
     my $content = $s->content();
-	if ($content =~ /RATE-LIMIT/) { return "(error, rate-limit)"; }
+	if ($content =~ /RATE-LIMIT/s) { return '(error, rate-limit)'; }
 	if ($content =~ /(http\:\/\/[^\s]+)/) {
-		dp(__LINE__.": shortenurl: $url, short: $1");
+		dp(__LINE__.": short: $1");
 		return $1;
+	} else {
+		dp(__LINE__.":shortenURL url: http://42.pl/u/?auto=1&url=$url content: $content");
 	}
 	return '';
 }
@@ -530,28 +533,38 @@ sub saveToDB {
 # Check from DB if old
 sub checkForPrevEntry {
 	my ($url, $newchannel, $md5hex, @rest) = @_;
-	dp(__LINE__.":checkForPrevEntry") if $DEBUG1;
+	dp(__LINE__.":checkForPrevEntry channel: $newchannel, url: $url, md5: $md5hex");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
-	#my $sth = $dbh->prepare("SELECT * FROM links WHERE url = ? AND channel = ?") or die DBI::errstr;
-	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ?") or die DBI::errstr;
-	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? and URL = ?) AND channel = ?") or die DBI::errstr;
+
+	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ? order by rowid asc") or die DBI::errstr;
+	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE URL = ? AND channel = ?") or die DBI::errstr;
+
 	$sth->bind_param(1, $md5hex);
 	$sth->bind_param(2, $url);
-	$sth->bind_param(2, $newchannel);
+	$sth->bind_param(3, $newchannel);
+	my $dbh = KaaosRadioClass::connectSqlite($db);
+	#da($sth);
 	$sth->execute();
 
 	# build elements into array
 	my @elements;
-	while(my ($nick, $pvm, $url, $title, $description, $channel) = $sth->fetchrow_array) {
-		push @elements, [$nick, $pvm, $url, $title, $channel];
-		if ($DEBUG1) { Irssi::print("urltitle3-debug: nick: $nick, pvm: $pvm, url: $url, channel: $channel"); }
+	my @row = ();
+	#while(my ($nick, $pvm, $url, $title, $description, $channel) = $sth->fetchrow_array) {
+	while (@row = $sth->fetchrow_array()) {
+		#push @elements, [$nick, $pvm, $url, $title, $channel];
+		#da(@row);
+		#dp(__LINE__.' ^-Bingo!!!');
+		push @elements, [@row];
+		#dp("urltitle3-debug: nick: $nick, pvm: $pvm, url: $url, channel: $channel");	# be careful with this
 	}
+	dp(__LINE__.':checkForPrevEntry elements:');
+	da(@elements);
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
-	dd(__LINE__.": $count previous elements found!");# if $DEBUG1;
-	return if ($count == 0);
-	return @elements;
+	dp(__LINE__.": $count previous elements found!");# if $DEBUG1;
+	return @elements;		# return all rows
+	#return $elements[0];	# return first row
 }
 
 sub api_conversion {
@@ -672,6 +685,7 @@ sub sig_msg_pub {
 	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shorten_url_channels');
 	if ($target ~~ @short_raw) {
 		$shortenUrl = 1;
+		dp(__LINE__.': shorten url enabled!');
 	} else {
 		$shortenUrl = 0;
 	}
@@ -731,28 +745,41 @@ sub msg_to_channel {
 	}
 	dp(__LINE__.':msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
 	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
+	return;
 }
 
 # wanha
 sub checkIfOld {
 	my ($server, $url, $target, $md5hex) = @_;
 	my $wanhadisabled = Irssi::settings_get_str('urltitle_wanha_disabled');
-	dp(__LINE__.":checkIfOld") if $DEBUG1;
+	dp(__LINE__.":checkIfOld wanhadisabled: $wanhadisabled target: $target");
 	if ($wanhadisabled == 1) {
-		dp(__LINE__.":Wanha is disabled.") if $DEBUG1;
+		dp(__LINE__.":Wanha is disabled.");
 		return 0;
 	}
-	
+	#my $wanhachannels = Irssi::settings_get_str('urltitle_wanha_channels');
+	my @wanha_raw = split / /, Irssi::settings_get_str('urltitle_wanha_channels');
+	dp(__LINE__.': wanha raw:');
+	da(@wanha_raw);
+	if ($target ~~ @wanha_raw) {
+		dp(__LINE__.': blongo! continue..');
+	} else {
+		dp(__LINE__.': blinga! return..');
+		return 0;
+	}
+
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
-	#dp(__LINE__.":checkIfOld count: $count");
-
-	if ($count != 0 && $wanhadisabled != 1 && $howManyDrunk == 0) {
+	dp(__LINE__.":checkIfOld count: $count, howmanydrunk: $howManyDrunk");
+	da(@prevUrls) if $DEBUG1;
+	if ($count != 0 && $howManyDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
 		$mon += 1;
 		#$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		msg_to_channel($server, $target, "w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
+		#msg_to_channel($server, $target, "w! ($prevUrls[0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
+		dp(__LINE__.": w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		return 1;
 	}
 	return 0;
@@ -863,9 +890,7 @@ sub searchIDfromDB {
 sub count_db {
 	my $sql = 'SELECT COUNT(*) from links';
 	my $dbh = KaaosRadioClass::connectSqlite($db);
-
-	KaaosRadioClass::closeDB($dbh);
-
+	return KaaosRadioClass::closeDB($dbh);
 }
 
 sub createShortAnswerFromResults {
@@ -1017,6 +1042,7 @@ sub sig_msg_pub_own {
 }
 
 Irssi::settings_add_str('urltitle', 'urltitle_enabled_channels', '');
+Irssi::settings_add_str('urltitle', 'urltitle_wanha_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_disabled', '0');
 Irssi::settings_add_str('urltitle', 'urltitle_shorten_url_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_dont_save_urls_channels', '');
@@ -1029,14 +1055,14 @@ Irssi::signal_register($signal_config_hash);
 my $signal_config_hash2 = { 'imdb_search_id' => [ qw/iobject string string string/ ] };
 Irssi::signal_register($signal_config_hash2);
 
-
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
 Irssi::print("$myname v. $VERSION loaded.");
 Irssi::print("\nNew commands:");
-Irssi::print('/set urltitle_enabled_channels #1 #2');
+Irssi::print('/set urltitle_enabled_channels #channel1 #channel2');
+Irssi::print('/set urltitle_wanha_channels #channel1 #channel2');
 Irssi::print('/set urltitle_wanha_disabled 0/1');
-Irssi::print('/set urltitle_dont_save_urls_channels #1 #2');
-Irssi::print('/set urltitle_shorten_url_channels #1 #2');
+Irssi::print('/set urltitle_dont_save_urls_channels #channel1 #channel2');
+Irssi::print('/set urltitle_shorten_url_channels #channel1 #channel2');
 Irssi::print('/set urltitle_enable_descriptions 0/1.');
 Irssi::print('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));

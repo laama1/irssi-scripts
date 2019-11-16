@@ -271,12 +271,12 @@ sub FINDFORECAST {
 	$searchword = stripc($searchword);
 	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
 	
-	if ($data < 0) {
+	if ($data eq '-1') {
 		# retry with search word
 		da(__LINE__.':FINDFORECAST failed data:',$data) if $DEBUG1;
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$data = KaaosRadioClass::fetchUrl($forecastUrl.$name.'&units=metric&appid='.$apikey, 0) if defined $name;
-		return 0 if ($data < 0);
+		return 0 if ($data eq '-1');
 
 		# add city name and country in front of return string when searching city name from db
 		my $jsondata = decode_json($data);
