@@ -33,7 +33,7 @@ my $myname = 'korvamato.pl';
 my $DEBUG = 1;
 my $DEBUG1 = 1;
 
-my $helptext = 'Lisää korvamato: !korvamato: tähän korvamatosanotukset. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> lisättävä rivi. Etsi korvamato: !korvamato etsi: hakusana tähän. !korvamato id #.';
+my $helptext = 'Lisää korvamato: !korvamato: <tähän korvamatosanotukset>. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> <lisättävä tieto>. Etsi korvamato: !korvamato etsi: <hakusana tähän>. !korvamato id #.';
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8'.$db) {
@@ -41,7 +41,7 @@ unless (-e $db) {
 		die;
 	}
 	close FILE;
-	createDB();
+	CREATEDB();
 	Irssi::print("$myname: Database file created.");
 } else {
 	Irssi::print("$myname: Database file found!");
@@ -49,7 +49,7 @@ unless (-e $db) {
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp('Printing help..');
+	dp(__LINE__.':Printing help..');
 	sayit($server, $target, $helptext);
 	sayit($server, $target, get_statistics());
 	return 0;
@@ -63,11 +63,11 @@ sub msgit {
 
 sub get_statistics {
 	my $query = 'SELECT count(*) from korvamadot where DELETED = 0';
-	my $result = KaaosRadioClass::readLineFromDataBase($db, $query);
-	dp('Results:');
-	da($result);
-	if ($result > 0) {
-		return "Minulla on $result korvamatoa päässäni.";
+	my @result = KaaosRadioClass::readLineFromDataBase($db, $query);
+	dp(__LINE__.':Results:');
+	da(@result);
+	if (@result > 0) {
+		return "Minulla on @result[0] korvamatoa päässäni.";
 	} else {
 		return 'Ei vielä korvamatoja päässä.';
 	}
@@ -76,7 +76,7 @@ sub get_statistics {
 # Say it public to a channel. Params: $server, $target, $saywhat
 sub sayit {
 	my ($server, $target, $saywhat) = @_;
-	dp('sayit: '. $saywhat);
+	dp(__LINE__.':sayit: '. $saywhat);
 	$server->command("MSG $target $saywhat");
 	return;
 }
@@ -426,7 +426,7 @@ sub if_korvamato {
 
 		if ($command =~ /(.*)/gi && $id == -1) {
 			my $newcommand = $1;
-			#dp("Parse command: $newcommand \n");
+			#dp(__LINE__.":Parse command: $newcommand \n");
 			if ($newcommand =~ /\bartisti?\:? (.*)/i) {
 				$artist = parseAwayKeywords($1);
 				dp(__LINE__.": Artist: $artist") if $artist;
@@ -510,7 +510,7 @@ sub event_privmsg {
 
 	return if ($nick eq $server->{nick});		# self-test
 
-	#dp("msg: $msg");
+	#dp(__LINE__.":msg: $msg");
 	if ($msg =~ /^!help\b/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {
 		msgit($server, $nick, $helptext);
 		msgit($server, $nick, get_statistics());
@@ -560,10 +560,9 @@ sub event_pubmsg {
 	} else {
 		return;
 	}
-
 }
 
-sub createDB {
+sub CREATEDB {
 	# Using FTS (full-text search)
 	my $sql = 'CREATE VIRTUAL TABLE korvamadot using fts4(NICK,PVM,QUOTE,INFO1,INFO2,CHANNEL,ARTIST,TITLE,LINK1,LINK2,DELETED)';
 	KaaosRadioClass::writeToDB($db, $sql);
