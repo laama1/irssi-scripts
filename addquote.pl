@@ -82,6 +82,22 @@ sub parseQuote {
 			Irssi::print($IRSSI{name}.": $msg request from $nick (too long!)");
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
 		}
+	} elsif ($msg =~ /^!rq/gi) {
+		my $data = KaaosRadioClass::readTextFile($tiedosto);
+		my $amount = @$data;
+		my $rand = int(rand($amount));
+		my $linecount = -1;
+		dp("addquote.pl amount: $amount, rand: $rand");
+		LINE: for (@$data) {
+			$linecount++;
+			next LINE unless ($rand == $linecount);
+			if($rand == $linecount) {
+				chomp (my $rimpsu = $_);
+				$server->command("MSG $target $rimpsu");			#splitlong.pl handles splitting message to many (if installed)
+				Irssi::print("vastasi: '$rimpsu' for $nick on channel: $target");
+				last;
+			}
+		}
 	}
 	return;
 }
