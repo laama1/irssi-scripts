@@ -66,6 +66,7 @@ UTF8 emojis:
 🌨️ Cloud With Snow
 ❄️ Snow flake
 🌪️ Tornado
+
 🌫️ Fog
 🌁 Foggy (city)
 ⚡ High Voltage
@@ -89,7 +90,7 @@ UTF8 emojis:
 
 🌊 water wave
 🌀 cyclone
-🌬️ wind
+🌬️ Wind Face
 💨 dashing away
 🍂 fallen leaf
 🌋 volcano

@@ -458,7 +458,8 @@ sub replace_non_url_chars {
 
 sub shortenURL {
 	my ($url, @rest) = @_;
-	dp(__LINE__.":shortenUrl: $url");
+	#dp(__LINE__.":shortenUrl: $url");
+	return '';		# FIXME, not in use currently, causes timeouts
     my $ua2 = new LWP::UserAgent;
     $ua2->agent($useragentOld);
 	$ua2->max_size(32768);
@@ -706,7 +707,7 @@ sub sig_msg_pub {
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
-	dp(__LINE__.":sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
+	#dp(__LINE__.":sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});

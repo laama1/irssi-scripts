@@ -198,7 +198,7 @@ sub grepIltis {
 	my $logtext;
 	#logmsg($page);
 	#if ($page != -1 && $page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
-	if ($page != -1 && $page =~ /itemProp="articleBody"/si) {
+	if ($page ne '-1' && $page =~ /itemProp="articleBody"/si) {
 		$page = KaaosRadioClass::ktrim($page);
 		#my $parsethis = $1;
 		my $allHoros = '';

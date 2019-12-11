@@ -268,37 +268,45 @@ sub IFUPDATE {
 		my $link1 = $1;
 		Irssi::print("$myname Add link1: $link1");
 		return UPDATECOLUMN($id, 'link1', $1);
-		return 1;
+		#return 1;
 		#$updatestring = "$suffix link1 = \"$link1\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
+		#$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /link2:? ?(.*)/gi) {
 		my $link2 = $1;
 		Irssi::print("$myname Add link2: $link2");
-		$updatestring = "$suffix link2 = \"$link2\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
+		return UPDATECOLUMN($id, 'link2', $1);
+		#$updatestring = "$suffix link2 = \"$link2\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info1?:? ?(.*)/gi) {
 		my $info1 = $1;
 		Irssi::print("$myname Add info1: $info1");
-		$updatestring = "$suffix info1 = \"$info1\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
+		return UPDATECOLUMN($id, 'info1', $1);
+		
+		#$updatestring = "$suffix info1 = \"$info1\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info2:? ?(.*)/gi) {
 		my $info2 = $1;
 		Irssi::print("$myname Add info2: $info2");
-		$updatestring = "$suffix info2 = \"$info2\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
+		return UPDATECOLUMN($id, 'info2', $1);
+		
+		#$updatestring = "$suffix info2 = \"$info2\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
 		my $artist = $1;
 		Irssi::print("$myname Add Artist: $artist");
-		$updatestring = "$suffix artist = \"$artist\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
+		return UPDATECOLUMN($id, 'artist', $1);
+		#$updatestring = "$suffix artist = \"$artist\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
 	} elsif ($command =~ /title:? ?(.*)/gi) {
-		my $title = $1;
-		$updatestring = "$suffix title = \"$title\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT title from korvamadot where rowid = $id";
+		#my $title = $1;
+		return UPDATECOLUMN($id, 'title', $1);
+		#$updatestring = "$suffix title = \"$title\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT title from korvamadot where rowid = $id";
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
-		my $lyrics = $1;
-		$updatestring = "$suffix quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
-		$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
+		#my $lyrics = $1;
+		return UPDATECOLUMN($id, 'quote', $1);
+		#$updatestring = "$suffix quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
+		#$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
 	}
 
 	if ($updatestring ne '') {
