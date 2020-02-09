@@ -129,7 +129,7 @@ eval {
 };
 
 # new headers for youtube and mixcloud etc.
-sub set_headers {
+sub set_useragent {
 	my ($choice, @rest) = @_;
 	if ($choice == 1) {
 		$ua->agent($useragentOld);
@@ -537,12 +537,13 @@ sub checkForPrevEntry {
 	dp(__LINE__.":checkForPrevEntry channel: $newchannel, url: $url, md5: $md5hex");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 
-	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ? order by rowid asc") or die DBI::errstr;
+	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ? order by rowid asc") or die DBI::errstr;
 	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE URL = ? AND channel = ?") or die DBI::errstr;
+	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE MD5HASH = ? AND channel = ? order by rowid asc") or die DBI::errstr;
 
 	$sth->bind_param(1, $md5hex);
-	$sth->bind_param(2, $url);
-	$sth->bind_param(3, $newchannel);
+	#$sth->bind_param(2, $url);
+	$sth->bind_param(2, $newchannel);
 	my $dbh = KaaosRadioClass::connectSqlite($db);
 	#da($sth);
 	$sth->execute();
@@ -587,8 +588,8 @@ sub api_conversion {
 	}
 
 	# set newer headers if mixcloud
-	if ($param =~ /mixcloud\.com/i) {
-		set_headers(2);
+	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i) {
+		set_useragent(2);
 	}
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
@@ -648,7 +649,7 @@ sub sig_msg_pub {
 	} else {
 		return;
 	}
-	set_headers(1);			# set default user agent
+	set_useragent(1);			# set default user agent
 	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {

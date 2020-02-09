@@ -46,13 +46,14 @@ $VERSION = '20191112';
 	changed     => $VERSION,
 );
 
-my $apikey = '4c8a7a171162e3a9cb1a2312bc8b7632';	# don't tell anyone
+my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/openweathermap_apikey';
+my $apikey;
 my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -118,9 +119,15 @@ https://emojipedia.org/moon-viewing-ceremony/
 =cut
 
 
+open APIKEY_fh, '<:encoding(UTF-8)', $apikeyfile or die $myname.': Unable to open APIKEY file. '. $!;
+$apikey = <APIKEY_fh>;
+chomp $apikey;
+close APIKEY_fh or die $myname.': Unable to close APIKEY file. '. $!;
+
+
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		Irssi::print("$myname: Unable to create or write file: $db");
+		Irssi::print("$myname: Unable to create or write DB file: $db");
 		die;
 	}
 	close FILE;
@@ -247,15 +254,15 @@ sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
 	$searchword = stripc($searchword);
 	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
-	if ($data eq "-1") {
+	if ($data eq '-1') {
 		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		dp(__LINE__.": lat: $lat lon: $lon name: $name");
 		return 0 unless defined $name;
 		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
-		return 0 if ($data eq "-1");
+		return 0 if ($data eq '-1');
 	}
-	
+
 	my $json = decode_json($data);
 	da(__LINE__.':FINDWEATHER JSON', $json) if $DEBUG1;
 	da(__LINE__.':FINDWEATHER JSON-temp', $json->{main}->{temp});
@@ -267,11 +274,11 @@ sub FINDWEATHER {
 
 sub FINDFORECAST {
 	my ($searchword, @rest) = @_;
-	my $returnstring = "\002klo\002 ";
+	my $returnstring = "\002klo\002 ";	# bold
 	# TODO my $json;
 	$searchword = stripc($searchword);
 	my $data = KaaosRadioClass::fetchUrl($forecastUrl.$searchword.'&units=metric&appid='.$apikey, 0);
-	
+
 	if ($data eq '-1') {
 		# retry with search word
 		da(__LINE__.':FINDFORECAST failed data:',$data) if $DEBUG1;
@@ -280,12 +287,11 @@ sub FINDFORECAST {
 		return 0 if ($data eq '-1');
 
 		# add city name and country in front of return string when searching city name from db
-		my $jsondata = decode_json($data);
-		$returnstring = $name . ', '.$jsondata->{city}->{country}.': '.$returnstring;
+		#my $jsondata = decode_json($data);
+		#$returnstring = $name . ', '.$jsondata->{city}->{country}.': '.$returnstring;
 	}
 
 	my $json = decode_json($data);
-	#da($json, __LINE__.': JSON');
 	my $index = 0;
 	foreach my $item (@{$json->{list}}) {
 		if ($index >= 7) {
@@ -293,7 +299,7 @@ sub FINDFORECAST {
 			last;
 		}
 		if ($index == 0) {
-			#$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}.': '.$returnstring;
+			$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}.': '.$returnstring;
 		}
 
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main});
@@ -466,7 +472,7 @@ sub getSayLine {
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $temp;
 	if ($tempmin ne $tempmax) {
-		$temp = "($tempmin..$tempmax)°C"
+		$temp = "($tempmin…$tempmax)°C"
 	} else {
 		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
 	}
