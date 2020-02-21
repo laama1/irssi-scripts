@@ -47,7 +47,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2019-11-14';
+$VERSION = '2020-02-09';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -588,7 +588,7 @@ sub api_conversion {
 	}
 
 	# set newer headers if mixcloud
-	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i) {
+	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
 	}
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
