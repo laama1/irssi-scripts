@@ -34,7 +34,7 @@ my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes
 
 my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
 my $infofile;
-my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe');
+my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe', '#kaaosradio');
 
 #my $enableChannels = {};
 #$enableChannels->{'nerv'}->{'#salamolo'};
@@ -54,6 +54,7 @@ sub event_priv_msg {
 	}
 	return unless ($msg =~ /\!horo/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
+	return;
 }
 
 sub event_pub_msg {
@@ -102,6 +103,7 @@ LINE: for (@information) {
 	}
 
 	Irssi::signal_stop();
+	return;
 }
 
 sub filterKeyword {
@@ -129,6 +131,7 @@ sub filterKeyword {
 	else 									{($infofile) = glob $irssidir . 'horoskooppeja.txt';}
 	#dp("horos2.pl: $& matched file: $infofile");
 	print("horos2.pl> $& matched file: $infofile");
+	return;
 }
 
 sub grepKeyword {
@@ -218,12 +221,14 @@ sub dp {
 	my ($data, @rest) = @_;
 	return if $debug != 1;
 	Irssi::print("$myname-debug: $data");
+	return;
 }
 
 sub da {
 	my (@data, @rest) = @_;
 	return if $debug != 1;
 	Irssi::print Dumper @data;
+	return;
 }
 
 sub get_channel_title {

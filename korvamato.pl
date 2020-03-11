@@ -167,18 +167,15 @@ sub check_if_delete {
 	return -1 unless $id > 0;
 	if ($command =~ s/ ([0-9]{1,4})//gi) {
 		$id = $1;
-		dp(__LINE__.": check_if_delete new id: $id");
 	}
 	if ($command =~ /(poista|del|delete) (.*)/gi && $id >= 0) {
 		# FIXME: Del by ID
-		dp(__LINE__.': check_if_delete: poista1');
 		my $searchword = $2;
 		if (del_mato($searchword, $id) == 0) {
 			# TODO: Print old info?
 			return 1;
 		}
 	} elsif ($command =~ /(poista|del|delete)/gi && $id >= 0) {
-		dp(__LINE__.': check_if_delete: poista2');
 		if (del_mato('', $id) == 0) {
 			# TODO: Print old info?
 			return 1;
@@ -424,10 +421,10 @@ sub if_korvamato {
 			return $1;
 		}
 
-
 		if (check_if_delete($command, $id) > 0) {
 			return "Deletoitu. ID: $id";
 		}
+
 		my $amount = 0;
 		my $returnstring = '';
 		my ($link1, $link2, $info1, $info2, $artist, $title, $lyrics) = '';

@@ -8,3 +8,6 @@ openweathermap.pl:
 
 hamqsl-pl:
 - XML::LibXML
+
+lastspoke.pl (irssi script)
+- JSON::PP

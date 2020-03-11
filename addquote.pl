@@ -6,12 +6,13 @@ use Data::Dumper;
 use DBI qw(:sql_types);
 
 use utf8;
-binmode(STDOUT, ":utf8");
-binmode(STDIN, ":utf8");
+binmode STDOUT, ":utf8";
+binmode STDIN, ":utf8";
 use KaaosRadioClass;		# LAama1 30.12.2016
 
 #my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
-my $tiedosto = '/var/www/html/quotes/quotes.txt';
+#my $tiedosto = '/var/www/html/quotes/quotes.txt';
+my $tiedosto = '/mnt/music/quotes.txt';
 my $publicurl = 'http://lamaz.bot.nu/quotes.txt';
 
 my $kanava = '#kaaosradio';
