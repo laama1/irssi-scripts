@@ -33,7 +33,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20200220';
+$VERSION = '20200311';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
@@ -46,7 +46,8 @@ $VERSION = '20200220';
 
 my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/openweathermap_apikey';
 my $apikey;
-my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
+#my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
+my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?q=';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $DEBUG = 1;
@@ -136,7 +137,7 @@ unless (-e $db) {
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, @rest) = @_;
 	# TODO: scattered clouds, light intensity rain
-	#dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset") if $DEBUG1;
+	#dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime");
 	my $sunmoon = get_sun_moon($sunrise, $sunset, $comparetime);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
@@ -164,7 +165,7 @@ sub replace_with_emoji {
 }
 
 # TODO: timezone
-# params: sunrise, sunset, time to compare, ISO 8601 "2020-02-24 09:00:00"
+# params: sunrise, sunset, time to compare: unixtime
 sub is_sun_up {
 	my ($sunrise, $sunset, $comparetime, $tz, @rest) = @_;
 	#dp(__LINE__." sunrise: $sunrise, sunset: $sunset, comaparetime: $comparetime");
@@ -173,15 +174,16 @@ sub is_sun_up {
 	$comparetime =~ s/(.*?) (.*)/$2/;
 	#dp(__LINE__." sunrise: $sunrise, sunset: $sunset, comaparetime: $comparetime");
 	if ($comparetime > $sunset || $comparetime < $sunrise) {
-		dp(__LINE__.': sun is down');
+		#dp(__LINE__.': sun is down');
 		return 0;
 	}
-	dp(__LINE__.': sun is up');
+	#dp(__LINE__.': sun is up');
 	return 1;
 }
 
 sub get_sun_moon {
 	my ($sunrise, $sunset, $comparetime, $tz, @rest) = @_;
+	#dp(__LINE__.": sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime");
 	if (is_sun_up($sunrise, $sunset, $comparetime) == 1) {
 		return '🌞';
 	}
@@ -225,12 +227,22 @@ sub omaconway {
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
 	$searchword = stripc($searchword);
-	my $data = KaaosRadioClass::fetchUrl($url.$searchword.'&units=metric&appid='.$apikey, 0);
+	Irssi::print("Searchword: $searchword");
+	my $newurl;
+	my $urltail = $searchword.'&units=metric&appid='.$apikey;
+	if ($searchword =~ /\d{5,}/) {
+		$newurl = $url.'zip=';
+		$urltail = $searchword.',fi&units=metric&appid='.$apikey;;		# Search post numbers only from finland
+	} else {
+		$newurl = $url.'q=';
+	}
+	Irssi::print("url: $newurl".$urltail);
+	my $data = KaaosRadioClass::fetchUrl($newurl.$urltail, 0);
 	if ($data eq '-1') {
 		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		return 0 unless defined $name;
-		$data = KaaosRadioClass::fetchUrl($url.$name.'&units=metric&appid='.$apikey, 0);
+		$data = KaaosRadioClass::fetchUrl($newurl.$urltail, 0);
 		return 0 if ($data eq '-1');
 	}
 
@@ -255,6 +267,7 @@ sub FINDFORECAST {
 	}
 
 	my $json = decode_json($data);
+	#da($json,__LINE__.': json:');
 	my $index = 0;
 	foreach my $item (@{$json->{list}}) {
 		if ($index >= 7) {
@@ -264,8 +277,12 @@ sub FINDFORECAST {
 		if ($index == 0) {
 			$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}.': '.$returnstring;
 		}
-		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, localtime($json->{city}->{sunrise})->datetime,
-											localtime($json->{city}->{sunset})->datetime, $item->{dt_txt});
+		
+		#my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, localtime($json->{city}->{sunrise})->datetime,
+		#									localtime($json->{city}->{sunset})->datetime, $item->{dt_txt});
+		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
+											$json->{city}->{sunset}, $item->{dt});
+
 
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
 		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
@@ -313,8 +330,8 @@ sub getSayLine2 {
 		$weatherdesc .= $item->{description};
 		$index++;
 	}
-
-	my $returnvalue = $json->{name}.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, );
+	# FIXME: fix time
+	my $returnvalue = $json->{name}.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, time);
 	return $returnvalue;
 }
 
