@@ -230,9 +230,10 @@ sub FINDWEATHER {
 	Irssi::print("Searchword: $searchword");
 	my $newurl;
 	my $urltail = $searchword.'&units=metric&appid='.$apikey;
-	if ($searchword =~ /\d{5,}/) {
+	if ($searchword =~ /(\d{5})/) {
+		Irssi::print("ZIP! $1");
 		$newurl = $url.'zip=';
-		$urltail = $searchword.',fi&units=metric&appid='.$apikey;;		# Search post numbers only from finland
+		$urltail = $1.',fi&units=metric&appid='.$apikey;;		# Search post numbers only from finland
 	} else {
 		$newurl = $url.'q=';
 	}
@@ -240,8 +241,12 @@ sub FINDWEATHER {
 	my $data = KaaosRadioClass::fetchUrl($newurl.$urltail, 0);
 	if ($data eq '-1') {
 		# city not found
+		#Irssi::print('City not found.');
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		return 0 unless defined $name;
+		$newurl = $url.'q=';
+		$urltail = $name.'&units=metric&appid='.$apikey;
+		#Irssi::print("url: ". $newurl.$urltail);
 		$data = KaaosRadioClass::fetchUrl($newurl.$urltail, 0);
 		return 0 if ($data eq '-1');
 	}
