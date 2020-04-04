@@ -13,7 +13,7 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 #my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
 #my $tiedosto = '/var/www/html/quotes/quotes.txt';
 my $tiedosto = '/mnt/music/quotes.txt';
-my $publicurl = 'http://lamaz.bot.nu/quotes.txt';
+my $publicurl = 'http://8-b.fi/quotes.txt';
 
 my $kanava = '#kaaosradio';
 my $verkko = 'IRCnet';
@@ -22,7 +22,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $DEBUG = 1;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20190801';
+$VERSION = '20200404';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -47,7 +47,7 @@ sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 	#my ($target, $text) = $msg =~ /^(\S*)\s:(.*)/;
 	return if ($nick eq $server->{nick});	#self-test
-	parseQuote($msg, $nick, 'priv', $server);
+	parseQuote($msg, $nick, $nick, $server);
 	return;
 }
 
@@ -78,7 +78,8 @@ sub parseQuote {
 			saveToDB($nick, $uusiquote, $target);
 			Irssi::print($IRSSI{name}.": $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
-			sayit(':)');
+			#sayit(':)');
+			$sever->command("msg $target :)");
 		} else {
 			Irssi::print($IRSSI{name}.": $msg request from $nick (too long!)");
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
