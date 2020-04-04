@@ -38,7 +38,6 @@ Operaattorit voivat käyttää myös privassa !kick #kanava <nick>, jolloin henk
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp(__LINE__.' Printing help..');
 	sayit($server, $target, $helptext);
 	return 0;
 }
@@ -67,13 +66,11 @@ sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
 	# TODO: Check that badsword does not allready exist
 	if ($badsword ~~ @badwords) {
-		dp(__LINE__.': '.$badsword.' allready in list.');
-		return -1;
+		return '';
 	}
-	dp(__LINE__.': adding badword to list');
 	KaaosRadioClass::addLineToFile($badwordfile, $badsword);
 	push @badwords, $badsword;
-	return 0;
+	return 1;
 }
 
 sub SAVEBADWORDLIST {
@@ -149,20 +146,25 @@ sub doKick {
 	return;
 }
 
+sub do_ban {
+	my ($server, $channel, $nick, $reason) = @_;
+	doKick($server, $channel, $nick, $reason);
+	$server->send_raw("ban $channel $nick :*$reason*");
+	return;
+}
+
 sub event_privmsg {
 	my ($server, $data, $nick, $address) = @_;
 	#if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
-	if($data =~ /^!kick (#[^\s]*) ([^\s]*)/gi) {
-		#dp("event_privmsg: $1 $2 $3");
+	if($data =~ /^!kick (#[^\s]*) ([^\s]*)(.*)/gi) {
 		dp(__LINE__.": event_privmsg params: $1 $2");
 		my $kickchannel = $1;
 		my $kicknick = $2;
-		#my $kickreason = $3 || '';
-		my $kickreason = 'dat ass';
+		#my $kickreason = 'dat ass';
+		my $kickreason = $3;
 		if (get_nickrec($server, $kickchannel, $kicknick)) {
 			dp(__LINE__.': event_privmsg, get_nickrec found');
 			if (ifop2($server, $kickchannel, $nick)) {
-				#kickPerson($server, $kickchannel, $kicknick, $kickreason);
 				dp(__LINE__.": event_privmsg, $nick is op.");
 				doKick($server, $kickchannel, $kicknick, $kickreason);
 				msgit($server, $nick, "Kicked $kicknick off $kickchannel!");
@@ -173,6 +175,24 @@ sub event_privmsg {
 		} else {
 			dp(__LINE__.": event_privmsg, no $kicknick on $kickchannel.");
 			msgit($server, $nick, "No nick $kicknick on $kickchannel!");
+		}
+	} elsif ($data =~ /^!kickban (#[^\s]*) ([^\s]*)(.*)/gi) {
+		my $banchannel = $1;
+		my $bannick = $2;
+		#my $banreason = 'dat ass';
+		my $banreason = $3;
+		if (get_nickrec($server, $banchannel, $bannick)) {
+			if (ifop2($server, $banchannel, $nick)) {
+				#dp(__LINE__.": event_privmsg, $nick is op.");
+				do_ban($server, $banchannel, $bannick, $banreason);
+				msgit($server, $nick, "Banned $bannick off $banchannel!");
+			} else {
+				#dp(__LINE__.": event_privmsg, $nick is NOT op.");
+				msgit($server, $nick, "You don't have operator status on $banchannel!");
+			}
+		} else {
+			#dp(__LINE__.": event_privmsg, no $bannick on $banchannel.");
+			msgit($server, $nick, "No nick $bannick on $banchannel!");
 		}
 	}
 	return;
@@ -189,7 +209,7 @@ sub badWordFilter {
 
 sub get_nickrec {
 	my ($server, $channel, $nick) = @_;
-	return unless defined($server) && defined($channel) && defined($nick);
+	return unless defined $server && defined $channel && defined $nick;
 	my $chanrec = $server->channel_find($channel);
 	return $chanrec ? $chanrec->nick_find($nick) : undef;
 }
@@ -213,7 +233,6 @@ sub event_pubmsg {
 		return;
 	}
 	if (badWordFilter($msg)) {
-		dp(__LINE__.': badword found!');
 		doKick($server, $target, $nick, 'Bad words!');
 		return;
 	}
@@ -236,14 +255,12 @@ sub event_pubmsg {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
-		dp(__LINE__.': adding a bad word: '.$1);
-		if (ADDBADWORD($1) == 0) {
+		if (ADDBADWORD($1)) {
 			sayit($server, $target, "Added $1 to list.");
 		} else {
 			sayit($server, $target, 'Allready found or error.');
 		}
 	} elsif ($msg =~ /^!badwords$/gi) {
-		dp(__LINE__. ': listing bad words');
 		my $string = 'Bad words: ';
 		foreach my $badword (@badwords) {
 			$string .= "$badword, ";
