@@ -67,7 +67,7 @@ my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 my $howManyDrunk = 0;
 my $dontprint = 0;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
@@ -544,7 +544,7 @@ sub checkForPrevEntry {
 	$sth->bind_param(1, $md5hex);
 	#$sth->bind_param(2, $url);
 	$sth->bind_param(2, $newchannel);
-	my $dbh = KaaosRadioClass::connectSqlite($db);
+	#my $dbh = KaaosRadioClass::connectSqlite($db);
 	#da($sth);
 	$sth->execute();
 
@@ -754,19 +754,12 @@ sub msg_to_channel {
 sub checkIfOld {
 	my ($server, $url, $target, $md5hex) = @_;
 	my $wanhadisabled = Irssi::settings_get_str('urltitle_wanha_disabled');
-	dp(__LINE__.":checkIfOld wanhadisabled: $wanhadisabled target: $target");
 	if ($wanhadisabled == 1) {
-		dp(__LINE__.":Wanha is disabled.");
 		return 0;
 	}
-	#my $wanhachannels = Irssi::settings_get_str('urltitle_wanha_channels');
 	my @wanha_raw = split / /, Irssi::settings_get_str('urltitle_wanha_channels');
-	dp(__LINE__.': wanha raw:');
-	da(@wanha_raw);
 	if ($target ~~ @wanha_raw) {
-		dp(__LINE__.': blongo! continue..');
 	} else {
-		dp(__LINE__.': blinga! return..');
 		return 0;
 	}
 
