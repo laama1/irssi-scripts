@@ -6,8 +6,8 @@ use Data::Dumper;
 use DBI qw(:sql_types);
 
 use utf8;
-binmode STDOUT, ":utf8";
-binmode STDIN, ":utf8";
+binmode STDOUT, ':utf8';
+binmode STDIN, ':utf8';
 use KaaosRadioClass;		# LAama1 30.12.2016
 
 #my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
@@ -79,7 +79,7 @@ sub parseQuote {
 			Irssi::print($IRSSI{name}.": $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
 			#sayit(':)');
-			$sever->command("msg $target :)");
+			$server->command("msg $target :)");
 		} else {
 			Irssi::print($IRSSI{name}.": $msg request from $nick (too long!)");
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
