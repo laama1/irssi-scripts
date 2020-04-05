@@ -12,6 +12,11 @@
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# Lataa koodit osoitteesta https://github.com/laama1/AI-MegaHAL
+# dnf install perl-CPAN
+
+
+use warnings;
 use strict;
 use Irssi;
 use AI::MegaHAL;
@@ -21,6 +26,7 @@ use vars qw($VERSION %IRSSI);
 use Data::Dumper;
 use KaaosRadioClass;      # LAama1 8.11.2017
 use utf8;
+use Encode;
 
 $VERSION = '0.24';
 %IRSSI = (
@@ -34,6 +40,7 @@ $VERSION = '0.24';
 
 
 # Intialise the AI
+my $charset = 'iso-8859-1';
 my $megahal = undef;
 my $megahal_path = '';
 my $ignore = {};
@@ -64,15 +71,14 @@ my @wordlist = (
 my @ignorenicks = (
 	'kaaosradio',
 	'ryokas',
-
 );
 
 my @channelnicks = ();               # value of nicks from the current channel
 my $currentchan;
 my $currentnetwork;
 
-my $DEBUG = 0;
-my $myname = "megahal2.pl";
+my $DEBUG = 1;
+my $myname = 'megahal2.pl';
 
 
 sub irssi_log {
@@ -103,7 +109,7 @@ sub populate_brain {
 		$megahal = new AI::MegaHAL(
 			'Path' => $brain,
 			'AutoSave' => 1,
-			'Banner' => 1
+			'Banner' => 0
 		);
 	}
 	Irssi::print("$myname: Brain populated..");      # LAama1
@@ -128,7 +134,7 @@ sub load_settings() {
 
 	# Create the megahal object
 	if (length $brain) {
-		dp("Populate brain next..");
+		dp('Populate brain next..');
 		populate_brain($brain);
 	}
 
@@ -150,7 +156,7 @@ sub load_settings() {
 			$ignore_timeout = $ignoreTO;
 			$prevent_flood = 1;
 		} else {
-			irssi_log("Not enabling flood protection until flood ratio and ignore timeout are set");
+			irssi_log('Not enabling flood protection until flood ratio and ignore timeout are set');
 		}
 
 	} else {
@@ -186,7 +192,7 @@ sub get_megahal {
 sub get_haiku_line {
 	my ($words, $count) = @_;
 
-	my $line = "";
+	my $line = '';
 	my $syllables = 0;
 	my $i = 10;
 	while ($count > $syllables && scalar(@{$words}) > 0 && $i > 0)
@@ -250,7 +256,10 @@ sub public_responder {
 	return unless defined $megahal;
 
 	# replace weird characters from user input
-	$data = KaaosRadioClass::replaceWeird($data);
+	Irssi::print('is utf1; '.utf8::is_utf8($data));
+	Encode::from_to($data, 'utf-8', $charset);
+	#$data = KaaosRadioClass::replaceWeird($data);
+	Irssi::print('is utf2: '.utf8::is_utf8($data));
 	
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
@@ -280,6 +289,7 @@ sub public_responder {
 
 	# Does the data contain my nick?
 	my $referencesme = $data =~ /$my_nick/i;
+	$data =~ s/^$my_nick\S?\s?//;
 
 	if ($referencesme && $skip_oraakkeli_but_learn == 0) {
 		my $alldone = 0;
@@ -312,7 +322,7 @@ sub public_responder {
 
 			# If the time has expired, just reset
 			} elsif (time() - $flood->{$uniq}->{'time'} > $ratio_seconds) {
-				$flood->{$uniq}->{'time'} = time();
+				$flood->{$uniq}->{'time'} = time;
 				$flood->{$uniq}->{'count'} = 1;
 
 				irssi_log("Reset $uniq flood count");
@@ -325,14 +335,14 @@ sub public_responder {
 				# If the user has been too verbose, ignore them
 				if ($flood->{$uniq}->{'count'} > $ratio_posts) {
 
-					$ignore->{$uniq} = time();
+					$ignore->{$uniq} = time;
 
 					# Display a pithy message stating our ignorance
 					my $msg = $ignores[rand(scalar(@ignores))];
 					$msg = sprintf($msg, $nick);
 					$server->command("msg $target $msg");
 					irssi_log("Ignoring $uniq for $ignore_timeout seconds");
-
+					Irssi::print("DIU0");
 					$alldone = 1;
 				}
 			}
@@ -343,27 +353,28 @@ sub public_responder {
 			if (rand(100) < 20) {
 				$server->command("msg $target $nick, Konnari juoksi yli järven.");
 			}
+			Irssi::print Dumper $lastwords;
 			$alldone = 1;
 		}
 
 		# Store this for next time
 		$lastwords->{$uniq} = $data;
-
 		# If we've finished with this user prematurely, just stop
 		return if $alldone == 1;
-
-		$data =~ s/^$my_nick\S?//;
+		
+		
+		Irssi::print("DIU3, data: $data");
 		my $output = return_reply($data);
 		#my $output = $megahal->do_reply($data, 0);
 		#$output =~ s/  */ /g;		# replace multiple spaces
 		#$output =~ s/^ *//g;		# replace spaces from beginning
 		#$output = KaaosRadioClass::replaceWeird($output);
 		#$output = "$nick: $output" if $referencesme;
-		
+		Irssi::print("DIU4: ". $output);
 		$server->command("msg $target $nick, $output") if $output;
 
 	} else {
-		$data =~ s/^$my_nick\S?//;
+		#$data =~ s/^$my_nick\S?\s?//;
 		foreach my $line (@wordlist) {
 			if ($data =~ /$line/ && $skip_oraakkeli_but_learn == 0) {
 				my $output = return_reply($data);
@@ -373,9 +384,8 @@ sub public_responder {
 		}
 
 		dp("Learned something.. nick: $nick, data: $data");
-		$data =~ s/^\S+[\:,]\s*//;
+		#$data =~ s/^\S+[\:,]\s*//;
 		$megahal->learn($data, 0);
-		
 	}
 }
 
@@ -418,7 +428,7 @@ sub populate_nicklist {
 }
 
 sub return_reply {
-	return;
+	#return;
 	my ($data, @rest) = @_;
 	my $output = $megahal->do_reply($data, 0);
 	$output =~ s/  */ /g;		# replace multiple spaces
@@ -433,7 +443,7 @@ sub learn_txt_file {
 	
 	#my $response = $ua->get($url);
 	my $response = KaaosRadioClass::fetchUrl($url);
-	if ($response ne "-1") {
+	if ($response ne '-1') {
 		#my $page = $response->decoded_content(charset => 'none');
 		my @lines = split (/\n/, $response);
 
@@ -446,7 +456,6 @@ sub learn_txt_file {
 	} else {
 		Irssi::print("$myname: Didn't learn anything from $url.");
 	}
-
 }
 
 # debug array
@@ -471,16 +480,15 @@ Irssi::signal_add("setup reread", \&load_settings);
 Irssi::command_bind('savebrain', \&savebrain);
 Irssi::command_bind('save', \&savebrain);
 
-
 Irssi::settings_add_str('MegaHAL', 'megahal_brain', '');
 
 Irssi::settings_add_str('MegaHAL', 'megahal_channels', '');
-Irssi::settings_add_bool('MegaHAL', 'megahal_antiflood', '');
-Irssi::settings_add_str('MegaHAL', 'megahal_flood_ratio', '');
+Irssi::settings_add_bool('MegaHAL', 'megahal_antiflood', 1);
+Irssi::settings_add_str('MegaHAL', 'megahal_flood_ratio', '1:2');
 Irssi::settings_add_int('MegaHAL', 'megahal_ignore_timeout', '1');
 dp("Loading settings next..");    # LAama1
 #Irssi::settings_set_str('megahal_brain', '/home/laama/.cpan/build/AI-MegaHAL-0.08-TSMTQK/');
-Irssi::settings_set_str('megahal_brain', '/home/laama/.irssi/scripts/');
+Irssi::settings_set_str('megahal_brain', '/home/laama/.irssi/megahal/');
 #dp(Irssi::settings_get_str('megahal_brain'));
 Irssi::print('');
 load_settings();
