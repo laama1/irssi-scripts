@@ -27,7 +27,7 @@ sub pubmsg {
 		my $querystr = substr $msg, ((length $serverrec->{nick}) +2);
 		my $stats = KaaosRadioClass::fetchUrl("http://www.lintukoto.net/viihde/oraakkeli/index.php?html=0&kysymys=${querystr}",0);
 		#sleep(2); # take a nap before answering
-		$serverrec->command("MSG $target $nick: ${stats}") unless $stats == -1;
+		$serverrec->command("MSG $target $nick: ${stats}") unless $stats eq '-1';
 		Irssi::print("!oraakkeli request from $nick on channel $target: $querystr, answer: $stats");
 	}
 	return;
