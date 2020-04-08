@@ -71,11 +71,12 @@ my @wordlist = (
 my @ignorenicks = (
 	'kaaosradio',
 	'ryokas',
+	'KD_Butt',
 );
 
 my @channelnicks = ();               # value of nicks from the current channel
-my $currentchan;
-my $currentnetwork;
+my $currentchan;						# used in flood protect
+my $currentnetwork;						# used in flood protect
 
 my $DEBUG = 1;
 my $myname = 'megahal2.pl';
@@ -113,13 +114,17 @@ sub populate_brain {
 		);
 	}
 	Irssi::print("$myname: Brain populated..");      # LAama1
+}
 
+## TODO: 
+sub reset_brain {
+# delete files and reload?
 }
 
 ##
 # Save the contents of the brain to megahal.brn
 ##
-sub savebrain {
+sub save_brain {
 	my ($data, $server, $witem) = @_;
 
 	$megahal->_cleanup();
@@ -195,12 +200,11 @@ sub get_haiku_line {
 	my $line = '';
 	my $syllables = 0;
 	my $i = 10;
-	while ($count > $syllables && scalar(@{$words}) > 0 && $i > 0)
-	{
+	while ($count > $syllables && scalar(@{$words}) > 0 && $i > 0) {
 		$i--;
 		$line .= shift @{$words};
-		$line .= " ";
-		irssi_log("add space!");
+		$line .= ' ';
+		irssi_log('add space!');
 		#my @s = $line=~/([aeiouy]+)/gi;
 		my @s = $line=~/([aeiouyöäå])/gi;
 		$syllables = scalar(@s);
@@ -228,43 +232,39 @@ sub give_me_a_haiku {
 	$server->command("msg $target -!- ". KaaosRadioClass::replaceWeird($_)) for @haiku;
 }
 
-
 ##
 # Public Responder
 # The bulk of the work goes on in here, including flood and repeat
-# protection, learning and reply generation. It's not as scary as it looks
+# protection, learning and reply generation. It's not as scary as it looks 
 ##
 sub public_responder {
 	my ($server, $data, $nick, $mask, $target) = @_;
-
 	my $my_nick = $server->{'nick'};
-	my $skip_oraakkeli_but_learn = 0;   #if oraakkeli.pl script enabled this is a fix.
+	my $skip_oraakkeli_but_learn = 0;   # if oraakkeli.pl script enabled this is a fix.
 	return if $nick ~~ @ignorenicks;
-	return if $data =~ /kaaos/i;
-	# Ignore lines containing URLs or !commands other than !haiku
-	return if $data =~ /https?:\/\//i || $data =~ /www\./i || $data =~ /^\![^haiku]/;
-	
-	$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # LAama1, oraakkeli parseri.
-
-	dp("$myname: Giving to Oraakkeli..") if $skip_oraakkeli_but_learn;
-	
 	# Don't talk to yourself
-	return if $nick =~ /$my_nick/;
+	return if $nick eq $my_nick;
+	return if $data =~ /kaaos/i && $target =~ /\#kaaosradio/i;
+
+	# Ignore lines containing URLs or !commands other than !haiku
+	return if $data =~ /tps?:\/\//i || $data =~ /www\./i; # || $data =~ /^\![^haiku]/;
+	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos ?-merkki viimeisenä
+	$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/);
+	dp("$myname: Giving data to Oraakkeli..") if $skip_oraakkeli_but_learn;
 	
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
 	return unless defined $megahal;
-
-	# replace weird characters from user input
-	Irssi::print('is utf1; '.utf8::is_utf8($data));
+	# replace weird/utf8 characters from user input
+	Irssi::print('is utf1; '.utf8::is_utf8($data). ', data: '.$data);
 	Encode::from_to($data, 'utf-8', $charset);
 	#$data = KaaosRadioClass::replaceWeird($data);
-	Irssi::print('is utf2: '.utf8::is_utf8($data));
+	Irssi::print('is utf2: '.utf8::is_utf8($data). ', data: '.$data);
 	
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
 		if (KaaosRadioClass::floodCheck(3) > 0) {
-			irssi_log("Haiku flood detected ($nick)");
+			irssi_log("Haiku flood detected ($nick)! ..skip");
 			return;
 		}
 		$data =~ s/\!haiku *//;
@@ -273,10 +273,10 @@ sub public_responder {
 		return;
 	}
 	if ($data =~ /^!/) {    # if !command
-		irssi_log("Some !command found, return");
+		irssi_log("Some un understood !command found, return. $data");
 		return;
 	}
-	dp("data: $data");
+
 	# check nicks from the channel
 	populate_nicklist($target, $server);
 	foreach my $currentnick (@channelnicks) {
@@ -284,30 +284,31 @@ sub public_responder {
 			return if $currentnick ne $my_nick;
 			Irssi::print("Bingo! $nick found from $data");
 		}
-		#dp("current nick: $currentnick");
+		#dp(__LINE__." current nick: $currentnick");
 	}
 
 	# Does the data contain my nick?
-	my $referencesme = $data =~ /$my_nick/i;
-	$data =~ s/^$my_nick\S?\s?//;
 
-	if ($referencesme && $skip_oraakkeli_but_learn == 0) {
+	#$data =~ s/^$my_nick\S?\s?//;	# remove mynick and garbage after it FIXME: cant use regexp
+	my $nicklen = length $my_nick;
+	my $nickindex = index $data, $server->{nick};
+	if ($nickindex >= 0 && !$skip_oraakkeli_but_learn) {
+		dp('data before: '.$data);
+		substr $data, $nickindex, $nicklen;
+		dp('data after: '. $data);
 		my $alldone = 0;
-		my $uniq = $nick . "@" . $target;
+		my $uniq = $nick . '@' . $target;	# nick@#target
 
 		# Do the right thing if the user is ignored
 		if (exists($ignore->{$uniq}) && $ignore->{$uniq} != 0) {
-
 			# If the user has done time, release them
-			if (time() - $ignore->{$uniq} > $ignore_timeout) {
-
+			if (time - $ignore->{$uniq} > $ignore_timeout) {
 				$ignore->{$uniq} = 0;
-				$flood->{$uniq}->{'time'} = time();
+				$flood->{$uniq}->{'time'} = time;
 				$flood->{$uniq}->{'count'} = 0;
-				irssi_log("Not ignoring $uniq any more");
-
-			# Otherwise ignore them
+				irssi_log("Not ignoring $uniq any more. He has suffered enough.");
 			} else {
+				# Otherwise ignore them
 				return;
 			}
 		}
@@ -428,31 +429,28 @@ sub populate_nicklist {
 }
 
 sub return_reply {
-	#return;
 	my ($data, @rest) = @_;
 	my $output = $megahal->do_reply($data, 0);
 	$output =~ s/  */ /g;		# replace multiple spaces
 	$output =~ s/^ *//g;		# replace spaces from beginning
-	$output = KaaosRadioClass::replaceWeird($output);
+	# $output = KaaosRadioClass::replaceWeird($output);
 	return $output;
 }
 
 # Learn from URL. Every line is used, so be careful.
 sub learn_txt_file {
 	my ($url, @rest) = @_;
-	
-	#my $response = $ua->get($url);
 	my $response = KaaosRadioClass::fetchUrl($url);
 	if ($response ne '-1') {
-		#my $page = $response->decoded_content(charset => 'none');
-		my @lines = split (/\n/, $response);
+		my @lines = split /\n/, $response;
+		my $linecount = 0;
 
 		foreach my $line (@lines) {
-			dp("Line: ".$line);
+			dp(__LINE__.': Line: '.$line);
 			$megahal->learn($line, 0) if $line;
+			$linecount++;
 		}
-
-		Irssi::print("$myname: Learned ok from $url.");
+		Irssi::print("$myname: Learned $linecount items from $url.");
 	} else {
 		Irssi::print("$myname: Didn't learn anything from $url.");
 	}
@@ -465,30 +463,26 @@ sub da {
 	Irssi::print Dumper (@_);
 }
 
+# debug print line
 sub dp {
 	return unless $DEBUG;
 	Irssi::print("$myname-debug: @_");
-	#Irssi::print("@_");
 }
-
-Irssi::command_bind('megahal_learn_from_url','learn_txt_file', "MegaHAL commands");
 
 
 Irssi::signal_add("message public", \&public_responder);
 Irssi::signal_add("setup changed", \&load_settings);
 Irssi::signal_add("setup reread", \&load_settings);
-Irssi::command_bind('savebrain', \&savebrain);
-Irssi::command_bind('save', \&savebrain);
+Irssi::command_bind('savebrain', \&save_brain);
+Irssi::command_bind('save', \&save_brain);
+Irssi::command_bind('megahal_learn_from_url','learn_txt_file', "MegaHAL commands");
 
 Irssi::settings_add_str('MegaHAL', 'megahal_brain', '');
-
 Irssi::settings_add_str('MegaHAL', 'megahal_channels', '');
 Irssi::settings_add_bool('MegaHAL', 'megahal_antiflood', 1);
 Irssi::settings_add_str('MegaHAL', 'megahal_flood_ratio', '1:2');
 Irssi::settings_add_int('MegaHAL', 'megahal_ignore_timeout', '1');
 dp("Loading settings next..");    # LAama1
-#Irssi::settings_set_str('megahal_brain', '/home/laama/.cpan/build/AI-MegaHAL-0.08-TSMTQK/');
 Irssi::settings_set_str('megahal_brain', '/home/laama/.irssi/megahal/');
-#dp(Irssi::settings_get_str('megahal_brain'));
 Irssi::print('');
 load_settings();
