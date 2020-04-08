@@ -36,18 +36,17 @@ $VERSION = 1.03;
 
 #$currentDir = cwd();
 my $currentDir = $ENV{HOME}.'/.irssi/scripts/irssi-scripts';
-# tsfile, time span.. save value of current time there. For flood protect.
-my $tsfile = "$currentDir/ts";	# ????
-my $djlist = "$currentDir/dj_list.txt";
-#my $database_handle;
 
-#my $myname = $0;
+# tsfile, time span.. save value of current time there. For flood protect.
+my $tsfile = "$currentDir/ts";
+my $djlist = "$currentDir/dj_list.txt";
+
 my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
 my $floodernick;
 my $floodertimes = 0;
-my $flooderdate = time;		# init
+my $flooderdate = time;		# initialize
 
 # returns last line from file -param.
 sub readLastLineFromFilename {
@@ -56,7 +55,7 @@ sub readLastLineFromFilename {
 	my $readline = '';
 	if (defined $file && -e $file) {
 		open (INPUT, "<$file:utf8") || return -1;
-		while (<INPUT>)	{
+		while (<INPUT>) {
 			chomp;
 			$readline = $_;
 		}
