@@ -300,16 +300,15 @@ sub get_channel_title {
 	my ($server, $channel) = @_;
 	my $chanrec = $server->channel_find($channel);
 	return '' unless defined $chanrec;
-	da('chanrec topic:',$chanrec->{topic}) if $DEBUG1;
 	return $chanrec->{topic};
 }
 
 ### Encode to UTF8. Params: $string, $charset
-sub etu {
+sub etu8 {
 	my ($string, $charset, @rest) = @_;
-	dd(__LINE__.": etu function. charset: $charset string before: $string");
+	dd(__LINE__.": etu8 function. charset: $charset string before: $string");
 	Encode::from_to($string, $charset, 'utf8') if $charset && $string;
-	dd(__LINE__.": etu function, string after: $string");
+	dd(__LINE__.": etu8 function, string after conversion to utf8: $string");
 	return $string;
 }
 
@@ -322,19 +321,19 @@ sub checkAndEtu {
 		dd(__LINE__.": charset is reported different from utf8");
 		if ($string =~ /Ã/) {
 			dd(__LINE__.": most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
-			$returnString = etu($string, $charset);
+			$returnString = etu8($string, $charset);
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
 			dd(__LINE__.": UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
 			$returnString = $string;
 		} else {
 			dd(__LINE__.": Didn't found any special characters. Converting..'");
-			$returnString = etu($string, $charset);
+			$returnString = etu8($string, $charset);
 		}
 	} elsif ($charset =~ /UTF8/i || $charset =~ /UTF-8/i) {
 		dd(__LINE__.": charset reported as utf8");
 		if ($string =~ /Ã/) {
 			dd(__LINE__.": ISO CHARS FOUND, INCORRECT! (reported as $charset)");
-			$returnString = etu($string, $charset) || "";		
+			$returnString = etu8($string, $charset) || "";		
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
 			dd(__LINE__.": UTF-8 CHARS FOUND, CORRECT! (reported as $charset)");
 			$returnString = $string;
@@ -350,7 +349,7 @@ sub checkAndEtu {
 sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
 
-	my ($samewords, $titlewordCount) = countSameWords($url, $title);
+	my ($samewords, $titlewordCount) = count_same_words($url, $title);
 	dd(__LINE__.": checkIfTitleInUrl titlewordCount: $titlewordCount, samewords: $samewords");
 	#dd(__LINE__.': checkIfTitleInUrl number1: '. ($samewords / $titlewordCount));
 	dd(__LINE__.': checkIfTitleInUrl number2: '. (0.83 * $titlewordCount));
@@ -367,35 +366,33 @@ sub checkIfTitleInUrl {
 	return 0;
 }
 
-## Count words from sentence after special chars are removed. Params.
-sub countWords {
+## Count words from sentence after special chars are removed. Param: string
+sub count_words {
 	my ($row,@rest) = @_;
-	
 	my @array = split_row_to_array($row);
 	my $count = 0;
 	foreach my $val (@array) {
 		$count++;
-		dd(__LINE__.": countWords: $val, count: $count") if $DEBUG1;
 	}
 	return $#array +1;
 }
 
-sub countSameWords {
+sub count_same_words {
 	my ($url, $title, @rest) = @_;
-	dd(__LINE__.": countSameWords url: $url, \n title: $title") if $DEBUG1;
+	dd(__LINE__.": count_same_words url: $url, \n title: $title") if $DEBUG1;
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-	#dd(__LINE__.": countSameWords titlewordCount: $titlewordCount");
+	#dd(__LINE__.": count_same_words titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
-		#dd(__LINE__.": countSameWords: $item, count: $count1") if $DEBUG1;
+		#dd(__LINE__.": count_same_words: $item, count: $count1") if $DEBUG1;
 		if ($item ~~ @rows1) {
 		#if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dd(__LINE__.":countSameWords item found: $item, count: $count1") if $DEBUG1;
+			dd(__LINE__.":count_same_words item found: $item, count: $count1") if $DEBUG1;
 			if ($count1 == $titlewordCount) {
-				dd(__LINE__.": countSameWords: bingo!") if $DEBUG1;
+				dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
 				return $count1, $titlewordCount;
 			}
 		}
@@ -407,11 +404,6 @@ sub countSameWords {
 # lowercase, remove weird chars. return formatted words
 sub split_row_to_array {
 	my ($row, @rest) = @_;
-	#dd(__LINE__.": split_row_to_array before: $row") if $DEBUG1;
-	print ("poks lainausmerkkiväkänen") if $row =~ /\”/;
-	print ("poks ajatusviiva") if $row =~ /\–/;
-	print ("poks plussa") if $row =~ /\+/;
-	#$row =~ s/[”\|:\"\+\,\!\(\)\–]//g;
 
 	$row = replace_non_url_chars($row);
 	#$row =~ s/[^\w\s\-\.\/\+\#]//g;
@@ -422,7 +414,7 @@ sub split_row_to_array {
 	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
 	#my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
-	dd('split_row_to_array words: ' . ($#returnArray+1)) if $DEBUG1;
+	dd('split_row_to_array word count: ' . ($#returnArray+1)) if $DEBUG1;
 	da(@returnArray) if $DEBUG1;
 	return @returnArray;
 }
@@ -539,7 +531,7 @@ sub checkForPrevEntry {
 
 	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ? order by rowid asc") or die DBI::errstr;
 	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE URL = ? AND channel = ?") or die DBI::errstr;
-	my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE MD5HASH = ? AND channel = ? order by rowid asc") or die DBI::errstr;
+	my $sth = $dbh->prepare('SELECT * FROM LINKS WHERE MD5HASH = ? AND channel = ? order by rowid asc') or die DBI::errstr;
 
 	$sth->bind_param(1, $md5hex);
 	#$sth->bind_param(2, $url);
@@ -551,14 +543,11 @@ sub checkForPrevEntry {
 	# build elements into array
 	my @elements;
 	my @row = ();
-	#while(my ($nick, $pvm, $url, $title, $description, $channel) = $sth->fetchrow_array) {
+
 	while (@row = $sth->fetchrow_array()) {
-		#push @elements, [$nick, $pvm, $url, $title, $channel];
-		#da(@row);
-		#dp(__LINE__.' ^-Bingo!!!');
 		push @elements, [@row];
-		#dp("urltitle3-debug: nick: $nick, pvm: $pvm, url: $url, channel: $channel");	# be careful with this
 	}
+
 	dp(__LINE__.':checkForPrevEntry elements:');
 	da(@elements);
 	$sth->finish();
@@ -574,13 +563,13 @@ sub api_conversion {
 	dp(__LINE__.":api_conversion") if $DEBUG1;
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
-		
+
 	# soundcloud conversion, example: https://soundcloud.com/oembed?url=https://soundcloud.com/shatterling/shatterling-different-meanings-preview
 	$param =~ s/\:\/\/soundcloud.com/\:\/\/soundcloud.com\/oembed\?url\=http\:\/\/soundcloud\.com/;
-		
+
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
-	
+
 	# TODO: imgur conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
 		my $image = $1;
