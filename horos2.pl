@@ -27,7 +27,7 @@ $VERSION = '0.35';
 my $helpmessage = '!horo <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horo vkl. Toimii myös privassa. Kokeile myös: !kuu, !aurora';
 
 # my $mynick = 'kaaos';
-my $debug = 1;
+my $debug = 0;
 
 my @weekdays = ('maanantain', 'tiistain', 'keskiviikon', 'torstain', 'perjantain', 'lauantain', 'sunnuntain');
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
@@ -114,7 +114,7 @@ sub filterKeyword {
 	#elsif	($msg =~ /\b(kes..)|(kesä)/ui)	{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
 	elsif	($msg =~ /(kesä)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
 	#elsif	($msg =~ /\b(kev..t)|(kevät)/ui){($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
-	elsif	($msg =~ /(kevät)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
+	elsif	($msg =~ /(kevä[ti])/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
 	elsif	($msg =~ /\b(talvi)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_talvi.txt'; }
 	elsif	($msg =~ /(viikonl|vkl)/i)		{($infofile) = glob $irssidir . 'horoskooppeja_vkl.txt'; }
 	elsif	($msg =~ /(vappu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_vappu.txt'; }
