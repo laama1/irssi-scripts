@@ -11,3 +11,5 @@ hamqsl-pl:
 
 lastspoke.pl (irssi script)
 - JSON::PP
+
+Webhook for Kaaosradio-discord-server added.
