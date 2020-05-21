@@ -978,6 +978,7 @@ sub noDescForThese {
 	return 1 if $url =~ /github\.com/i;
 	return 1 if $url =~ /gurushots\.com/i;
 	return 1 if $url =~ /streamable\.com/i;
+	return 1 if $url =~ /imgur\.com\/gallery/i;
 	#return 1 if $url =~ /bandcamp\.com/i;
 
 	return 0;
