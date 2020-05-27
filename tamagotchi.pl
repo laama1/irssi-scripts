@@ -19,7 +19,7 @@ $VERSION = "20200325";
 my $playerstats;
 
 my $levelpoints = 25;	# how many points between levels
-my @ybernicks = ('super', 'mega', 'giga', 'hyper', 'ultra', 'moar_', 'god_', 'dog');
+my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human');
 my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
@@ -28,7 +28,7 @@ my $foodcounter = 0;
 my $foodlevel = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
 
-my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'hyvää', 'chill', 'siisti', 'elin', 'koodi');
+my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'porn', 'hyvää', 'chill', 'siisti', 'elin', 'koodi');
 my @loveanswer_words = ('*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3');
 my $lovecounter = 0;
 my $lovelevel = 0;
@@ -47,7 +47,7 @@ my $hatelevel = 0;
 my @hatenicks = ('satan_', 'devil_', 'demon_', 'antichrist_', 'mephistopheles');
 
 my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy');
-my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fok', 'ei!', 'EI!');
+my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fok', 'ei!', 'EI!', 'fek', 'fik');
 
 sub da {
 	print Dumper(@_);
@@ -92,17 +92,22 @@ sub change_nick {
 }
 
 # return $level (current level number) if levelup
-sub count_level {
+sub if_lvlup {
 	my ($counter, @nicks, @rest) = @_;
 	my $modulo = $counter % $levelpoints;
 	my $level = int($counter / $levelpoints);
-	#Irssi::print(__LINE__.':tamagotchi.pl count_level: modulo: '. $modulo. ', level: '. $level.' (counter: '. $counter. ', levelpoints: '. $levelpoints.')');
+	#Irssi::print(__LINE__.':tamagotchi.pl if_lvlup: modulo: '. $modulo. ', level: '. $level.' (counter: '. $counter. ', levelpoints: '. $levelpoints.')');
 	if ($modulo == 0) {
 		# level up
 		Irssi::print(__LINE__.':tamagotchi.pl: level up! ('.$level.')');
 		return $level;
 	}
 	return 0;
+}
+
+sub count_level {
+	my ($counter, @nicks, @rest) = @_;
+	return int($counter / $levelpoints));
 }
 
 sub evolve {
@@ -129,7 +134,11 @@ sub pubmsg {
     return unless $target ~~ @targets;
 
 	if ($msg =~ /^!tama/i) {
-		msg_channel($serverrec, $target, "ruoka: $foodcounter, rakkaus: $lovecounter, päihteet: $drugcounter, viha: $hatecounter");
+		my $foodlvl = count_level($foodcounter, @foodnicks);
+		my $lovelvl = count_level($lovecounter, @lovenicks);
+		my $druglvl = count_level($drugcounter, @drugnicks);
+		my $hatelvl = count_level($hatecounter, @hatenicks);
+		msg_channel($serverrec, $target, "ruoka: $foodcounter ($foodlvl), rakkaus: $lovecounter ($lovelvl), päihteet: $drugcounter ($druglvl), viha: $hatecounter ($hatelvl)");
 		return;
 	}
 	
@@ -138,25 +147,25 @@ sub pubmsg {
 	if (match_word($msg, @foods)) {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
-		my $curlevel = count_level($foodcounter, @foodnicks);
+		my $curlevel = if_lvlup($foodcounter, @foodnicks);
 		evolve($serverrec, $target, $curlevel, 'FooD', @foodnicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
-		my $curlevel = count_level($drugcounter, @drugnicks);
+		my $curlevel = if_lvlup($drugcounter, @drugnicks);
 		evolve($serverrec, $target, $curlevel, 'dRuGg', @drugnicks) if ($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
-		my $curlevel = count_level($lovecounter, @lovenicks);
+		my $curlevel = if_lvlup($lovecounter, @lovenicks);
 		evolve($serverrec, $target, $curlevel, 'LovE', @lovenicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
-		my $curlevel = count_level($hatecounter, @hatenicks);
+		my $curlevel = if_lvlup($hatecounter, @hatenicks);
 		evolve($serverrec, $target, $curlevel, 'HaT', @hatenicks) if($curlevel > 0);
 		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter");
 	}
