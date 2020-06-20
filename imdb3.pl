@@ -47,12 +47,12 @@ sub do_imdb {
     my @enabled = split / /, $enabled_raw ;
     return unless grep /^$target$/, @enabled;
 	
-	if ($msg =~ /^!help imdb/i || $msg =~ /^!imdb$/i) {
+	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
 		print_help($server, $target);
 		return;
 	}
 	
-	return unless ($msg =~ /^!imdb\b/i);
+	return unless ($msg =~ /!imdb\b/i);
 	return if KaaosRadioClass::floodCheck() == 1;
 	my $param = 't';		# title search
 	my $query;				# search query
@@ -89,65 +89,9 @@ sub do_imdb {
 		$query =~ s/$1//;
 	}
 
-	imdb_fetch($server, $target, $query, $param, $year);
-	return 0;
+	return imdb_fetch($server, $target, $query, $param, $year);
+	#return 0;
 
-	#dp("msg: $msg, query: $query");
-	unless ($query) {
-		sayit($server, $target, 'En älynnyt..');
-		return 0;
-	}
-	my $url = "http://www.omdbapi.com/?${param}=${query}&apikey=$apikey" if $param and $query;
-	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
-
-	$url .= "&y=${year}" if $year;
-	#$url .= "&year=${year}" if $year;
-	
-	my $imdb = do_search($url);
-	#Irssi::print Dumper $imdb if $DEBUG1;
-	if (!defined($imdb)) {
-		my $saystring = search_omdb($query);
-		dp("Saystring: $saystring");
-		#my $saystring = search_theimdb($query);
-		#my $saystring = search_theimdb($url);
-		if (defined($saystring)) {
-			sayit($server, $target, $saystring);
-		} else {
-			sayit($server, $target, "$nick, try harder?");
-		}
-		return;
-	}
-
- # OMDB-API koodia
-	if ($imdb->{Response} =~ /True/ ) {
-		dp("imdb->Response = TRUE");
-		my $saystring = print_line_from_search_result($imdb);
-		sayit($server, $target, $saystring);
-		return 0;
-	}
-	if ($imdb ne '1' && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
-		dp('imdb total results more than one!');
-		my $manyfound = $imdb->{totalResults};
-		my $sayline;
-
-		my $i = 0;
-		while ($i < $manyfound && $i < 6) {
-			dp("Search ${i}:");
-			dp(Dumper $imdb->{"Search"}[$i]);
-			$sayline .= $imdb->{"Search"}[$i]->{Title}. " ".$imdb->{"Search"}[$i]->{Year}." (".$imdb->{"Search"}[$i]->{Type}."), ";
-			dp('Sayline: '.$sayline);
-			$i++;
-		}
-		sayit($server, $target, "$sayline <$manyfound found>");
-		return 0;
-	} #elsif ($imdb eq "1" || $imdb->{totalResults} eq undef) {
-		else {
-		dp('imdb no results found');
-		sayit($server, $target, 'Nothing found :P');
-		return 0;
-	}
- #=cut
-	return 1;
 }
 
 sub sig_imdb_search {
@@ -169,7 +113,6 @@ sub imdb_fetch {
 	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
 
 	$url .= "&y=${year}" if $year;
-	#$url .= "&year=${year}" if $year;
 	
 	my $imdb = do_search($url);
 	#Irssi::print Dumper $imdb if $DEBUG1;
@@ -374,9 +317,6 @@ sub print_line_from_search_result {
 # OMDB-api
 sub print_line_from_search_result {
 	my ($param, @rest) = @_;
-	#Irssi::print("imdb3.pl debug print_line_from_search_result param dumber: ") if $DEBUG;
-	#Irssi::print Dumper $param if $DEBUG;
-	
 	my ($link, $title, $title2, $actor, $plot, $rating) = "";
 
 	$link = "http://www.imdb.com/title/" . $param->{imdbID};

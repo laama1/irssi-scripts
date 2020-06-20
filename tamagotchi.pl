@@ -5,7 +5,7 @@ use Irssi;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = "20200325";
+$VERSION = "20200527";
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
@@ -93,11 +93,11 @@ sub change_nick {
 
 # return $level (current level number) if levelup
 sub if_lvlup {
-	my ($counter @rest) = @_;
+	my ($counter, @rest) = @_;
 	my $modulo = $counter % $levelpoints;
 	if ($modulo == 0) {
 		# level up
-		Irssi::print(__LINE__.':tamagotchi.pl: level up! ('.$level.')');
+		Irssi::print('tamagotchi.pl: level up! ('.count_level($counter).')');
 		return count_level($counter);
 	}
 	return 0;
@@ -105,7 +105,7 @@ sub if_lvlup {
 
 sub count_level {
 	my ($counter, @nicks, @rest) = @_;
-	return int($counter / $levelpoints));
+	return int($counter / $levelpoints);
 }
 
 sub evolve {
@@ -145,22 +145,22 @@ sub pubmsg {
 	if (match_word($msg, @foods)) {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
-		evolve($serverrec, $target, $curlevel, 'FooD', @foodnicks) if (if_lvlup($foodcounter));
+		evolve($serverrec, $target, $foodlevel, 'FooD', @foodnicks) if (if_lvlup($foodcounter));
 		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
-		evolve($serverrec, $target, $curlevel, 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
+		evolve($serverrec, $target, $druglevel, 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
 		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
-		evolve($serverrec, $target, $curlevel, 'LovE', @lovenicks) if(if_lvlup($lovecounter));
+		evolve($serverrec, $target, $lovelevel, 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
-		evolve($serverrec, $target, $curlevel, 'HaT', @hatenicks) if(if_lvlup($hatecounter));
+		evolve($serverrec, $target, $hatelevel, 'HaT', @hatenicks) if(if_lvlup($hatecounter));
 		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter");
 	}
 }
