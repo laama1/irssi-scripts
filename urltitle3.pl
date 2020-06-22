@@ -25,15 +25,8 @@ use HTTP::Response;
 use HTML::Entities qw(decode_entities);
 #use RDF::RDFa::Parser;
 use utf8;
-#use open ':std', ':encoding(UTF-8)';
-#binmode STDIN,  ':utf8';
-#binmode STDOUT, ':utf8';
-#binmode STDERR, ':utf8';
-#binmode STDOUT, ":encoding(utf8)";
-#binmode STDIN, ":encoding(utf8)";
-#binmode STDERR, ":encoding(utf8)";
-#binmode FILE, ':utf8';
-#use open ':std', ':encoding(utf8)';
+
+use Date::Parse;
 
 use DBI;
 use DBI qw(:sql_types);
@@ -67,7 +60,7 @@ my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 my $howManyDrunk = 0;
 my $dontprint = 0;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
@@ -86,16 +79,16 @@ $newUrlData->{fetchurl} = '';		# which url to actually fetch
 $newUrlData->{shorturl} = '';		# shortened url for the link
 
 my $shortModeEnabled = 0;			# don't print that much garbage
-my  $shortenUrl = 0;				# enable shorten url
+my $shortenUrl = 0;					# enable shorten url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		Irssi::print("$myname: Unable to create or write file: $db");
+		Irssi::print($IRSSI{name}.": Unable to create or write file: $db");
 		die;
 	}
 	close FILE;
 	createFstDB();
-	Irssi::print("$myname: Database file created.");
+	Irssi::print($IRSSI{name}.": Database file created.");
 }
 
 
@@ -116,7 +109,7 @@ my %headers = (
 	'timeout' => 4,									# default 180 seconds
 	'cookie_jar' => $cookie_jar,
 	#'default_headers' => 
-	#'requests_redirectable' => ['GET', 'HEAD'],		# defaults GET HEAD
+	#'requests_redirectable' => ['GET'],		# defaults GET HEAD
 	#'parse_head' => 1,
 );
 my $ua = LWP::UserAgent->new(%headers);
@@ -504,23 +497,24 @@ sub saveToDB {
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm . "; " . $nick . "; " . $url . "; " . $title . "; " .$description);
 	
-	if ($DEBUG1) { print("$myname-debug saveToDB: $db, pvm: $pvm, nick: $nick, url: $url, title: $title, description: $description, channel: $channel, md5: $md5hex"); }
+	dp(__LINE__.":saveToDB: $db, pvm: $pvm, nick: $nick, url: $url, title: $title, description: $description, channel: $channel, md5: $md5hex") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
-	$sth->bind_param(1, $nick);
+	$sth->bind_param(1, $newUrlData->{nick});
 	$sth->bind_param(2, $pvm, { TYPE => SQL_INTEGER });
 	$sth->bind_param(3, $url);
-	$sth->bind_param(4, $title);
-	$sth->bind_param(5, $description);
-	$sth->bind_param(6, $channel);
-	$sth->bind_param(7, $md5hex);
+	$sth->bind_param(4, $newUrlData->{title});
+	$sth->bind_param(5, $newUrlData->{desc});
+	$sth->bind_param(6, $newUrlData->{chan});
+	$sth->bind_param(7, $newUrlData->{md5});
 	$sth->execute;
 	$sth->finish();
 	$dbh->disconnect();
 
-	Irssi::print("$myname: URL from $channel saved to database.");
-	return 0;
+	Irssi::print($IRSSI{name}.": URL from $newUrlData->{chan} saved to database.");
+	clearUrlData();
+	return;
 }
 
 # Check from DB if old
@@ -560,7 +554,72 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":api_conversion") if $DEBUG1;
+	dp(__LINE__.":api_conversion: $param") if $DEBUG;
+
+	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/(.*?)\b/) {
+		# youtube api
+		my $videoid = $1;
+		dp(__LINE__.":api_conversion: youtube api id: ".$videoid);
+		
+		my $apikey = "AIzaSyD8ujjsiTqVujs-Z0tSrn8_HJTCyUO_04I";
+		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
+		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
+		da($ytubeapidata_json->{items});
+		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
+		dp(__LINE__.' likes: '.$likes);
+		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
+		dp(__LINE__.' comments: '. $commentcount);
+		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
+		dp(__LINE__.' title: '.$title);
+		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
+		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
+		dp(__LINE__.' channeltitle: '. $chantitle);
+		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
+		dp(__LINE__.' published: '.str2time($published));
+		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
+		$newUrlData->{desc} = $description;
+		da($newUrlData);
+		#saveToDB($nick, )
+		
+		return 1;
+	}
+
+	# TODO: imgur conversion
+	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
+		my $image = $1;
+		Irssi::print($IRSSI{name}." imgur-klick! img: $image");
+	}
+	if ($param =~/\:\/\/drive\.google\.com\/file/) {
+		# gdrive api
+		Irssi::print($IRSSI{name}." gdrive api!");
+	}
+
+}
+
+sub signal_emitters {
+	my ($param, $server, $target, @rest) = @_;
+	dp(__LINE__.":signal_emitters");
+	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
+		# sample: https://www.imdb.com/title/tt2562232/
+		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
+		Irssi::print($IRSSI{name}." IMDB signal emited!! $1");
+		# Irssi::signal_stop();
+		return 1;
+	}
+
+	# taivaanvahti id
+	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
+		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
+		Irssi::print("Taivaanvahti signal emited!! $1");
+		# Irssi::signal_stop();
+		return 1;
+	}
+	return 0;	# not emitting signal
+}
+
+sub url_conversion {
+	my ($param, $server, $target, @rest) = @_;
+	dp(__LINE__.":url_conversion, param: $param");
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
 
@@ -570,40 +629,19 @@ sub api_conversion {
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
 
-	# TODO: imgur conversion
-	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
-		my $image = $1;
-		Irssi::print("imgur-klick! img: $image");
-	}
-
 	# set newer headers if mixcloud
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
 	}
-	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
-		# sample: https://www.imdb.com/title/tt2562232/
-		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
-		Irssi::print("IMDB signal emited!! $1");
-		# Irssi::signal_stop();
-		$dontprint = 1;
-	}
 
-	# taivaanvahti id
-	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
-		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
-		Irssi::print("Taivaanvahti signal emited!! $1");
-		# Irssi::signal_stop();
-		$dontprint = 1;
-	}
-
-	# lamaz.bot.nu
+	# 8-b.fi FIXME
 	#if ($param =~ s/lamaz\.bot\.nu/localhost/gi) {
-	if ($param =~ s/lamaz\.bot\.nu:12345\/?/\[\:\:1\]\:80\//gi) {
-		Irssi::print('lamaz-bot-nu conversion2: '. $param);
-	}
-	if ($param =~ s/lamaz\.bot\.nu\//\[\:\:1\]\:81\//gi) {
-		Irssi::print('lamaz-bot-nu conversion: '. $param);
-	}
+	#if ($param =~ s/lamaz\.bot\.nu:12345\/?/\[\:\:1\]\:80\//gi) {
+	#	Irssi::print('lamaz-bot-nu conversion2: '. $param);
+	#}
+	#if ($param =~ s/8-b\.fi/\[\:\:1\]\:80/gi) {
+	#	Irssi::print('lamaz-bot-nu conversion: '. $param);
+	#}
 
 	return $param;
 
@@ -621,10 +659,9 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
-		print "$myname: Shortening sayline a bit..." if ($sayline =~ s/(.{220})(.*)/$1 .../);
+		dp(__LINE__.":sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{220})(.*)/$1 .../);
 	
 		dp(__LINE__.":sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
-		#$server->command("msg -channel $target $sayline") if grep /$target/, @enabled;
 		msg_to_channel($server, $target, $sayline);
 		clearUrlData();
 		return;
@@ -654,7 +691,7 @@ sub sig_msg_pub {
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_title($server, $target) =~ /np\:/i) {
-			dp(__LINE__.'np FOUND from channel title') if $DEBUG1;
+			dp(__LINE__.':np FOUND from channel title') if $DEBUG1;
 			$dontprint = 1;
 		} else {
 			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
@@ -681,8 +718,15 @@ sub sig_msg_pub {
 		$shortenUrl = 0;
 	}
 
-	$newUrlData->{fetchurl} = api_conversion($newUrlData->{url}, $server, $target);	#
-	
+	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);	#
+	if (api_conversion($newUrlData->{fetchurl})) {
+		# save links from every channel
+		saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
+		clearUrlData();
+		return;
+	}
+	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
+
 	if ($newUrlData->{fetchurl} eq '') {
 		#return;
 	}
@@ -701,7 +745,6 @@ sub sig_msg_pub {
 	
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
-		
 		dp(__LINE__.': sig_msg_pub new title: ' .$title) if $DEBUG_decode;
 	}
 
@@ -767,6 +810,22 @@ sub checkIfOld {
 		return 1;
 	}
 	return 0;
+}
+
+# find with keywords comma-separated list
+sub find_keywords {
+	my ($keywords, @rest) = @_;
+	Irssi::print("$myname: find_keywords request: $keywords");
+	my $returnString;
+	my @words = split /, ?/, $keywords;
+	my $search_sql = 'SELECT rowid,* from links where ';
+	my $counter = 0;
+	foreach my $searchword (@words) {
+		if ($counter > 0) {
+			$search_sql += ' or ';
+		}
+		$search_sql += "(URL like ? or TITLE like ? or DESCRIPTION like ?)";
+	}
 }
 
 sub findUrl {
@@ -1002,7 +1061,7 @@ sub clearUrlData {
 sub dp {
 	my ($string, @rest) = @_;
 	if ($DEBUG == 1) {
-		print("\n$myname debug: ".$string);
+		print($IRSSI{name}." debug: ".$string);
 	}
 }
 
@@ -1010,13 +1069,13 @@ sub dp {
 sub dd {
 	my ($string, @rest) = @_;
 	if ($DEBUG_decode == 1) {
-		print("\n$myname debug: ".$string);
+		print($IRSSI{name}." debugdecode: ".$string);
 	}
 }
 
 # debug print array
 sub da {
-	Irssi::print("debugarray: ");
+	Irssi::print($IRSSI{name}." debugarray: ");
 	Irssi::print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
 }
 

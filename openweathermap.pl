@@ -22,18 +22,12 @@ use Data::Dumper;
 binmode STDIN, ':utf8';
 binmode STDOUT, ':utf8';
 binmode STDERR, ':utf8';
-#binmode STDOUT, ":encoding(utf8)";
-#binmode STDIN, ":encoding(utf8)";
-#binmode STDERR, ":encoding(utf8)";
-#binmode FILE, ':utf8';
-#use open ':std', ':encoding(utf8)';
 
 use Data::Dumper;
-
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20200311';
+$VERSION = '20200620';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
@@ -50,7 +44,7 @@ my $apikey = '&units=metric&appid=';
 my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
@@ -243,10 +237,9 @@ sub FINDWEATHER {
 		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		return undef unless defined $name;
-		#$newurl = $url.;
 		$urltail = $name;
 		$data = request_api($newurl.$urltail);
-		return undef if ($data eq '-1');
+		return undef if (!defined $data || $data eq '-1');
 	}
 
 	my $json = decode_json($data);
@@ -348,9 +341,10 @@ sub getSayLine2 {
 # format the message
 sub getSayLine {
 	my ($json, @rest) = @_;
+	return undef unless defined $json;
 	if ($json eq '0') {
 		dp('getSayLine json = 0');
-		return 0;
+		return undef;
 	}
 	dp(__LINE__.' getDayLine json:');
 	da($json);
@@ -425,6 +419,7 @@ sub get_apperent_temp {
 	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
 	my $cosOfZenithAngle = get_cos_of_zenith_angle(deg2rad($latitude), $timestamp);
 
+	#Irssi::print('cosOfZenithAngle: ' . $cosOfZenithAngle);
 	my $secOfZenithAngle = 1/ $cosOfZenithAngle;
 	my $transmissionCoefficient = TRANSMISSIONCOEFFICIENTCLEARDAY - (TRANSMISSIONCOEFFICIENTCLEARDAY - TRANSMISSIONCOEFFICIENTCLOUDY) * ($cloudiness/100.0);
 	my $calculatedIrradiation = 0;

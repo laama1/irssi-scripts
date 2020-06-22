@@ -34,8 +34,14 @@ $json->allow_blessed(1);
 my $apikey = 'a06b4d3f';
 
 sub print_help {
-	my ($server, $target) = @_;
-	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffoja IMDB:stä hakusanalla, muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.';
+	my ($server, $target, $is_enabled) = @_;
+	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffoja OMDB:stä hakusanalla, muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.'.
+	' Käytössä: '.$is_enabled;
+	if ($is_enabled) {
+		$helpmessage .= '. Deaktivoi skripti kirjoittamalla: !imdb off.';
+	} else {
+		$helpmessage .= '. Aktivoi skripti kirjoittamalla: !imdb on.';
+	}
 	sayit($server, $target, $helpmessage);
 	return 0;
 }
@@ -44,16 +50,41 @@ sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   #self-test
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    my @enabled = split / /, $enabled_raw ;
-    return unless grep /^$target$/, @enabled;
-	
+    my @enabled = split / /, $enabled_raw;
+    
+	my $is_enabled = grep /^$target$/, @enabled;
 	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
-		print_help($server, $target);
+		print_help($server, $target, $is_enabled);
 		return;
 	}
 	
 	return unless ($msg =~ /!imdb\b/i);
 	return if KaaosRadioClass::floodCheck() == 1;
+
+	if ($msg eq "!imdb on") {
+		if ($is_enabled) {
+			sayit($server, $target, 'Aktivoitu jo!');
+			return;
+		} else {
+			Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
+			sayit($server, $target, 'Aktivoitiin IMDB-skripti kanavalla: ' . $target);
+			return;
+		}
+	} elsif ($msg eq "!imdb off") {
+		if (!$is_enabled) {
+			sayit($server, $target, 'Deaktivoitu jo!');
+			return;
+		} else {
+			my $index = 0;
+			$index++ until $enabled[$index] eq $target;
+			splice(@enabled, $index, 1);
+			Irssi::settings_set_str('imdb_enabled_channels', join(' ',@enabled));
+			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
+			return;
+		}
+	}
+	return unless $is_enabled;
+	
 	my $param = 't';		# title search
 	my $query;				# search query
 	my $year;				# year search
@@ -94,10 +125,12 @@ sub do_imdb {
 
 }
 
+# Signal received from another function. URL as parameter
 sub sig_imdb_search {
 	my ($server, $searchparam, $target, $searchword) = @_;
 	# 'imdb_search_id', $server, 'tt-search', $target, $1
-	Irssi::print("imdb3.pl, signal received: $searchparam, $searchword");
+	return unless $target ~~ Irssi::settings_get_str('imdb_enabled_channels');
+	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';
 	imdb_fetch($server, $target, $searchword, $param);
 
@@ -130,7 +163,7 @@ sub imdb_fetch {
 		return;
 	}
 
- # OMDB-API koodia
+	# OMDB-API koodia
 	if ($imdb->{Response} =~ /True/ ) {
 		dp("imdb->Response = TRUE");
 		my $saystring = print_line_from_search_result($imdb);
@@ -369,8 +402,6 @@ sub sig_msg_pub_own {
 }
 
 Irssi::signal_add('imdb_search_id', 'sig_imdb_search');
-
-
 Irssi::settings_add_str('imdb', 'imdb_enabled_channels', 'Kaaos-komennot');
 Irssi::signal_add('message public', 'do_imdb');
 Irssi::signal_add('message own_public', 'sig_msg_pub_own');
