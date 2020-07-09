@@ -44,7 +44,7 @@ my $apikey = '&units=metric&appid=';
 my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
@@ -131,7 +131,7 @@ unless (-e $db) {
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, @rest) = @_;
 	# TODO: scattered clouds, light intensity rain
-	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime") if $DEBUG1;
+	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime");
 	my $sunmoon = get_sun_moon($sunrise, $sunset, $comparetime);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
@@ -163,15 +163,18 @@ sub replace_with_emoji {
 sub is_sun_up {
 	my ($sunrise, $sunset, $comparetime, $tz, @rest) = @_;
 	#dp(__LINE__." sunrise: $sunrise, sunset: $sunset, comaparetime: $comparetime");
-	$sunrise =~ s/(.*?)T(.*)/$2/;
-	$sunset =~ s/(.*?)T(.*)/$2/;
-	$comparetime =~ s/(.*?) (.*)/$2/;
-	#dp(__LINE__." sunrise: $sunrise, sunset: $sunset, comaparetime: $comparetime");
+	#$sunrise =~ s/(.*?)T(.*)/$2/;
+	#$sunset =~ s/(.*?)T(.*)/$2/;
+	#$comparetime =~ s/(.*?) (.*)/$2/;
+	$sunrise = $sunrise % 86400;
+	$sunset = $sunset % 86400;
+	$comparetime = $comparetime % 86400;
+	dp(__LINE__." sunrise: $sunrise, sunset: $sunset, comaparetime: $comparetime") if $DEBUG1;
 	if ($comparetime > $sunset || $comparetime < $sunrise) {
-		dp(__LINE__.': sun is down') if $DEBUG1;
+		dp(__LINE__.': sun is down');
 		return 0;
 	}
-	dp(__LINE__.': sun is up') if $DEBUG1;
+	dp(__LINE__.': sun is up');
 	return 1;
 }
 
@@ -258,21 +261,22 @@ sub FINDFORECAST {
 	
 	if ($searchword =~ /(\d{5})/) {
 		my $urltail = 'zip='.$1.',fi';		# Search post numbers only from finland
-		Irssi::print("ZIP! $1 url: ".$forecastUrl.$urltail);
+		dp("ZIP! $1 url: ".$forecastUrl.$urltail) if $DEBUG1;
 		$data = request_api($forecastUrl.$urltail);
 	} else {
 		$data = request_api($forecastUrl.'q='.$searchword);
 	}
-
+	dp(__LINE__);
 	if ($data eq '-1') {
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$data = request_api($forecastUrl.'q='.$name) if defined $name;
 		return 0 if ($data eq '-1');
 	}
-
+	dp(__LINE__);
 	my $json = decode_json($data);
 	#da($json,__LINE__.': json:');
 	my $index = 0;
+	my $increment_hours = 0;
 	foreach my $item (@{$json->{list}}) {
 		if ($index >= 7) {
 			# max 8 items: 8x 3h = 24h
@@ -283,10 +287,12 @@ sub FINDFORECAST {
 		}
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
 											$json->{city}->{sunset}, $item->{dt});
+		#dp(__LINE__.' '.$item->{dt});
 		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
 		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 1) .'°C, ';
 		$index++;
 	}
+	dp(__LINE__);
 	return $returnstring;
 }
 
@@ -373,11 +379,12 @@ sub getSayLine {
 
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
-	my $wind_gust;
+	my $wind_gust = '';
 	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 1) if (defined $json->{wind}->{gust});
+	Irssi::print('wind gust: '.$wind_gust);
 	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
 	my $wind = '💨 '.$wind_speed;
-	if (defined $wind_gust && $wind_gust > 0) {
+	if (defined $wind_gust && $wind_gust ne '' && $wind_gust > 0) {
 		$wind .= " ($wind_gust)";
 	}
 	$wind .= ' m/s';
@@ -388,7 +395,7 @@ sub getSayLine {
 	my $weatherdesc = '';
 	my $index = 1;
 	foreach my $item (@{$json->{weather}}) {
-		da(__LINE__.': weather:', $item) if $DEBUG1;
+		da(__LINE__.': weather:', $item);
 		if ($index > 1) {
 			$weatherdesc .= ', ';
 		}
@@ -575,7 +582,7 @@ sub stripc {
 sub request_api {
 	my ($url, @rest) = @_;
 	$url .= $apikey;
-	dp(__LINE__.' URL: '. $url);
+	dp(__LINE__.' request_api URL: '. $url);
 	return KaaosRadioClass::fetchUrl($url);
 }
 
