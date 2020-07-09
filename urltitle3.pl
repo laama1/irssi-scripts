@@ -51,18 +51,19 @@ $VERSION = '2020-02-09';
 	changed     => $VERSION,
 );
 
+my $DEBUG = 1;
+my $DEBUG1 = 0;
+my $DEBUG_decode = 0;
 
 my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
 my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
 my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
-
+my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
+my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $howManyDrunk = 0;
 my $dontprint = 0;
 
-my $DEBUG = 1;
-my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
 my $myname = 'urltitle3.pl';
 
 # Data type
@@ -363,10 +364,10 @@ sub checkIfTitleInUrl {
 sub count_words {
 	my ($row,@rest) = @_;
 	my @array = split_row_to_array($row);
-	my $count = 0;
-	foreach my $val (@array) {
-		$count++;
-	}
+	#my $count = 0;
+	#foreach my $val (@array) {
+	#	$count++;
+	#}
 	return $#array +1;
 }
 
@@ -489,23 +490,23 @@ sub createFstDB {
 
 # Save to sqlite DB
 sub saveToDB {
-	my ($nick, $url, $title, $description, $channel, $md5hex, @rest) = @_;
+	my (@rest) = @_;
 	dp(__LINE__.': saveToDB') if $DEBUG1;
 	my $pvm = time;
 	#my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_shorten_url_channels'));
     #return if $channel ~~ @dontsave;
     
-	KaaosRadioClass::addLineToFile($logfile, $pvm . "; " . $nick . "; " . $url . "; " . $title . "; " .$description);
+	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{description});
 	
-	dp(__LINE__.":saveToDB: $db, pvm: $pvm, nick: $nick, url: $url, title: $title, description: $description, channel: $channel, md5: $md5hex") if $DEBUG1;
+	dp(__LINE__.":saveToDB: $db, pvm: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
 	$sth->bind_param(1, $newUrlData->{nick});
 	$sth->bind_param(2, $pvm, { TYPE => SQL_INTEGER });
-	$sth->bind_param(3, $url);
+	$sth->bind_param(3, $newUrlData->{url});
 	$sth->bind_param(4, $newUrlData->{title});
-	$sth->bind_param(5, $newUrlData->{desc});
+	$sth->bind_param(5, substr $newUrlData->{desc}, 0, 350);
 	$sth->bind_param(6, $newUrlData->{chan});
 	$sth->bind_param(7, $newUrlData->{md5});
 	$sth->execute;
@@ -556,14 +557,16 @@ sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
 	dp(__LINE__.":api_conversion: $param") if $DEBUG;
 
-	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/(.*?)\b/) {
+	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/) {
 		# youtube api
 		my $videoid = $1;
 		dp(__LINE__.":api_conversion: youtube api id: ".$videoid);
 		
-		my $apikey = "AIzaSyD8ujjsiTqVujs-Z0tSrn8_HJTCyUO_04I";
 		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
 		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
+		if ($ytubeapidata_json eq '-1') {
+			return 0;
+		}
 		da($ytubeapidata_json->{items});
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		dp(__LINE__.' likes: '.$likes);
@@ -579,8 +582,6 @@ sub api_conversion {
 		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
 		$newUrlData->{desc} = $description;
 		da($newUrlData);
-		#saveToDB($nick, )
-		
 		return 1;
 	}
 
@@ -629,19 +630,10 @@ sub url_conversion {
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
 
-	# set newer headers if mixcloud
+	# set more recent headers if mixcloud or other
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
 	}
-
-	# 8-b.fi FIXME
-	#if ($param =~ s/lamaz\.bot\.nu/localhost/gi) {
-	#if ($param =~ s/lamaz\.bot\.nu:12345\/?/\[\:\:1\]\:80\//gi) {
-	#	Irssi::print('lamaz-bot-nu conversion2: '. $param);
-	#}
-	#if ($param =~ s/8-b\.fi/\[\:\:1\]\:80/gi) {
-	#	Irssi::print('lamaz-bot-nu conversion: '. $param);
-	#}
 
 	return $param;
 
@@ -706,8 +698,7 @@ sub sig_msg_pub {
 
 	if (dontPrintThese($newUrlData->{url}) == 1) {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
-		saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
-		clearUrlData();
+		saveToDB();
 		return;
 	}
 	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shorten_url_channels');
@@ -721,8 +712,8 @@ sub sig_msg_pub {
 	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);	#
 	if (api_conversion($newUrlData->{fetchurl})) {
 		# save links from every channel
-		saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
-		clearUrlData();
+		msg_to_channel($server, $target, $newUrlData->{title});
+		saveToDB();
 		return;
 	}
 	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
@@ -764,8 +755,7 @@ sub sig_msg_pub {
 	}
 
 	# save links from every channel
-	saveToDB($newUrlData->{nick}, $newUrlData->{url}, $newUrlData->{title}, $newUrlData->{desc}, $newUrlData->{chan}, $newUrlData->{md5});
-	clearUrlData();
+	saveToDB();
 	return;
 }
 
@@ -805,7 +795,6 @@ sub checkIfOld {
 		$mon += 1;
 		#$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		msg_to_channel($server, $target, "w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
-		#msg_to_channel($server, $target, "w! ($prevUrls[0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		dp(__LINE__.": w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		return 1;
 	}
@@ -1004,9 +993,7 @@ sub createAnswerFromResults {
 	}
 
 	dp(__LINE__.":string: $returnstring");
-	#dp($string);
 	return $returnstring;
-
 }
 
 # Dont spam these domains.
