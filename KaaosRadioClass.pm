@@ -35,7 +35,7 @@ $VERSION = 1.03;
 @EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
 
 #$currentDir = cwd();
-my $currentDir = $ENV{HOME}.'/.irssi/scripts/irssi-scripts';
+my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 
 # tsfile, time span.. save value of current time there. For flood protect.
 my $tsfile = "$currentDir/ts";
@@ -50,11 +50,11 @@ my $flooderdate = time;		# initialize
 
 # returns last line from file -param.
 sub readLastLineFromFilename {
-	my ($file, @rest) = @_;
+	my ($filename, @rest) = @_;
 
 	my $readline = '';
-	if (defined $file && -e $file) {
-		open (INPUT, "<$file:utf8") || return -1;
+	if (defined $filename && -e $filename) {
+		open (INPUT, "<:encoding(UTF-8)", $filename) || return -1;
 		while (<INPUT>) {
 			chomp;
 			$readline = $_;
@@ -134,13 +134,11 @@ sub insertSQL {
 	return $rv
 }
 
+# give param filename, read textfile, return as array
 sub readTextFile {
-	my ($file, @rest) = @_;
+	my ($filename, @rest) = @_;
 	my @returnArray;
-	#open(INPUT, "<$file:utf8") || do {
-	open INPUT, '<:encoding(UTF8)', $file or return "Could not open $file $!";
-	#	return -1;
-	#};
+	open INPUT, '<:encoding(UTF8)', $filename or return "Could not open $filename $!";
 	while(<INPUT>) {
 		chomp;
 		push @returnArray, $_;
@@ -363,7 +361,9 @@ sub closeDB {
 sub getMonthString {
 	my ($month, $lowercase, @rest);
 	($month, $lowercase, @rest) = @_;
-	if ($month > 12 || $month < 1) return;
+	if ($month > 12 || $month < 1) {
+		return;
+	}
 	my @months = qw(Tammikuu Helmikuu Maaliskuu Huhtikuu Toukokuu Kesäkuu Heinäkuu Elokuu Syyskuu Lokakuu Marraskuu Joulukuu);
 	if ($lowercase == 1) {
 		return lc $months[$month-1];
@@ -430,7 +430,7 @@ sub getJSON {
 		return -1;
 	}
 	return -2 unless $response;
-	
+
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
 
