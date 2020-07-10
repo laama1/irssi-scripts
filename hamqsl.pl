@@ -36,7 +36,7 @@ sub pub_msg {
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(!help ham)/sgi) {
 		return if KaaosRadioClass::floodCheck() == 1;
-		my $help = getHelp();
+		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /(!hams)/sgi) {
 		return if KaaosRadioClass::floodCheck() == 1;
@@ -44,7 +44,7 @@ sub pub_msg {
         my $newdata = parse_hams_data($xml);
 
 		$serverrec->command("MSG $target $newdata");
-		Irssi::print("hamqsl.pl: request from $nick on channel $target");
+		Irssi::print($IRSSI{"name"}.": request from $nick on channel $target");
 	}
 }
 
