@@ -40,7 +40,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2020-02-09';
+$VERSION = '2020-07-09';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
