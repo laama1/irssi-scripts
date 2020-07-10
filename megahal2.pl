@@ -62,10 +62,10 @@ my @ignores = (
 
 # react to these
 my @wordlist = (
-	'tietokonei',
+	'tietokone',
 	'paskat',
-	'moikka',
-	'tervehdys',
+	'moik',
+	'terve',
 	'niinist',
 );
 
@@ -76,10 +76,10 @@ my @ignorenicks = (
 );
 
 my @channelnicks = ();               # value of nicks from the current channel
-my $currentchan;						# used in flood protect
-my $currentnetwork;						# used in flood protect
+my $currentchan = '';						# used in flood protect
+my $currentnetwork = '';						# used in flood protect
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'megahal2.pl';
 
 
@@ -94,7 +94,7 @@ sub irssi_log {
 ##
 sub populate_brain {
 	my $brain = shift;
-	dp("Brain: ".$brain);
+	dp(__LINE__." Brain: ".$brain);
 	unless (length $brain && -d $brain) {
 		$megahal = undef;
 	}
@@ -146,7 +146,7 @@ sub load_settings() {
 
 	# Create the megahal object
 	if (length $brain) {
-		dp('Populate brain next..');
+		dp(__LINE__.' Populate brain next..');
 		populate_brain($brain);
 	}
 
@@ -252,22 +252,21 @@ sub public_responder {
 	# Don't talk to yourself
 	return if $nick eq $my_nick;
 	return if $data =~ /kaaos/i && $target =~ /\#kaaosradio/i;
-
-	# Ignore lines containing URLs or !commands other than !haiku
-	return if $data =~ /tps?:\/\//i || $data =~ /www\./i; # || $data =~ /^\![^haiku]/;
-	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos ?-merkki viimeisen�
+	
+	# Ignore lines containing URLs
+	return if $data =~ /tps?:\/\//i || $data =~ /www\./i;
+	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin
 	$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/);
-	dp("$myname: Giving data to Oraakkeli..") if $skip_oraakkeli_but_learn;
+	dp(__LINE__." $myname: Giving data to Oraakkeli: ". $skip_oraakkeli_but_learn);
 	
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
 	return unless defined $megahal;
 	# replace weird/utf8 characters from user input
-	Irssi::print('is utf1; '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
+	dp(__LINE__.' is utf1; '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
 	Encode::from_to($data, 'utf-8', $charset);
 	#$data = KaaosRadioClass::replaceWeird($data);
-	Irssi::print('is utf2: '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
-	
+	dp(__LINE__.' is utf2: '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
 		if (KaaosRadioClass::floodCheck(3) > 0) {
@@ -290,9 +289,8 @@ sub public_responder {
 		# go through all nicks from channel
 		if ($data =~ $currentnick) {
 			# if somebodys nick is found from the data
-			
-			# return if it's not mine.
-			#return if $currentnick ne $my_nick;
+			# exit loop if it'smine.
+			last if $currentnick eq $my_nick;
 
 			# OR, remove nick from data instead
 			substr($data, (index $data, $currentnick), (length $currentnick)) = '';
@@ -300,15 +298,14 @@ sub public_responder {
 	}
 
 	# Does the data contain my nick?
-
 	my $nicklen = length $my_nick;
 	my $nickindex = index $data, $my_nick;
-	if ($nickindex >= 0 && !$skip_oraakkeli_but_learn) {
-		dp("nick index: $nickindex, nicklen: $nicklen");
-		dp('data before: '.$data);
-		substr($data, $nickindex, ($nicklen+1)) = '';
+	if ($nickindex >= 0 && $skip_oraakkeli_but_learn eq "") {
+		dp(__LINE__.": nick index: $nickindex, nicklen: $nicklen");
+		dp(__LINE__.' data before: '.$data);
+		substr($data, $nickindex, ($nicklen+1)) = '';	# remove one character after nick also
 		#$data = substr $data, ($nicklen +1);
-		dp('data after: '. $data);
+		dp(__LINE__.' data after: '. $data);
 		my $alldone = 0;
 		my $uniq = $nick . '@' . $target;	# nick@#target
 
@@ -378,7 +375,6 @@ sub public_responder {
 		#$output =~ s/^ *//g;		# replace spaces from beginning
 		#$output = KaaosRadioClass::replaceWeird($output);
 		#$output = "$nick: $output" if $referencesme;
-		Irssi::print("DIU4: ". $output) if $DEBUG;
 		$server->command("msg $target $nick, $output") if $output;
 
 	} else {
@@ -389,7 +385,6 @@ sub public_responder {
 				last;
 			}
 		}
-		dp("Learned something.. nick: $nick, data: $data");
 		$megahal->learn($data, 0);
 	}
 }
