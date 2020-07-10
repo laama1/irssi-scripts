@@ -14,7 +14,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2020-02-20';
+$VERSION = '2020-07-09';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
@@ -26,12 +26,9 @@ $VERSION = '2020-02-20';
 );
 my $myname = 'gsheet.pl';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/gsheet_cookies.dat';
-my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/google_apikey';
 
-open APIKEY_fh, '<:encoding(UTF-8)', $apikeyfile or die $myname.': Unable to open APIKEY file. '. $!;
-my $apik = <APIKEY_fh>;
-chomp $apik;
-close APIKEY_fh or die $myname.': Unable to close APIKEY file. '. $!;
+my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/google_apikey';
+my $apik = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 
 my $calid = '46oohofs0emt0rrm05darkobdo@group.calendar.google.com';
 my $sheetid = '1pRBIrNYjw5Qp1B8DyiyeKhFPFZB0hS_L94d4pa6V6YU';
