@@ -300,8 +300,9 @@ sub get_channel_title {
 ### Encode to UTF8. Params: $string, $charset
 sub etu8 {
 	my ($string, $charset, @rest) = @_;
+	return $string if !$charset || !$string;
 	dd(__LINE__.": etu8 function. charset: $charset string before: $string");
-	Encode::from_to($string, $charset, 'utf8') if $charset && $string;
+	Encode::from_to($string, $charset, 'utf8');
 	dd(__LINE__.": etu8 function, string after conversion to utf8: $string");
 	return $string;
 }
@@ -496,7 +497,7 @@ sub saveToDB {
 	#my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_shorten_url_channels'));
     #return if $channel ~~ @dontsave;
     
-	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{description});
+	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
 	
 	dp(__LINE__.":saveToDB: $db, pvm: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
@@ -594,7 +595,7 @@ sub api_conversion {
 		# gdrive api
 		Irssi::print($IRSSI{name}." gdrive api!");
 	}
-
+	return 0;
 }
 
 sub signal_emitters {
@@ -630,7 +631,7 @@ sub url_conversion {
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
 
-	# set more recent headers if mixcloud or other
+	# set more recent headers if mixcloud or other known website
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
 	}
@@ -695,7 +696,7 @@ sub sig_msg_pub {
 	my $isTitleInUrl = 0;	# title or file
 	my $md5hex = '';		# MD5 of requested page
 
-
+	# if we want to censore
 	if (dontPrintThese($newUrlData->{url}) == 1) {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 		saveToDB();
@@ -709,41 +710,44 @@ sub sig_msg_pub {
 		$shortenUrl = 0;
 	}
 
-	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);	#
-	if (api_conversion($newUrlData->{fetchurl})) {
-		# save links from every channel
-		msg_to_channel($server, $target, $newUrlData->{title});
-		saveToDB();
-		return;
-	}
+	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);
+	
 	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
 
-	if ($newUrlData->{fetchurl} eq '') {
+	if (api_conversion($newUrlData->{fetchurl})) {
+		#msg_to_channel($server, $target, $newUrlData->{title});
+		#saveToDB();
 		#return;
+	} else {
+		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 	}
 	
-	($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 	my $newtitle = '';
 	$newtitle = $newUrlData->{title} if $newUrlData->{title};
 
+	# if exact page was sent before on the same chan
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
-	
-	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{240})(.*)/$1.../);
+
+	# shorten output message	
+	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{250})(.*)/$1.../);
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
 	#dp(__LINE__.":sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
+	# if description would suit better than title, use description instead
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
 		dp(__LINE__.': sig_msg_pub new title: ' .$title) if $DEBUG_decode;
 	}
 
-	if ($shortModeEnabled == 0 && length($newUrlData->{url}) >= 70) {
+	# if original url longer than 70 characters, do "shorturl"
+	if ($shortModeEnabled == 0 && length $newUrlData->{url} >= 70) {
 		$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
+	# increase $howManyDrunk if necessary
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
 		if ($drunk && $howManyDrunk < 1) {
 			msg_to_channel($server, $target, 'tl;dr');
