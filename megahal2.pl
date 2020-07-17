@@ -94,7 +94,7 @@ sub irssi_log {
 ##
 sub populate_brain {
 	my $brain = shift;
-	dp(__LINE__." Brain: ".$brain);
+	dp(__LINE__." Brain path: ".$brain);
 	unless (length $brain && -d $brain) {
 		$megahal = undef;
 	}
@@ -114,7 +114,7 @@ sub populate_brain {
 			'Wrap' => 0,
 		);
 	}
-	irssi_log("$myname: Brain populated..");      # LAama1
+	irssi_log("Brain populated..");      # LAama1
 }
 
 ## TODO: 
@@ -438,9 +438,9 @@ sub learn_txt_file {
 			$megahal->learn($line, 0) if $line;
 			$linecount++;
 		}
-		Irssi::print("$myname: Learned $linecount items from $url.") if $DEBUG;
+		irssi_log("Learned $linecount items from $url.");
 	} else {
-		Irssi::print("$myname: Didn't learn anything from $url.") if $DEBUG;
+		irssi_log("Didn't learn anything from $url.");
 	}
 }
 
