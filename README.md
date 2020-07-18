@@ -2,14 +2,14 @@
 -made using Perl<br>
 -Old and new scripts, mostly WIP (work in progress)
 
-Requires extra modules:
+These scripts require extra modules:
 openweathermap.pl:
 - Number::Format
 
-hamqsl-pl:
+hamqsl.pl:
 - XML::LibXML
 
-lastspoke.pl (irssi script)
+lastspoke.pl
 - JSON::PP
 
 Webhook for Kaaosradio-discord-server added.
