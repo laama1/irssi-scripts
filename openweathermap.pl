@@ -40,6 +40,7 @@ $VERSION = '20200620';
 
 my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/openweathermap_apikey';
 my $apikey = '&units=metric&appid=';
+$apikey .= KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 #my $url = 'https://api.openweathermap.org/data/2.5/weather?q=';
 my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
@@ -111,11 +112,6 @@ https://emojipedia.org/moon-viewing-ceremony/
 =cut
 
 
-open APIKEY_fh, '<:encoding(UTF-8)', $apikeyfile or die $myname.': Unable to open APIKEY file. '. $!;
-$apikey .= <APIKEY_fh>;
-chomp $apikey;
-close APIKEY_fh or die $myname.': Unable to close APIKEY file. '. $!;
-
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
@@ -141,8 +137,9 @@ sub replace_with_emoji {
 	$string =~ s/Clear/$sunmoon /u;			# short desc
 	$string =~ s/Clouds/☁️ /u;				# short desc
 	$string =~ s/Rain/🌧️ /u;				# short desc
-	$string =~ s/light rain/☔ /u;
+	$string =~ s/thunderstorm with rain/⛈️ /u;
 	$string =~ s/thunderstorm/⚡ /u;
+	$string =~ s/light rain/☔ /u;
 	$string =~ s/scattered clouds/☁ /u;
 	my $sunup = is_sun_up($sunrise, $sunset, $comparetime);
 	if ($sunup == 1) {
@@ -154,6 +151,7 @@ sub replace_with_emoji {
 	} elsif ($sunup == 0) {
 		$string =~ s/shower rain/🌧️ /su;
 		$string =~ s/broken clouds/☁ /su;
+		$string =~ s/overcast clouds/☁ /sui;
 	}
 	return $string;
 }
@@ -235,17 +233,19 @@ sub FINDWEATHER {
 		$newurl = $url.'q=';
 	}
 	#Irssi::print("url: $newurl".$urltail);
-	my $data = request_api($newurl.$urltail);
-	if ($data eq '-1') {
+	my $json = request_api($newurl.$urltail);
+	da($json);
+	if ($json eq '-1') {
 		# city not found
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
+		dp (__LINE__.' name: '.$name);
 		return undef unless defined $name;
 		$urltail = $name;
-		$data = request_api($newurl.$urltail);
-		return undef if (!defined $data || $data eq '-1');
+		$json = request_api($newurl.$urltail);
+		return undef if (!defined $json || $json eq '-1');
 	}
 
-	my $json = decode_json($data);
+	#my $json = decode_json($data);
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
@@ -255,25 +255,25 @@ sub FINDWEATHER {
 sub FINDFORECAST {
 	my ($searchword, @rest) = @_;
 	my $returnstring = "\002klo\002 ";	# bold
-	my $data;
+	my $json;
 
 	$searchword = stripc($searchword);
 	
 	if ($searchword =~ /(\d{5})/) {
 		my $urltail = 'zip='.$1.',fi';		# Search post numbers only from finland
 		dp("ZIP! $1 url: ".$forecastUrl.$urltail) if $DEBUG1;
-		$data = request_api($forecastUrl.$urltail);
+		$json = request_api($forecastUrl.$urltail);
 	} else {
-		$data = request_api($forecastUrl.'q='.$searchword);
+		$json = request_api($forecastUrl.'q='.$searchword);
 	}
 	dp(__LINE__);
-	if ($data eq '-1') {
+	if ($json eq '-1') {
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
-		$data = request_api($forecastUrl.'q='.$name) if defined $name;
-		return 0 if ($data eq '-1');
+		$json = request_api($forecastUrl.'q='.$name) if defined $name;
+		return 0 if ($json eq '-1');
 	}
 	dp(__LINE__);
-	my $json = decode_json($data);
+	#my $json = decode_json($json);
 	#da($json,__LINE__.': json:');
 	my $index = 0;
 	my $increment_hours = 0;
@@ -312,13 +312,13 @@ sub FINDAREAWEATHER {
 	return 'City not found from DB or API.' unless ($lat && $lon && $name);
 
 	my $searchurl = $areaUrl.$lat."&lon=$lon";
-	my $data = request_api($searchurl);
+	my $json = request_api($searchurl);
 
-	if ($data eq '-1') {
+	if ($json eq '-1') {
 		return 0;
 	}
 
-	my $json = decode_json($data);
+	#my $json = decode_json($data);
 	my $sayline;
 	foreach my $city (@{$json->{list}}) {
 		# TODO: get city coords from API and save to DB
@@ -384,7 +384,7 @@ sub getSayLine {
 	Irssi::print('wind gust: '.$wind_gust);
 	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
 	my $wind = '💨 '.$wind_speed;
-	if (defined $wind_gust && $wind_gust ne '' && $wind_gust > 0) {
+	if (defined $wind_gust && $wind_gust ne '') {
 		$wind .= " ($wind_gust)";
 	}
 	$wind .= ' m/s';
@@ -456,9 +456,13 @@ sub get_minute_of_day {
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
+	dp(__LINE__.' search city from DB: '.$city);
 	$city = "%${city}%";
-	my $sql = 'SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ? or (POSTNUMBER like ? AND POSTNUMBER is not null);';
-	my @results = bind_sql($sql, ($city, $city));
+	my $sql = 'SELECT DISTINCT LAT, LON,NAME from CITIES where NAME Like ? or (POSTNUMBER like ? AND POSTNUMBER is not null) LIMIT 1;';
+	#my @results = bind_sql($sql, ($city, $city));
+	my @results = KaaosRadioClass::bindSQL($db, $sql, ($city, $city));
+	dp(__LINE__.' results:');
+	da(@results);
 	return $results[0], $results[1], decode('UTF-8', $results[2]);
 }
 
@@ -551,19 +555,19 @@ sub filter_keyword {
 	$msg = decode('UTF-8', $msg);
 
 	my $returnstring;
-	if ($msg =~ /\!(sää |saa |s )(.*)$/ui) {
+	if ($msg =~ /\!(sää |saa |s[^ae] ?)(.*)$/ui) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = getSayLine(FINDWEATHER($city));
 		$dbh = KaaosRadioClass::closeDB($dbh);
-	} elsif ($msg =~ /\!(se )(.*)$/i) {
+	} elsif ($msg =~ /\!(se ?)(.*)$/i) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = FINDFORECAST($city);
 		$dbh = KaaosRadioClass::closeDB($dbh);
-	} elsif ($msg =~ /\!(sa )(.*)$/i) {
+	} elsif ($msg =~ /\!(sa ?)(.*)$/i) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
@@ -582,8 +586,8 @@ sub stripc {
 sub request_api {
 	my ($url, @rest) = @_;
 	$url .= $apikey;
-	dp(__LINE__.' request_api URL: '. $url);
-	return KaaosRadioClass::fetchUrl($url);
+	dp(__LINE__." request_api URL: $url");
+	return KaaosRadioClass::getJSON($url);
 }
 
 # debug print
