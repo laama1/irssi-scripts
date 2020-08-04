@@ -544,8 +544,6 @@ sub checkForPrevEntry {
 		push @elements, [@row];
 	}
 
-	dp(__LINE__.':checkForPrevEntry elements:');
-	da(@elements);
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
@@ -556,7 +554,7 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":api_conversion: $param") if $DEBUG;
+	dp(__LINE__.":api_conversion: $param");
 
 	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/) {
 		# youtube api
@@ -570,19 +568,15 @@ sub api_conversion {
 		}
 		da($ytubeapidata_json->{items});
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
-		dp(__LINE__.' likes: '.$likes);
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
-		dp(__LINE__.' comments: '. $commentcount);
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
 		dp(__LINE__.' title: '.$title);
 		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
 		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
 		dp(__LINE__.' channeltitle: '. $chantitle);
 		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
-		dp(__LINE__.' published: '.str2time($published));
 		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
 		$newUrlData->{desc} = $description;
-		da($newUrlData);
 		return 1;
 	}
 
