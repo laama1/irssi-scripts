@@ -79,7 +79,7 @@ my @channelnicks = ();               # value of nicks from the current channel
 my $currentchan = '';						# used in flood protect
 my $currentnetwork = '';						# used in flood protect
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'megahal2.pl';
 
 
@@ -359,7 +359,7 @@ sub public_responder {
 		# Do nothing if the user is repeating himself
 		if (exists($lastwords->{$uniq}) && $lastwords->{$uniq} eq $data) {
 			if (rand(100) < 20) {
-				$server->command("msg $target $nick, Konnari juoksi yli j�rven.");
+				$server->command("msg $target $nick, Konnari juoksi yli järven.");
 			}
 			$alldone = 1;
 		}
