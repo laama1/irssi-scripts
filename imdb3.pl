@@ -23,7 +23,7 @@ $VERSION = '2019-01-22';
         changed     => $VERSION
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $debugfilename = Irssi::get_irssi_dir(). '/scripts/urldebuglog.txt';
 my $json = JSON->new();
@@ -129,7 +129,11 @@ sub do_imdb {
 sub sig_imdb_search {
 	my ($server, $searchparam, $target, $searchword) = @_;
 	# 'imdb_search_id', $server, 'tt-search', $target, $1
-	return unless $target ~~ Irssi::settings_get_str('imdb_enabled_channels');
+	#return unless $target ~~ Irssi::settings_get_str('imdb_enabled_channels');
+    my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
+    my @enabled = split / /, $enabled_raw;
+	return unless grep /^$target$/, @enabled;
+
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';
 	imdb_fetch($server, $target, $searchword, $param);
