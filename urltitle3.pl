@@ -192,7 +192,7 @@ sub fetch_title {
 		}
 
 	} else {
-		Irssi::print("$myname: Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		Irssi::print("$myname: Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		return 'Error: '.$response->status_line, 0,0, $md5hex;
 	}
 
@@ -201,7 +201,7 @@ sub fetch_title {
 			dp(__LINE__.':Short mode enabled = 1');
 			return '', 0 , 0, $md5hex;
 		} else {
-			return 'File: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
+			return 'Mimetype: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
 		}
 	}
 
@@ -554,12 +554,12 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":api_conversion: $param");
+	dp(__LINE__.":api_conversion: $param") if $DEBUG1;
 
 	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/) {
 		# youtube api
 		my $videoid = $1;
-		dp(__LINE__.":api_conversion: youtube api id: ".$videoid);
+		dp(__LINE__.":api_conversion: youtube api id: ".$videoid) if $DEBUG1;
 		
 		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
 		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
@@ -585,16 +585,28 @@ sub api_conversion {
 		my $image = $1;
 		Irssi::print($IRSSI{name}." imgur-klick! img: $image");
 	}
-	if ($param =~/\:\/\/drive\.google\.com\/file/) {
+	if ($param =~/\:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]*)/) {
 		# gdrive api
-		Irssi::print($IRSSI{name}." gdrive api!");
+		my $fileid = $1;
+		my $apiurl = "https://www.googleapis.com/drive/v3/files/".$fileid."?key=".$apikey;
+		Irssi::print($IRSSI{name}." gdrive api! fileid: $fileid, apiurl: $apiurl");
+		my $gdriveapidata_json = KaaosRadioClass::getJSON($apiurl);
+		#dp($gdriveapidata_json);
+		if ($gdriveapidata_json eq '-1') {
+			print "FAK!";
+			return 0;
+		}
+		da($gdriveapidata_json);
+		$newUrlData->{title} = 'Mimetype: '.$gdriveapidata_json->{mimeType}.', name: '.$gdriveapidata_json->{name};
+		#$newUrlData->{desc} = $description;
+		return 1;
 	}
 	return 0;
 }
 
 sub signal_emitters {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":signal_emitters");
+	dp(__LINE__.":signal_emitters") if $DEBUG1;
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
@@ -615,7 +627,7 @@ sub signal_emitters {
 
 sub url_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":url_conversion, param: $param");
+	dp(__LINE__.":url_conversion, param: $param") if $DEBUG1;
 	# spotify conversion
 	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
 
