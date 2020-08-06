@@ -2,19 +2,11 @@ use Irssi;
 use warnings;
 use strict;
 use utf8;
-#binmode(STDOUT, ':utf8');
-#binmode(STDIN, ':utf8');
-#use open ':std', ':encoding(UTF-8)';
-#use Irssi::Irc;
-#use DBI;
-#use DBI qw(:sql_types);
-#use Encode;
-#use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
-
-
+use Time::HiRes;
 use vars qw($VERSION %IRSSI);
-$VERSION = '20200719';
+
+$VERSION = '20200806';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -27,9 +19,10 @@ $VERSION = '20200719';
 
 my @channels = ('#Chat', '#salamolo2', '#salamolo', '#chat');
 my @answers = ('.bef', '.bang', '.pew');
-my @keywords = ('KWEK', 'FLAP');
+my @keywords = ('KWEK', 'FLAP');		# TODO
 my $DEBUG = 1;
 
+# send private message
 sub msgit {
 	my ($server, $nick, $text, @rest) = @_;
 	$server->command("msg $nick $text");
@@ -44,6 +37,7 @@ sub sayit {
 	return;
 }
 
+# check if line contains these regexp
 sub if_kwek {
 	my ($msg, $nick, @rest) = @_;
 	if($msg =~ /KWEK/ || $msg =~ /FLAP/) {
@@ -53,14 +47,15 @@ sub if_kwek {
 	return undef;
 }
 
+# run this function on every text line
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	#Irssi::print($IRSSI{name}.' pubmsg! target: '. $target);
 	if ($target ~~ @channels) {
 		my $newReturnString = if_kwek($msg, $nick);
 		if ($newReturnString) {
-			sleep(4);
-			print($IRSSI{name}."> target found! $target, returnstring: $newReturnString") if $DEBUG;
+			sleep 3;
+			my $howlong = Time::HiRes::sleep(rand(6));
+			print($IRSSI{name}."> target found! $target, returnstring: $newReturnString. Slept for $howlong+3 seconds") if $DEBUG;
 			sayit($server, $target, $newReturnString);
 		}
 	}
