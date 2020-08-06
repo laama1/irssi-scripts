@@ -45,7 +45,7 @@ $apikey .= KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
@@ -381,7 +381,7 @@ sub getSayLine {
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
 	my $wind_gust = '';
 	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 1) if (defined $json->{wind}->{gust});
-	Irssi::print('wind gust: '.$wind_gust);
+	dp(__LINE__.': wind gust: '.$wind_gust);
 	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
 	my $wind = '💨 '.$wind_speed;
 	if (defined $wind_gust && $wind_gust ne '') {
