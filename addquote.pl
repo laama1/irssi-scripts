@@ -84,7 +84,7 @@ sub parseQuote {
 			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
 		}
 	} elsif ($msg =~ /^!rq (.{3,15})/gi) {
-		my $searchword = $1;
+		my $searchword = decode('UTF-8', $1);
 		dp(__LINE__." searchword: $searchword");
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
 		my @answers;
