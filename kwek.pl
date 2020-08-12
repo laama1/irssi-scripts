@@ -6,7 +6,7 @@ use Data::Dumper;
 use Time::HiRes;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '20200806';
+$VERSION = '20200812';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -18,9 +18,9 @@ $VERSION = '20200806';
 );
 
 my @channels = ('#Chat', '#salamolo2', '#salamolo', '#chat');
-my @answers = ('.bef', '.bang', '.pew');
+my @answers = ('.boo','.bang', '.pang', '.pew', '.peng', '.p00f', '.paf', '.boem', '.kaboom', '.knal', '.bef', '.hump');
 my @keywords = ('KWEK', 'FLAP');		# TODO
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 # send private message
 sub msgit {
