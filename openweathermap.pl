@@ -45,7 +45,9 @@ $apikey .= KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $url = 'https://api.openweathermap.org/data/2.5/weather?';
 my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
-my $DEBUG = 0;
+my $uvUrl = 'http://api.openweathermap.org/data/2.5/uvi?&lat=';
+my $uvforecastUrl = 'http://api.openweathermap.org/data/2.5/uvi/forecast?';
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
@@ -110,7 +112,6 @@ UTF8 emojis:
 https://emojipedia.org/moon-viewing-ceremony/
 
 =cut
-
 
 
 unless (-e $db) {
@@ -226,7 +227,7 @@ sub FINDWEATHER {
 	my $newurl;
 	my $urltail = $searchword;
 	if ($searchword =~ /(\d{5})/) {
-		dp(__LINE__." ZIP! $1");
+		dp(__LINE__." ZIP-code found: $1");
 		$newurl = $url.'zip=';
 		$urltail = $1.',fi';		# Search post numbers only from finland
 	} else {
@@ -235,9 +236,10 @@ sub FINDWEATHER {
 	#Irssi::print("url: $newurl".$urltail);
 	my $json = request_api($newurl.$urltail);
 	da($json);
+	my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
+
 	if ($json eq '-1') {
 		# city not found
-		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		dp (__LINE__.' name: '.$name);
 		return undef unless defined $name;
 		$urltail = $name;
@@ -245,7 +247,7 @@ sub FINDWEATHER {
 		return undef if (!defined $json || $json eq '-1');
 	}
 
-	#my $json = decode_json($data);
+	$json->{uvindex} = FINDUVINDEX($lat, $lon);
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	SAVECITY($json);
 	SAVEDATA($json);
@@ -327,6 +329,18 @@ sub FINDAREAWEATHER {
 	return $sayline;
 }
 
+sub FINDUVINDEX {
+	my ($lat, $lon, @rest) = @_;
+
+	my $searchurl = $uvUrl.$lat."&lon=$lon";
+	my $json = request_api($searchurl);
+
+	if ($json eq '-1') {
+		return undef;
+	}
+	return $json->{value}
+}
+
 # format the message in another way
 sub getSayLine2 {
 	my ($json, $sunrise, $sunset,@rest) = @_;
@@ -402,9 +416,13 @@ sub getSayLine {
 		$weatherdesc .= $item->{description};
 		$index++;
 	}
+	my $uv_index = '';
+	if (defined $json->{uvindex} && $json->{uvindex} > 0) {
+		$uv_index = ', UVI: '.$json->{uvindex};
+	}
 	da(__LINE__.': weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt});
-	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.$newdesc.'. '.$sunrise.', '.$sunset.', '.$wind.$sky.$apptemp;
+	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.$newdesc.'. '.$sunrise.', '.$sunset.', '.$wind.$sky.$apptemp.$uv_index;
 	return $returnvalue;
 }
 
