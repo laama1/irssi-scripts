@@ -22,7 +22,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $DEBUG = 1;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20200811';
+$VERSION = '20200812';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -51,6 +51,7 @@ sub event_privmsg {
 	return;
 }
 
+# msg to $kanava
 sub sayit {
 	my ($msg) = @_;
 	my @windows = Irssi::windows();
@@ -68,7 +69,6 @@ sub sayit {
 sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
 	if($msg =~ /^!aq\s(.{1,470})/gi) {
-		#dp("parseQuote nick: $nick");
 		my $uusiquote = decode('UTF-8', $1);
 		my $pituus = length $uusiquote;
 		if ($pituus < 470) {
@@ -77,7 +77,6 @@ sub parseQuote {
 			saveToDB($nick, $uusiquote, $target);
 			print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
-			#sayit(':)');
 			$server->command("msg $target :)");
 		} else {
 			print($IRSSI{name}."> $msg request from $nick (too long!)");
@@ -89,20 +88,18 @@ sub parseQuote {
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
 		my @answers;
 		LINE: for (@$data) {
-			#next LINE unless ();
 			if ($_ =~ /$searchword/gi ) {
 				chomp (my $rimpsu = $_);
-				#dp(__LINE__." rimpsu: $rimpsu");
 				push @answers, $rimpsu;
 			}
 		}
 		my $amount_a = scalar @answers;
 		if ($amount_a > 0) {
-			dp("LÖYTYI!");
+			dp(__LINE__." LÖYTYI!");
 			my $sayline = rand_line(@answers);
-			$server->command("MSG $target $sayline");			#splitlong.pl handles splitting message to many (if installed)
+			$server->command("MSG $target $sayline");
 		} else {
-			dp("EI LÖYTYNYT");
+			dp(__LINE__." EI LÖYTYNYT");
 			da(@answers);
 
 		}
@@ -117,7 +114,7 @@ sub parseQuote {
 			next LINE unless ($rand == $linecount);
 			if($rand == $linecount) {
 				chomp (my $rimpsu = $_);
-				$server->command("MSG $target $rimpsu");			#splitlong.pl handles splitting message to many (if installed)
+				$server->command("MSG $target $rimpsu");
 				print($IRSSI{name}."> vastasi: '$rimpsu' for $nick on channel: $target");
 				last;
 			}
@@ -142,7 +139,6 @@ sub rand_line {
 				last;
 			}
 		}
-
 	return undef;
 }
 
