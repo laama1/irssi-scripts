@@ -1,11 +1,10 @@
 use warnings;
 use strict;
 use Irssi;
-#use KaaosRadioClass;				# LAama1 7.3.2019
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = "20200527";
+$VERSION = "20200911";
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
