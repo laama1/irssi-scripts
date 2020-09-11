@@ -167,7 +167,7 @@ sub writeToFile {
 	return 0;
 }
 
-# overwrite
+# overwrite file
 sub writeArrayToFile {
 	my ($filename, @array) = @_;
 	open my $OUTPUT, '>:utf8', $filename || do {
@@ -337,6 +337,21 @@ sub writeToOpenDB {
 	return 0;
 }
 
+sub readFromOpenDB {
+	my ($dbh, $string, @params, @rest) = @_;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	$sth->execute();
+
+	if(my @line = $sth->fetchrow_array) {
+		dp(__LINE__.': --fetched a result--');
+		dp(Dumper @line);
+		$sth->finish();
+		$dbh->disconnect();
+		return @line;
+	}
+	return;
+}
+
 sub writeToDB {
 	my ($db, $string) = @_;
 	my $dbh = connectSqlite($db);
@@ -430,10 +445,8 @@ sub getJSON {
 		return -1;
 	}
 	return -2 unless $response;
-
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
-
 	$json = decode_json($response);
 	return $json;
 }

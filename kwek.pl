@@ -18,7 +18,7 @@ $VERSION = '20200812';
 );
 
 my @channels = ('#Chat', '#salamolo2', '#salamolo', '#chat');
-my @answers = ('.boo','.bang', '.pang', '.pew', '.peng', '.p00f', '.paf', '.boem', '.kaboom', '.knal', '.bef', '.hump');
+my @answers = ('.boo','.bang', '.pang', '.pew', '.peng', '.p00f', '.paf', '.boem', '.knal', '.bef', '.hump');
 my @keywords = ('KWEK', 'FLAP');		# TODO
 my $DEBUG = 0;
 

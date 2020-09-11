@@ -25,25 +25,21 @@ my $nicktail = '^_^';
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
 my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams', 'nam', 'kelpaa');
 my $foodcounter = 0;
-my $foodlevel = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
 
 my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'porn', 'hyvää', 'chill', 'siisti', 'elin', 'koodi');
 my @loveanswer_words = ('*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3');
 my $lovecounter = 0;
-my $lovelevel = 0;
 my @lovenicks = ('luvdisc', 'pikatsu', 'pantisy', 'soul');
 
 my @drugs = ('kalja', 'bisse', 'hiisi', 'pieru', 'viina', 'heroiini', 'bongi', 'juoppo', 'kahvi');
 my @druganswer_words = ('^_^', '-_-', 'o_O', 'O_o', '._.', '8-)', '(--8', 'i need');
 my $drugcounter = 0;
-my $druglevel = 0;
 my @drugnicks = ('psyduck', 'golduck', 'spoink', 'grumpig', 'kamatotsy');
 
 my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska', 'jumal', 'kapitalismi', 'raha');
 #my @hateanswer_words = ('');
 my $hatecounter = 0;
-my $hatelevel = 0;
 my @hatenicks = ('satan_', 'devil_', 'demon_', 'antichrist_', 'mephistopheles');
 
 my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy');
@@ -97,7 +93,7 @@ sub if_lvlup {
 	my $modulo = $counter % $levelpoints;
 	if ($modulo == 0) {
 		# level up
-		Irssi::print('tamagotchi.pl: level up! ('.count_level($counter).')');
+		Irssi::print(%IRSSI{name}.': level up! ('.count_level($counter).')');
 		return count_level($counter);
 	}
 	return 0;
@@ -145,22 +141,22 @@ sub pubmsg {
 	if (match_word($msg, @foods)) {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
-		evolve($serverrec, $target, $foodlevel, 'FooD', @foodnicks) if (if_lvlup($foodcounter));
+		evolve($serverrec, $target, count_level($foodcounter, @foodnicks), 'FooD', @foodnicks) if (if_lvlup($foodcounter));
 		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
-		evolve($serverrec, $target, $druglevel, 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
+		evolve($serverrec, $target, count_level($drugcounter, @drugnicks), 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
 		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
-		evolve($serverrec, $target, $lovelevel, 'LovE', @lovenicks) if(if_lvlup($lovecounter));
+		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
-		evolve($serverrec, $target, $hatelevel, 'HaT', @hatenicks) if(if_lvlup($hatecounter));
+		evolve($serverrec, $target, count_level($hatecounter, @hatenicks), 'HaT', @hatenicks) if(if_lvlup($hatecounter));
 		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter");
 	}
 }

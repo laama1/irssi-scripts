@@ -14,7 +14,7 @@ use Data::Dumper;
 
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20191111';
+$VERSION = '20200818';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -49,10 +49,9 @@ unless (-e $db) {
 
 sub print_help {
 	my ($server, $target) = @_;
-	dp(__LINE__.':Printing help..');
 	sayit($server, $target, $helptext);
 	sayit($server, $target, get_statistics());
-	return 0;
+	return;
 }
 
 sub msgit {
@@ -76,14 +75,13 @@ sub get_statistics {
 # Say it public to a channel. Params: $server, $target, $saywhat
 sub sayit {
 	my ($server, $target, $saywhat) = @_;
-	dp(__LINE__.':sayit: '. $saywhat);
 	$server->command("MSG $target $saywhat");
 	return;
 }
 
 sub find_mato {
 	my ($searchword, @rest) = @_;
-	Irssi::print("$myname: etsi request: {$searchword}.");
+	print(%IRSSI{name}."> etsi request: {$searchword}.");
 	my $returnstring = '';
 	if ($searchword =~ s/kaikki: //gi || $searchword =~ s/all: //gi) {
 		dp(__LINE__.': find_mato 1');
@@ -237,19 +235,32 @@ sub get_position {
 
 sub UPDATECOLUMN {
 	my ($id, $column, $value, @rest) = @_;
-	my $sqlstr1 = "SELECT $column from korvamadot where rowid = ?";
+	my $returnstring;
+	my $oldvalue;
+	my $sqlstr1 = "SELECT $column from korvamadot where rowid = ?";		# get old value first
 	my $sqlstr2 = "UPDATE korvamadot SET $column = ? WHERE rowid = ?";
 	my $dbh = KaaosRadioClass::connectSqlite($db);
-	#my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 }) or die DBI::errstr;
+
 	my $sth1 = $dbh->prepare($sqlstr1) or return; #die DBI::errstr;
 	$sth1->bind_param(1, $id, { TYPE => SQL_INTEGER });
-	
+	$sth1->execute();
+	if($oldvalue = $sth1->fetchrow_array) {
+		dp(__LINE__.': --fetched a result-- '. $oldvalue);
+	} else {
+		$oldvalue = '<tyhjä>';
+	}
+	$sth1->finish();
+
 	my $sth2 = $dbh->prepare($sqlstr2) or die DBI::errstr;
 	$sth2->bind_param(1, $value);
 	$sth2->bind_param(2, $id, { TYPE => SQL_INTEGER });
-	$sth2->execute;
+	$sth2->execute();
 	$sth2->finish();
 	$dbh->disconnect();
+
+	if ($oldvalue ne '') {
+		return "Päivitetty. Oli: $oldvalue";
+	}
 	return 1;
 }
 
@@ -265,62 +276,45 @@ sub IFUPDATE {
 		my $link1 = $1;
 		Irssi::print("$myname Add link1: $link1");
 		return UPDATECOLUMN($id, 'link1', $1);
-		#return 1;
-		#$updatestring = "$suffix link1 = \"$link1\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /link2:? ?(.*)/gi) {
 		my $link2 = $1;
 		Irssi::print("$myname Add link2: $link2");
 		return UPDATECOLUMN($id, 'link2', $1);
-		#$updatestring = "$suffix link2 = \"$link2\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info1?:? ?(.*)/gi) {
 		my $info1 = $1;
 		Irssi::print("$myname Add info1: $info1");
 		return UPDATECOLUMN($id, 'info1', $1);
-		
-		#$updatestring = "$suffix info1 = \"$info1\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info2:? ?(.*)/gi) {
 		my $info2 = $1;
 		Irssi::print("$myname Add info2: $info2");
 		return UPDATECOLUMN($id, 'info2', $1);
-		
-		#$updatestring = "$suffix info2 = \"$info2\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
 		my $artist = $1;
 		Irssi::print("$myname Add Artist: $artist");
 		return UPDATECOLUMN($id, 'artist', $1);
-		#$updatestring = "$suffix artist = \"$artist\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
 	} elsif ($command =~ /title:? ?(.*)/gi) {
-		#my $title = $1;
+		print(%IRSSI{name}."> Add title: $1");
 		return UPDATECOLUMN($id, 'title', $1);
-		#$updatestring = "$suffix title = \"$title\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT title from korvamadot where rowid = $id";
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
-		#my $lyrics = $1;
+		print(%IRSSI{name}."> Add lyrics: $1");
 		return UPDATECOLUMN($id, 'quote', $1);
-		#$updatestring = "$suffix quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
-		#$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
 	}
 
 	if ($updatestring ne '') {
-			my $oldvalue = KaaosRadioClass::readLineFromDataBase($selectoldstring);
-			# HACK:
-			dp(__LINE__.': oldvalue: '. $oldvalue.' oldstring: '.$selectoldstring);
+		my $oldvalue = KaaosRadioClass::readLineFromDataBase($selectoldstring);
+		# HACK:
+		dp(__LINE__.': oldvalue: '. $oldvalue.' oldstring: '.$selectoldstring);
 
-			if (not $oldvalue) {
-				$oldvalue = '<tyhjä>';
-			}
-			#my $returnvalue = updateDB($string);
-			#if ($returnvalue == 0) {
-				return "Päivitetty. Oli: $oldvalue";
-			#}
+		if (not $oldvalue) {
+			$oldvalue = '<tyhjä>';
 		}
+		#my $returnvalue = updateDB($string);
+		#if ($returnvalue == 0) {
+			return "Päivitetty. Oli: $oldvalue";
+		#}
+	}
 
-	return; #($updatestring, $selectoldstring);
+	return;
 }
 
 sub check_if_exists {
@@ -416,9 +410,8 @@ sub if_korvamato {
 			return 'En tajunnut! Kokeile !korvamato etsi: <hakusana>';
 		}
 
-		#my ($string, $oldstring) =
-		if (IFUPDATE($id, $command)) {
-			return $1;
+		if (my $updated = IFUPDATE($id, $command)) {
+			return $updated;
 		}
 
 		if (check_if_delete($command, $id) > 0) {
@@ -431,38 +424,22 @@ sub if_korvamato {
 
 		if ($command =~ /(.*)/gi && $id == -1) {
 			my $newcommand = $1;
-			#dp(__LINE__.":Parse command: $newcommand \n");
 			if ($newcommand =~ /\bartisti?\:? (.*)/i) {
 				$artist = parseAwayKeywords($1);
-				dp(__LINE__.": Artist: $artist") if $artist;
-			}
-			if ($newcommand =~ /\btitle\:? (.*)/i) {
+			} elsif ($newcommand =~ /\btitle\:? (.*)/i) {
 				$title = parseAwayKeywords($1);
-				dp(__LINE__.": Title: $title") if $title;
-			}
-			if ($newcommand =~ /\burl\:? (.*)/i) {
+			} elsif ($newcommand =~ /\burl\:? (.*)/i) {
 				$url = parseAwayKeywords($1);
-				dp(__LINE__.": Url: $url") if $url;
-			}
-			if ($newcommand =~ /\binfo1\:? (.*)/i) {
+			} elsif ($newcommand =~ /\binfo1\:? (.*)/i) {
 				$info1 = parseAwayKeywords($1);
-				dp(__LINE__.": Info1: $info1") if $info1;
-			}
-			if ($newcommand =~ /\binfo2\:? (.*)/i) {
+			} elsif ($newcommand =~ /\binfo2\:? (.*)/i) {
 				$info2 = parseAwayKeywords($1);
-				dp(__LINE__.": Info2: $info2") if $info2,
-			}
-			if ($newcommand =~ /\blink1\:? (.*)/i) {
+			} elsif ($newcommand =~ /\blink1\:? (.*)/i) {
 				$link1 = parseAwayKeywords($1);
-				dp(__LINE__.": Link1: $link1") if $link1;
-			}
-			if ($newcommand =~ /\blink2\:? (.*)/i) {
+			} elsif ($newcommand =~ /\blink2\:? (.*)/i) {
 				$link2 = parseAwayKeywords($1);
-				dp(__LINE__.": Link2: $link2") if $link2;
-			}
-			if ($newcommand =~ /\blyrics\:? (.*)/i) {
+			} elsif ($newcommand =~ /\blyrics\:? (.*)/i) {
 				$lyrics = parseAwayKeywords($1);
-				dp(__LINE__.": Lyrics: $lyrics") if $lyrics;
 			}
 
 			# Do a search from database
@@ -653,7 +630,7 @@ sub createAnswerFromResultsor {
 	}
 
 	if (defined($deleted) && $deleted == 0) {
-		dp(__LINE__.": String: $string");
+		#dp(__LINE__.": String: $string");
 		return $string;
 	}
 	return 'Poistettu.';
