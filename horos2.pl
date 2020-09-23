@@ -28,7 +28,7 @@ my $helpmessage = '!horo <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti
 
 my $debug = 1;
 
-my @weekdays = ('maanantain', 'tiistain', 'keskiviikon', 'torstain', 'perjantain', 'lauantain', 'sunnuntain');
+my @weekdays = ('maanantai', 'tiistai', 'keskiviiko', 'torstai', 'perjantai', 'lauantai', 'sunnuntai');
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
 
 my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
@@ -51,7 +51,7 @@ sub event_priv_msg {
 	if ($msg =~ /\!help/i) { 
 		$server->command("msg -nick $nick $helpmessage");
 	}
-	return unless ($msg =~ /\!horo/i);
+	return unless ($msg =~ /\!h/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -63,7 +63,7 @@ sub event_pub_msg {
 		$serverrec->command("msg -channel $target $helpmessage");
 	}
 
-	return unless ($msg =~ /\!horo/i);
+	return unless ($msg =~ /\!h/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
@@ -145,6 +145,7 @@ sub grepKeyword {
 	chomp (my $tomorrowak = @weekdays[`date +%u`]);
 
 	my $month = strftime "%B", localtime $currenttime;
+	my $year = strftime "%Y", localtime $currenttime;
 	#Irssi::print("tset locale 3 tomorrow: $tomorrow month: $month");
 	chomp (my $nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month" 2>>horosstderr.txt`);
 	my $season = checkSeason($month, 0);
@@ -163,6 +164,7 @@ sub grepKeyword {
 	$rimpsu =~ s/\$seasonob/$seasonob/g;
 	$rimpsu =~ s/\$moonphase/$moonphase/g;
 	$rimpsu =~ s/\$tomorrow/$tomorrow/g;
+	$rimpsu =~ s/\$year/$year/g;
 	return $rimpsu;
 }
 
