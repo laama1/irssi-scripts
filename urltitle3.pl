@@ -566,7 +566,7 @@ sub api_conversion {
 		if ($ytubeapidata_json eq '-1') {
 			return 0;
 		}
-		da($ytubeapidata_json->{items});
+		da($ytubeapidata_json->{items}) if $DEBUG1;
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};

@@ -363,7 +363,7 @@ sub getSayLine {
 	my ($json, @rest) = @_;
 	return undef unless defined $json;
 	if ($json eq '0') {
-		dp('getSayLine json = 0');
+		dp(__LINE__.' getSayLine json = 0');
 		return undef;
 	}
 	dp(__LINE__.' getDayLine json:');
@@ -376,7 +376,9 @@ sub getSayLine {
 	} else {
 		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
 	}
+	my $havaintotime = localtime($json->{dt})->strftime('%H:%M');
 	my $apptemp = get_apperent_temp($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
+	dp(__LINE__.': havaintotime: '.$havaintotime);
 	dp(__LINE__.': apparent temp: '.$apptemp);
 	dp(__LINE__.': feels like: '.$json->{main}->{feels_like});
 	my $sky = '';

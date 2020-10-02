@@ -157,14 +157,13 @@ sub event_privmsg {
 	my ($server, $data, $nick, $address) = @_;
 	#if($data =~ /^!kick (#[^\s]*) ([^\s]*) (.{1,470})/gi) {
 	if($data =~ /^!kick (#[^\s]*) ([^\s]*)(.*)/gi) {
-		dp(__LINE__.": event_privmsg params: $1 $2");
+		dp(__LINE__.": event_privmsg kick 3 params: $1 $2 $3");
 		my $kickchannel = $1;
 		my $kicknick = $2;
-		#my $kickreason = 'dat ass';
 		my $kickreason = $3;
 		if (get_nickrec($server, $kickchannel, $kicknick)) {
 			dp(__LINE__.': event_privmsg, get_nickrec found');
-			if (ifop2($server, $kickchannel, $nick)) {
+			if (ifop($server, $kickchannel, $nick)) {
 				dp(__LINE__.": event_privmsg, $nick is op.");
 				doKick($server, $kickchannel, $kicknick, $kickreason);
 				msgit($server, $nick, "Kicked $kicknick off $kickchannel!");
@@ -177,12 +176,13 @@ sub event_privmsg {
 			msgit($server, $nick, "No nick $kicknick on $kickchannel!");
 		}
 	} elsif ($data =~ /^!kickban (#[^\s]*) ([^\s]*)(.*)/gi) {
+		dp(__LINE__.": event_privmsg kickban 3 params: $1 $2 $3");
 		my $banchannel = $1;
 		my $bannick = $2;
 		#my $banreason = 'dat ass';
 		my $banreason = $3;
 		if (get_nickrec($server, $banchannel, $bannick)) {
-			if (ifop2($server, $banchannel, $nick)) {
+			if (ifop($server, $banchannel, $nick)) {
 				#dp(__LINE__.": event_privmsg, $nick is op.");
 				do_ban($server, $banchannel, $bannick, $banreason);
 				msgit($server, $nick, "Banned $bannick off $banchannel!");
@@ -206,7 +206,6 @@ sub badWordFilter {
 	return 0;
 }
 
-
 sub get_nickrec {
 	my ($server, $channel, $nick) = @_;
 	return unless defined $server && defined $channel && defined $nick;
@@ -215,7 +214,7 @@ sub get_nickrec {
 }
 
 # if $nick is OP or VOICE or HALFOP
-sub ifop2 {
+sub ifop {
 	my ($server, $channel, $nick) = @_;
 	my $nickrec = get_nickrec($server, $channel, $nick);
 	return ($nickrec->{op} == 1 || $nickrec->{voice} == 1 || $nickrec->{halfop} == 1) ? 1 : 0;
@@ -228,16 +227,18 @@ sub event_pubmsg {
 	my @enabled = split / /, $enabled_raw;
 	return unless grep /$target/, @enabled;
 
-	if ($msg =~ /^!help kick\b/i || $msg =~ /^!kick$/i) {
+	if ($msg =~ /^!help kick(pelle)?/i) {
 		print_help($server, $target);
 		return;
+	} elsif ($msg =~ /!help$/i) {
+		sayit($server, $target, '!help kickpelle, for more info');
 	}
 	if (badWordFilter($msg)) {
 		doKick($server, $target, $nick, 'Bad words!');
 		return;
 	}
 
-	if (ifop2($server, $target, $nick) != 1) {
+	if (ifop($server, $target, $nick) != 1) {
 		return;
 	}
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{

@@ -51,7 +51,7 @@ sub event_priv_msg {
 	if ($msg =~ /\!help/i) { 
 		$server->command("msg -nick $nick $helpmessage");
 	}
-	return unless ($msg =~ /\!h/i);
+	return unless ($msg =~ /\!h[^eu]/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -63,7 +63,7 @@ sub event_pub_msg {
 		$serverrec->command("msg -channel $target $helpmessage");
 	}
 
-	return unless ($msg =~ /\!h/i);
+	return unless ($msg =~ /\!h[^eu]/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
