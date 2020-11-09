@@ -98,7 +98,8 @@ my $cookie_jar = HTTP::Cookies->new(
 	autosave => 1,
 );
 my $max_size = 262144;		# bytes
-my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+#my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; fi-FI; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/65.0';
 my %headers = (
 	'agent' => $useragentOld,
@@ -408,9 +409,8 @@ sub split_row_to_array {
 
 	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
-	#my @returnArray = split(/[\s\&\+\-\–\–\_\.\/\=\?\#]+/, $row);
 	dd('split_row_to_array word count: ' . ($#returnArray+1)) if $DEBUG1;
-	da(@returnArray) if $DEBUG1;
+	da(@returnArray);
 	return @returnArray;
 }
 
@@ -439,7 +439,7 @@ sub replace_non_url_chars {
 
 	$row =~ s/ / /g;		# no-break space nbsp
 
-	dd(__LINE__.": replace non url chars row after: $row") if $DEBUG1;
+	dd(__LINE__.": replace non url chars row after: $row");
 	return $row;
 }
 
@@ -570,10 +570,10 @@ sub api_conversion {
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
-		dp(__LINE__.' title: '.$title);
+		dp(__LINE__.' youtube title: '.$title);
 		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
 		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
-		dp(__LINE__.' channeltitle: '. $chantitle);
+		dp(__LINE__.' youtube channeltitle: '. $chantitle);
 		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
 		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
 		$newUrlData->{desc} = $description;
@@ -585,7 +585,9 @@ sub api_conversion {
 		my $image = $1;
 		Irssi::print($IRSSI{name}." imgur-klick! img: $image");
 	}
-	if ($param =~/\:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]*)/) {
+
+	# google drive
+	if ($param =~ /\:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]*)/) {
 		# gdrive api
 		my $fileid = $1;
 		my $apiurl = "https://www.googleapis.com/drive/v3/files/".$fileid."?key=".$apikey;
@@ -596,11 +598,28 @@ sub api_conversion {
 			print "FAK!";
 			return 0;
 		}
-		da($gdriveapidata_json);
+		da($gdriveapidata_json) if $DEBUG1;
 		$newUrlData->{title} = 'Mimetype: '.$gdriveapidata_json->{mimeType}.', name: '.$gdriveapidata_json->{name};
 		#$newUrlData->{desc} = $description;
 		return 1;
 	}
+
+	# instagram API
+	if ($param =~ /www.instagram.com/) {
+		# instagram conversion, example: https://api.instagram.com/oembed/?url=https://www.instagram.com/p/CFKNRqNhW32/
+		Irssi::print($IRSSI{name}.' Instagram url detected!');
+		my $instapiurl = 'https://api.instagram.com/instagram_oembed/?url=' . $param;
+		dp('instapi url:'.$instapiurl);
+		my $instajson = KaaosRadioClass::getJSON($instapiurl);
+		if ($instajson eq '-1') {
+			print "FUUK!";
+			return 0;
+		}
+		dp($instajson->{title});
+		$newUrlData->{title} = KaaosRadioClass::ktrim($instajson->{title} . ' ['. $instajson->{author_name}.']');
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -640,6 +659,10 @@ sub url_conversion {
 	# set more recent headers if mixcloud or other known website
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
+	}
+
+	if ($param =~ /twitter.com/i) {
+		$param =~ s/twitter\.com/nitter\.net/i;
 	}
 
 	return $param;
@@ -798,7 +821,7 @@ sub checkIfOld {
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
 	dp(__LINE__.":checkIfOld count: $count, howmanydrunk: $howManyDrunk");
-	da(@prevUrls) if $DEBUG1;
+	#da(@prevUrls) if $DEBUG1;
 	if ($count != 0 && $howManyDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
@@ -840,7 +863,7 @@ sub findUrl {
 		} else {
 			@results = searchDB($searchword);
 		}
-		da('id search result dump:',@results);
+		da('id search result dump:',@results) if $DEBUG1;
 		return createAnswerFromResults(@results);
 	} elsif ($searchword =~ s/^kaikki:? ?//i || $searchword =~ s/^all:? ?//i) {
 		# print all found entries
@@ -924,8 +947,8 @@ sub searchIDfromDB {
 	@result = $sth->fetchrow_array();
 	$sth->finish();
 	$dbh->disconnect();
-	dp(__LINE__.":SEARCH ID Dump:");
-	da(@result);
+	dp(__LINE__.":SEARCH ID Dump:") if $DEBUG1;
+	da(@result) if $DEBUG1;
 	return @result;
 }
 
