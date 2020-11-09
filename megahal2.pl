@@ -67,6 +67,8 @@ my @wordlist = (
 	'moik',
 	'terve',
 	'niinist',
+	'trump',
+	'biden'
 );
 
 my @ignorenicks = (
