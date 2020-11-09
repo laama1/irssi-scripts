@@ -24,7 +24,8 @@ $VERSION = '0.35';
     url		=> 'http://www.kaaosradio.fi'
 );
 
-my $helpmessage = '!horo <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horo vkl. Toimii myös privassa. Kokeile myös: !kuu, !aurora';
+my $helpmessage1 = 'Kirjoita !help horoskooppi.';
+my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horo vkl. Toimii myös privassa. Kokeile myös: !kuu, !aurora';
 
 my $debug = 1;
 
@@ -45,13 +46,16 @@ my $myname = 'horos2.pl';
 
 my @userarray = ();		# who has allready requested horo today
 
+# private horoscope not implemented
 sub event_priv_msg {
 	my ($server, $msg, $nick, $address) = @_;
 	return if ($nick eq $server->{nick});		# self-test
-	if ($msg =~ /\!help/i) { 
-		$server->command("msg -nick $nick $helpmessage");
+	if ($msg =~ /\!help hor/i) { 
+		$server->command("msg -nick $nick $helpmessage2");
+	} elsif ($msg =~ /!help$/) {
+		$server->command("msg -nick $nick $helpmessage1");
 	}
-	return unless ($msg =~ /\!h[^eu]/i);
+	return unless ($msg =~ /\!h!(e|u)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -60,10 +64,14 @@ sub event_pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return unless ($target ~~ @channels);
 	if ($msg =~ /\!help hor/i) {
-		$serverrec->command("msg -channel $target $helpmessage");
+		$serverrec->command("msg -channel $target $helpmessage2");
+	}
+	elsif ($msg =~ /\!help$/i) {
+		$serverrec->command("msg -channel $target $helpmessage1");
 	}
 
-	return unless ($msg =~ /\!h[^eu]/i);
+	return unless ($msg =~ /\!h/i);
+	return if ($msg =~ /\!huomenna/ || $msg =~ /help/);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
@@ -128,7 +136,7 @@ sub filterKeyword {
 	elsif	($msg =~ /(pääsiäi)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_paasiainen.txt';}
 	else 									{($infofile) = glob $irssidir . 'horoskooppeja.txt';}
 	#dp("horos2.pl: $& matched file: $infofile");
-	print("horos2.pl> $& matched file: $infofile");
+	print($IRSSI{name}."> $& matched file: $infofile");
 	return;
 }
 
@@ -141,13 +149,15 @@ sub grepKeyword {
 	#Irssi::print("test locale2 today ". strftime "%A", localtime($currenttime));
 	my $weekdak = @weekdays[`date +%u` -1];				#genetiivi(?)muoto
 
-	my $tomorrow = strftime "%A", localtime($currenttime + $dateseconds);
-	chomp (my $tomorrowak = @weekdays[`date +%u`]);
+	my $tomorrow = strftime "%A", localtime ($currenttime + $dateseconds);
+	my $tomorrowak;
+	chomp ($tomorrowak = @weekdays[`date +%u`]);
 
 	my $month = strftime "%B", localtime $currenttime;
 	my $year = strftime "%Y", localtime $currenttime;
 	#Irssi::print("tset locale 3 tomorrow: $tomorrow month: $month");
-	chomp (my $nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month" 2>>horosstderr.txt`);
+	my $nextmonth;
+	chomp ($nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month" 2>> $ENV{HOME}."/irssi/scripts/horosstderr.txt"`);
 	my $season = checkSeason($month, 0);
 	my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
 	my $seasonob = checkSeason($month, 2);				# objektiivimuoto?
@@ -184,12 +194,8 @@ sub checkIfAllreadyDone {
 			$returnvalue = $item->[2];			# return previous rand number
 			last;
 		} elsif ($item->[0] eq $address && $ydayn != $yday) {
-			dp('Userarray before splicing: ');
-			Irssi::print Dumper @userarray if $debug;
 			#remove old values
 			splice(@userarray, $index,1);
-			dp('Userarray after splicing: ');
-			Irssi::print Dumper @userarray if $debug;
 			last;
 		}
 		$index++;

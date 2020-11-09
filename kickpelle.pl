@@ -231,7 +231,7 @@ sub event_pubmsg {
 		print_help($server, $target);
 		return;
 	} elsif ($msg =~ /!help$/i) {
-		sayit($server, $target, '!help kickpelle, for more info');
+		sayit($server, $target, 'kirjoita !help kickpelle, saat listää ohjeita.');
 	}
 	if (badWordFilter($msg)) {
 		doKick($server, $target, $nick, 'Bad words!');

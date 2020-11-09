@@ -33,7 +33,8 @@ my $myname = 'korvamato.pl';
 my $DEBUG = 1;
 my $DEBUG1 = 1;
 
-my $helptext = 'Lisää korvamato: !korvamato: <tähän korvamatosanotukset>. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> <lisättävä tieto>. Etsi korvamato: !korvamato etsi: <hakusana tähän>. !korvamato id #.';
+#my $helptext = 'Lisää korvamato: !korvamato: <tähän korvamatosanotukset>. Muokkaa korvamatoa: !korvamato id # <del> <lyrics:|artist:|title:|url:|link2:|info1:|info2:> <lisättävä tieto>. Etsi korvamato: !korvamato etsi: <hakusana tähän>. !korvamato id #.';
+my $helptext = 'Korvamato help: http://8-b.fi:82/kd_butt.html#korvamato';
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8'.$db) {
@@ -493,7 +494,7 @@ sub event_privmsg {
 	return if ($nick eq $server->{nick});		# self-test
 
 	#dp(__LINE__.":msg: $msg");
-	if ($msg =~ /^!help\b/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {
+	if ($msg =~ /^!help$/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {
 		msgit($server, $nick, $helptext);
 		msgit($server, $nick, get_statistics());
 		return;
