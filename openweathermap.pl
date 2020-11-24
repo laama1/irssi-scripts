@@ -47,7 +47,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'http://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'http://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';

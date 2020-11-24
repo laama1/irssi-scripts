@@ -605,7 +605,7 @@ sub api_conversion {
 	}
 
 	# instagram API
-	if ($param =~ /www.instagram.com/) {
+	if ($param =~ /www.eitoimi.instagram.com/) {
 		# instagram conversion, example: https://api.instagram.com/oembed/?url=https://www.instagram.com/p/CFKNRqNhW32/
 		Irssi::print($IRSSI{name}.' Instagram url detected!');
 		my $instapiurl = 'https://api.instagram.com/instagram_oembed/?url=' . $param;

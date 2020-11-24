@@ -12,4 +12,7 @@ hamqsl.pl:
 lastspoke.pl
 - JSON::PP
 
-Webhook for Kaaosradio-discord-server added.
+msg_telegram.pl
+- URI::Encode
+
+Webhook for Kaaosradio-discord-server added. (meaning what? -- LAama1)

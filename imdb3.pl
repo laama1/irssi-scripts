@@ -16,7 +16,7 @@ $VERSION = '2019-01-22';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => "LAama1 #kaaosleffat",
-        name        => "IMDB/OMDB",
+        name        => "OMDB-script",
         description => "Fetch info from omdbapi or theimdbapi.org",
         license     => "Fublic Domain",
         url         => "http://kaaosradio.fi",
@@ -392,7 +392,7 @@ sub do_search {
 sub dp {
 	return unless $DEBUG;
 	my $sayline = shift;
-	Irssi::print("debug: $sayline");
+	print($IRSSI{name}. " debug: $sayline");
 }
 
 sub sayit {

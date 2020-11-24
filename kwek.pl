@@ -6,7 +6,7 @@ use Data::Dumper;
 use Time::HiRes;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '20200812';
+$VERSION = '20201022';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -18,8 +18,10 @@ $VERSION = '20200812';
 );
 
 my @channels = ('#Chat', '#salamolo2', '#salamolo', '#chat');
-my @answers = ('.boo','.bang', '.pang', '.pew', '.peng', '.p00f', '.paf', '.boem', '.kaboem', '.knal', '.bef', '.hump');
-my @keywords = ('KWEK', 'FLAP');		# TODO
+#my @answers = ('.boo','.bang', '.pang', '.pew', '.peng', '.p00f', '.paf', '.boem', '.kaboem', '.knal', '.bef', '.hump');
+my @answers = ('.bef','.hump');
+#my @keywords = ('KWEK', 'FLAP');		# TODO
+my @keywords = ('quack', 'quack2');
 my $DEBUG = 0;
 
 # send private message
@@ -40,7 +42,8 @@ sub sayit {
 # check if line contains these regexp
 sub if_kwek {
 	my ($msg, $nick, @rest) = @_;
-	if($msg =~ /KWEK/ || $msg =~ /FLAP/) {
+	#if($msg =~ /KWEK/ || $msg =~ /FLAP/) {
+	if($msg =~ /quack/ ) {
 		print($IRSSI{name}.'> '. $msg);
 		return $answers[int(rand(scalar @answers))];
 	}
@@ -53,13 +56,17 @@ sub event_pubmsg {
 	if ($target ~~ @channels) {
 		my $newReturnString = if_kwek($msg, $nick);
 		if ($newReturnString) {
-			sleep 3;
-			my $howlong = Time::HiRes::sleep(rand(6));
+			sleep 5;
+			my $howlong = Time::HiRes::sleep rand(6);
 			print($IRSSI{name}."> target found! $target, returnstring: $newReturnString. Slept for $howlong+3 seconds") if $DEBUG;
 			sayit($server, $target, $newReturnString);
 		}
 	}
-	return;
+	if ($msg =~ /fumigate the moose/) {
+		my $response = "Uh, no, actually I'm an Epsilon from way back.";
+		print $IRSSI{name}."> bot mooses!" if $DEBUG;
+		sayit($server, $target, $response);
+	}
 }
 
 Irssi::signal_add_last('message public', 'event_pubmsg');

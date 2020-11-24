@@ -337,7 +337,7 @@ sub writeToOpenDB {
 	return 0;
 }
 
-sub readFromOpenDB {
+sub readLineFromOpenDB {
 	my ($dbh, $string, @params, @rest) = @_;
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
@@ -345,11 +345,24 @@ sub readFromOpenDB {
 	if(my @line = $sth->fetchrow_array) {
 		dp(__LINE__.': --fetched a result--');
 		dp(Dumper @line);
-		$sth->finish();
-		$dbh->disconnect();
+		#$sth->finish();
+		#$dbh->disconnect();
 		return @line;
 	}
 	return;
+}
+
+sub readArrayFromOpenDB {
+	my ($dbh, $string, @params, @rest) = @_;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	$sth->execute();
+	my @elements = ();
+	while(my @line = $sth->fetchrow_array) {
+		dp(__LINE__.': --fetched a result--');
+		dp(Dumper @line);
+		push @elements, [@row];
+	}
+	return @elements;
 }
 
 sub writeToDB {
