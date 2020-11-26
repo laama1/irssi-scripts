@@ -3,6 +3,8 @@ use strict;
 use Irssi;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
+use DBI;			# https://metacpan.org/pod/DBI
+
 
 $VERSION = "20200911";
 %IRSSI = (
@@ -14,6 +16,7 @@ $VERSION = "20200911";
         url         => '',
         changed     => $VERSION
 );
+
 my $db = Irssi::get_irssi_dir(). "/scripts/tamagotchi.db";
 my $playerstats;
 
@@ -46,13 +49,15 @@ my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fo
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
-		Irssi::print($IRSSI{name}.": Unable to create file: $db");
+		Irssi::print($IRSSI{name}.": Error, unable to create file: $db");
 		die;
 	}
 	close FILE;
 	createDB();
 	Irssi::print($IRSSI{name}.": Database file created.");
 }
+readFromDb();
+#read_db();
 
 sub da {
 	print Dumper(@_);
@@ -204,14 +209,44 @@ sub increaseValue {
 	my $item = shift;
 	my $time = time;
 	my $sql = "UPDATE tama SET AMOUNT = AMOUNT+1, FEATURETIME = $time WHERE FEATURE = '$item'";
-	#print $sql;
 	my $rc = KaaosRadioClass::writeToDB($db, $sql);
-	#da($rc);
 }
 
 sub readFromDb {
-	my $sql = 'SELECT love, hate, food, drugs FROM tama';
+	my $sql = 'SELECT * FROM tama';
+	my @results = read_db($sql);
+	#my @results = KaaosRadioClass::bindSQL($db, $sql);
+	print "results next:";
+	#da(@results);
+	foreach my $result (@results) {
+		print $IRSSI{name}.': '.$result->{FEATURE} . ' '.$result->{AMOUNT};
+		if ($result->{FEATURE} eq 'love') {
+			$lovecounter = $result->{AMOUNT};
+		} elsif ($result->{FEATURE} eq 'food') {
+			$foodcounter = $result->{AMOUNT};
+		} elsif ($result->{FEATURE} eq 'drugs') {
+			$drugcounter = $result->{AMOUNT};
+		} elsif ($result->{FEATURE} eq 'love') {
+			$lovecounter = $result->{AMOUNT};
+		}
+	}
+}
 
+sub read_db {
+	my ($sql, @rest) = @_;
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$db",'','', {RaiseError => 1, AutoCommit => 1});
+	#my $dbh = KaaosRadioClass::connectSqlite($db);							# DB handle
+	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
+	$sth->execute() or return $dbh->errstr;
+	my @results;
+	my $idx = 0;
+	while(my $row = $sth->fetchrow_hashref) {
+		push @results, $row;
+		$idx++;
+	}
+	$sth->finish();
+	$dbh->disconnect();
+	return @results;
 }
 
 Irssi::settings_add_str('tamagotchi', 'tamagotchi_enabled_channels', '');
