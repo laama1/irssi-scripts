@@ -14,11 +14,11 @@ $VERSION = "20200911";
         url         => '',
         changed     => $VERSION
 );
-
+my $db = Irssi::get_irssi_dir(). "/scripts/tamagotchi.db";
 my $playerstats;
 
-my $levelpoints = 25;	# how many points between levels
-my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human');
+my $levelpoints = 20;	# how many points between levels
+my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human', 'trump');
 my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
@@ -43,6 +43,16 @@ my @hatenicks = ('satan_', 'devil_', 'demon_', 'antichrist_', 'mephistopheles');
 
 my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy');
 my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fok', 'ei!', 'EI!', 'fek', 'fik');
+
+unless (-e $db) {
+	unless(open FILE, '>'.$db) {
+		Irssi::print($IRSSI{name}.": Unable to create file: $db");
+		die;
+	}
+	close FILE;
+	createDB();
+	Irssi::print($IRSSI{name}.": Database file created.");
+}
 
 sub da {
 	print Dumper(@_);
@@ -70,6 +80,7 @@ sub msg_random {
 	return;
 }
 
+# TODO
 sub if_nick_in_use {
 	my ($server, $nick, @rest) = @_;
 	da('whois1:', $server->send_raw("whois $nick"));
@@ -81,7 +92,7 @@ sub change_nick {
 	my ($server, $newnick, @rest) = @_;
 	#if_nick_in_use($server, $newnick);
 	$newnick .= $nicktail;
-	Irssi::print('tamagotchi.pl change_nick: '. $newnick);
+	Irssi::print($IRSSI{name}.' change_nick: '. $newnick);
 	$server->command("NICK $newnick");
 	return;
 }
@@ -92,7 +103,7 @@ sub if_lvlup {
 	my $modulo = $counter % $levelpoints;
 	if ($modulo == 0) {
 		# level up
-		Irssi::print(%IRSSI{name}.': level up! ('.count_level($counter).')');
+		Irssi::print($IRSSI{name}.': level up! ('.count_level($counter).')');
 		return count_level($counter);
 	}
 	return 0;
@@ -141,23 +152,66 @@ sub pubmsg {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
 		evolve($serverrec, $target, count_level($foodcounter, @foodnicks), 'FooD', @foodnicks) if (if_lvlup($foodcounter));
+		increaseValue('food');
 		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
 		evolve($serverrec, $target, count_level($drugcounter, @drugnicks), 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
+		increaseValue('drugs');
 		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
 		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
+		increaseValue('love');
 		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
 		evolve($serverrec, $target, count_level($hatecounter, @hatenicks), 'HaT', @hatenicks) if(if_lvlup($hatecounter));
+		increaseValue('hate');
 		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter");
 	}
+}
+
+sub createDB {
+	my $dbh = KaaosRadioClass::connectSqlite($db);
+	my $sql = "CREATE TABLE if not exists tama
+			    (FEATURE text not null,
+				AMOUNT int default 0,
+				FEATURETIME int default 0);";
+
+	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
+	if($rv ne 0) {
+   		Irssi::print ($IRSSI{name}." DBI Error: ". $rv);
+	} else {
+   		Irssi::print($IRSSI{name}." Table tama created successfully");
+		my $time = time;
+		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('love', $time)";
+		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
+		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('hate', $time)";
+		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
+		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('drugs', $time)";
+		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
+		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('food', $time)";
+		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
+	}
+	KaaosRadioClass::closeDB($dbh);
+}
+
+sub increaseValue {
+	my $item = shift;
+	my $time = time;
+	my $sql = "UPDATE tama SET AMOUNT = AMOUNT+1, FEATURETIME = $time WHERE FEATURE = '$item'";
+	#print $sql;
+	my $rc = KaaosRadioClass::writeToDB($db, $sql);
+	#da($rc);
+}
+
+sub readFromDb {
+	my $sql = 'SELECT love, hate, food, drugs FROM tama';
+
 }
 
 Irssi::settings_add_str('tamagotchi', 'tamagotchi_enabled_channels', '');
