@@ -82,7 +82,7 @@ sub sayit {
 
 sub find_mato {
 	my ($searchword, @rest) = @_;
-	print(%IRSSI{name}."> etsi request: {$searchword}.");
+	print($IRSSI{name}."> etsi request: {$searchword}.");
 	my $returnstring = '';
 	if ($searchword =~ s/kaikki: //gi || $searchword =~ s/all: //gi) {
 		dp(__LINE__.': find_mato 1');
@@ -294,10 +294,10 @@ sub IFUPDATE {
 		Irssi::print("$myname Add Artist: $artist");
 		return UPDATECOLUMN($id, 'artist', $1);
 	} elsif ($command =~ /title:? ?(.*)/gi) {
-		print(%IRSSI{name}."> Add title: $1");
+		print($IRSSI{name}."> Add title: $1");
 		return UPDATECOLUMN($id, 'title', $1);
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
-		print(%IRSSI{name}."> Add lyrics: $1");
+		print($IRSSI{name}."> Add lyrics: $1");
 		return UPDATECOLUMN($id, 'quote', $1);
 	}
 
