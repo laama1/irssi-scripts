@@ -216,18 +216,18 @@ sub readFromDb {
 	my $sql = 'SELECT * FROM tama';
 	my @results = read_db($sql);
 	#my @results = KaaosRadioClass::bindSQL($db, $sql);
-	print "results next:";
+	#print "results next:";
 	#da(@results);
 	foreach my $result (@results) {
-		print $IRSSI{name}.': '.$result->{FEATURE} . ' '.$result->{AMOUNT};
+		#print $IRSSI{name}.': '.$result->{FEATURE} . ' '.$result->{AMOUNT};
 		if ($result->{FEATURE} eq 'love') {
 			$lovecounter = $result->{AMOUNT};
 		} elsif ($result->{FEATURE} eq 'food') {
 			$foodcounter = $result->{AMOUNT};
 		} elsif ($result->{FEATURE} eq 'drugs') {
 			$drugcounter = $result->{AMOUNT};
-		} elsif ($result->{FEATURE} eq 'love') {
-			$lovecounter = $result->{AMOUNT};
+		} elsif ($result->{FEATURE} eq 'hate') {
+			$hatecounter = $result->{AMOUNT};
 		}
 	}
 }
@@ -239,10 +239,8 @@ sub read_db {
 	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
 	$sth->execute() or return $dbh->errstr;
 	my @results;
-	my $idx = 0;
 	while(my $row = $sth->fetchrow_hashref) {
 		push @results, $row;
-		$idx++;
 	}
 	$sth->finish();
 	$dbh->disconnect();
