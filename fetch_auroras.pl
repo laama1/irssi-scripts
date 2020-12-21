@@ -3,6 +3,7 @@
 #export LC_ALL=en_US.UTF8;
 # skripti hakee urlista tiedon revontulista.
 # KP-arvo tallennetaan tietokantaan myöhempää käyttöä varten.
+# Skripti ajetaan esim. crontabissa näin: 0,30 * * * * /usr/bin/perl /home/laama/.irssi/scripts/irssi-scripts/fetch_auroras.pl
 # LAama1 1.10.2016, 7.9.2017 (minor), 14.3.2018 (copy to kiva.vhosti.fi)
 use strict;
 use Data::Dumper;
