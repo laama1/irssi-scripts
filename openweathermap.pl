@@ -53,6 +53,8 @@ my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
 
+my $helptext = 'Sää-skripti. Ohje: http://8-b.fi:82/kd_butt.html#s';
+
 =pod
 UTF8 emojis:
 ⛈️ Cloud With Lightning and Rain
@@ -395,10 +397,11 @@ sub getSayLine {
 
 	my $sunrise = '🌄 '.localtime($json->{sys}->{sunrise})->strftime('%H:%M');
 	my $sunset = '🌆 ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
+	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
 	my $wind_gust = '';
 	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 1) if (defined $json->{wind}->{gust});
 	dp(__LINE__.': wind gust: '.$wind_gust);
-	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
+	
 	my $wind = '💨 '.$wind_speed;
 	if (defined $wind_gust && $wind_gust ne '') {
 		$wind .= " ($wind_gust)";
@@ -593,6 +596,8 @@ sub filter_keyword {
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = FINDAREAWEATHER($city);
 		$dbh = KaaosRadioClass::closeDB($dbh);
+	} elsif ($msg =~ /!help$/ || $msg =~ /!help sää/) {
+		$returnstring = $helptext;
 	}
 	return $returnstring;
 }
