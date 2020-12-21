@@ -17,7 +17,7 @@ $VERSION = '0.50';
 	description => 'Revontuli- ja kuun vaiheet -skripti.',
 	license => 'BSD',
 	url => 'http://www.kaaosradio.fi',
-	changed => '2018-10-28',
+	changed => '2020-12-21',
 );
 
 my $DEBUG = 1;
@@ -27,7 +27,8 @@ my $db = $ENV{HOME}.'/public_html/auroras.db';
 #my @channels = ('#salamolo', '#botti', '#kaaosradio');
 
 sub getHelp {
-	return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
+	#return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
+	return '!kuu ja !aurora ohje: http://8-b.fi:82/kd_butt.html#rev';
 }
 
 sub pubmsg {
@@ -35,7 +36,7 @@ sub pubmsg {
 	#return unless ($msg =~ /$serverrec->{nick}/i);
 	#return unless ($target ~~ @channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help aurora)/gi) {
+	if ($msg =~ /(!help aurora)/gi || $msg =~ /(!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $help = getHelp();
 		$serverrec->command("MSG $target $help");
@@ -57,7 +58,6 @@ sub pubmsg {
 
 sub fetchAuroraData {
 	my $searchdate = time - (60*60);			# max 1 hour ago
-	Irssi::print('search date: ' . $searchdate) if $DEBUG;
 	my $fetchString = "select kpnow, kp1hforecast, PVM, speed from AURORAS where pvm > $searchdate ORDER BY PVM desc limit 1;";
 	my (@line) = KaaosRadioClass::readLineFromDataBase($db, $fetchString);
 	Irssi::print ('Dump:') if $DEBUG;
