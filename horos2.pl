@@ -25,9 +25,9 @@ $VERSION = '0.35';
 );
 
 my $helpmessage1 = 'Kirjoita !help horoskooppi.';
-my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horo vkl. Toimii myös privassa. Kokeile myös: !kuu, !aurora';
+my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horoskooppi viikonloppu. Toimii myös privassa.';
 
-my $debug = 1;
+my $debug = 0;
 
 my @weekdays = ('maanantai', 'tiistai', 'keskiviiko', 'torstai', 'perjantai', 'lauantai', 'sunnuntai');
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
@@ -55,7 +55,7 @@ sub event_priv_msg {
 	} elsif ($msg =~ /!help$/) {
 		$server->command("msg -nick $nick $helpmessage1");
 	}
-	return unless ($msg =~ /\!h!(e|u)/i);
+	return unless ($msg =~ /\!h!(a|e|u)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -71,7 +71,7 @@ sub event_pub_msg {
 	}
 
 	return unless ($msg =~ /\!h/i);
-	return if ($msg =~ /\!huomenna/ || $msg =~ /help/);
+	return if ($msg =~ /huomen/ || $msg =~ /help/ || $msg =~ /hams/);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
@@ -157,7 +157,7 @@ sub grepKeyword {
 	my $year = strftime "%Y", localtime $currenttime;
 	#Irssi::print("tset locale 3 tomorrow: $tomorrow month: $month");
 	my $nextmonth;
-	chomp ($nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month" 2>> $ENV{HOME}."/irssi/scripts/horosstderr.txt"`);
+	chomp ($nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month"`);
 	my $season = checkSeason($month, 0);
 	my $seasongen = checkSeason($month, 1);				# genetiivi muoto?
 	my $seasonob = checkSeason($month, 2);				# objektiivimuoto?

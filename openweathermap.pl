@@ -49,7 +49,6 @@ my $uvUrl = 'http://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'http://api.openweathermap.org/data/2.5/uvi/forecast?';
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $myname = 'openweathermap.pl';
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
 
@@ -118,12 +117,12 @@ https://emojipedia.org/moon-viewing-ceremony/
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		Irssi::print("$myname: Unable to create or write DB file: $db");
+		Irssi::print($IRSSI{name}.": Unable to create or write DB file: $db");
 		die;
 	}
 	close FILE;
 	if (CREATEDB() == 0) {
-		Irssi::print("$myname: Database file created.");
+		Irssi::print($IRSSI{name}.": Database file created.");
 	}
 }
 
@@ -368,8 +367,8 @@ sub getSayLine {
 		dp(__LINE__.' getSayLine json = 0');
 		return undef;
 	}
-	dp(__LINE__.' getDayLine json:');
-	da($json);
+	#dp(__LINE__.' getDayLine json:');
+	#da($json);
 	my $tempmin = $fi->format_number($json->{main}->{temp_min}, 1);
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $temp;
@@ -380,9 +379,9 @@ sub getSayLine {
 	}
 	my $havaintotime = localtime($json->{dt})->strftime('%H:%M');
 	my $apptemp = get_apperent_temp($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
-	dp(__LINE__.': havaintotime: '.$havaintotime);
-	dp(__LINE__.': apparent temp: '.$apptemp);
-	dp(__LINE__.': feels like: '.$json->{main}->{feels_like});
+	#dp(__LINE__.': havaintotime: '.$havaintotime);
+	#dp(__LINE__.': apparent temp: '.$apptemp);
+	#dp(__LINE__.': feels like: '.$json->{main}->{feels_like});
 	my $sky = '';
 	#if (is_sun_up(localtime($json->{sys}->{sunrise})->datetime,
 	#				localtime $json->{sys}->{sunset},
@@ -414,7 +413,7 @@ sub getSayLine {
 	my $weatherdesc = '';
 	my $index = 1;
 	foreach my $item (@{$json->{weather}}) {
-		da(__LINE__.': weather:', $item);
+		#da(__LINE__.': weather:', $item);
 		if ($index > 1) {
 			$weatherdesc .= ', ';
 		}
@@ -422,10 +421,10 @@ sub getSayLine {
 		$index++;
 	}
 	my $uv_index = '';
-	if (defined $json->{uvindex} && $json->{uvindex} > 0) {
+	if (defined $json->{uvindex} && $json->{uvindex} > 1) {
 		$uv_index = ', UVI: '.$json->{uvindex};
 	}
-	da(__LINE__.': weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
+	#da(__LINE__.': weatherdesc:',$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt});
 	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.', '.$newdesc.'. '.$sunrise.', '.$sunset.', '.$wind.$sky.$apptemp.$uv_index;
 	return $returnvalue;
@@ -448,13 +447,11 @@ sub get_apperent_temp {
 
 	my $e = ($humidity / 100.0) * 6.105 * exp (17.27*$dryBulbTemperature / (237.7 + $dryBulbTemperature));
 	my $cosOfZenithAngle = get_cos_of_zenith_angle(deg2rad($latitude), $timestamp);
-
-	#Irssi::print('cosOfZenithAngle: ' . $cosOfZenithAngle);
-	my $secOfZenithAngle = 1/ $cosOfZenithAngle;
+	my $secOfZenithAngle = (1/$cosOfZenithAngle);
 	my $transmissionCoefficient = TRANSMISSIONCOEFFICIENTCLEARDAY - (TRANSMISSIONCOEFFICIENTCLEARDAY - TRANSMISSIONCOEFFICIENTCLOUDY) * ($cloudiness/100.0);
 	my $calculatedIrradiation = 0;
 	if ($cosOfZenithAngle > 0) {
-            $calculatedIrradiation = (SOLAR_CONSTANT * $cosOfZenithAngle * $transmissionCoefficient ** $secOfZenithAngle)/10;
+		$calculatedIrradiation = (SOLAR_CONSTANT * $cosOfZenithAngle * $transmissionCoefficient ** $secOfZenithAngle)/10;
     }
 	my $apparentTemperature = $dryBulbTemperature + (0.348 * $e) - (0.70 * $windSpeed) + ((0.70 * $calculatedIrradiation)/($windSpeed + 10)) - 4.25;
 	dp(__LINE__.': apparent temp: '.$apparentTemperature);
@@ -537,20 +534,20 @@ sub CREATEDB {
 
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 	if($rv != 0) {
-   		Irssi::print ("$myname: DBI Error $rv");
+   		Irssi::print ($IRSSI{name}.": DBI Error $rv");
 		return -1;
 	} else {
-   		Irssi::print("$myname: Table CITIES created successfully");
+   		Irssi::print($IRSSI{name}.": Table CITIES created successfully");
 	}
 
 	my $stmt2 = 'CREATE TABLE IF NOT EXISTS DATA (CITY TEXT primary key, PVM INT, COUNTRY TEXT, CITYID int, SUNRISE int, SUNSET int, DESCRIPTION text, WINDSPEED text, WINDDIR text,
 	TEMPMAX text, TEMP text, HUMIDITY text, PRESSURE text, TEMPMIN text, LAT text, LON text)';
 	my $rv2 = KaaosRadioClass::writeToOpenDB($dbh, $stmt2);
 	if($rv2 < 0) {
-   		Irssi::print ("$myname: DBI Error: $rv2");
+   		Irssi::print ($IRSSI{name}.": DBI Error: $rv2");
 		return -2;
 	} else {
-   		Irssi::print("$myname: Table DATA created successfully");
+   		Irssi::print($IRSSI{name}.": Table DATA created successfully");
 	}
 
 	$dbh = KaaosRadioClass::closeDB($dbh);
@@ -578,19 +575,22 @@ sub filter_keyword {
 	$msg = decode('UTF-8', $msg);
 
 	my $returnstring;
-	if ($msg =~ /\!(sää |saa |s[^ae] ?)(.*)$/ui) {
+	if ($msg =~ /\!(sää ?|saa ?|s)([^ae].*)$/ui) {
+		# sää nyt
 		return if KaaosRadioClass::floodCheck() > 0;
-		my $city = $2;
+		my $city = KaaosRadioClass::ktrim($2);
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = getSayLine(FINDWEATHER($city));
 		$dbh = KaaosRadioClass::closeDB($dbh);
 	} elsif ($msg =~ /\!(se ?)(.*)$/i) {
+		# ennustus
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = FINDFORECAST($city);
 		$dbh = KaaosRadioClass::closeDB($dbh);
 	} elsif ($msg =~ /\!(sa ?)(.*)$/i) {
+		# lähialueen sää
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $city = $2;
 		$dbh = KaaosRadioClass::connectSqlite($db);
