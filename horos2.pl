@@ -150,13 +150,13 @@ sub grepKeyword {
 	my $weekdak = @weekdays[`date +%u` -1];				#genetiivi(?)muoto
 
 	my $tomorrow = strftime "%A", localtime ($currenttime + $dateseconds);
-	my $tomorrowak;
+	my $tomorrowak = '';
 	chomp ($tomorrowak = @weekdays[`date +%u`]);
 
 	my $month = strftime "%B", localtime $currenttime;
 	my $year = strftime "%Y", localtime $currenttime;
 	#Irssi::print("tset locale 3 tomorrow: $tomorrow month: $month");
-	my $nextmonth;
+	my $nextmonth = '';
 	chomp ($nextmonth = `LANG=fi_FI.utf-8; date +%B --date="next month"`);
 	my $season = checkSeason($month, 0);
 	my $seasongen = checkSeason($month, 1);				# genetiivi muoto?

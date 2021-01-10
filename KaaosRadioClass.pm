@@ -109,7 +109,7 @@ sub bindSQL {
 	my ($db, $sql, @params, @rest) = @_;
 	my $dbh = connectSqlite($db);							# DB handle
 	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
-	$sth->execute(@params) or return ($dbh->errstr);
+	$sth->execute(@params) or return $dbh->errstr;
 	my @results;
 	my $idx = 0;
 	while(my @row = $sth->fetchrow_array) {
