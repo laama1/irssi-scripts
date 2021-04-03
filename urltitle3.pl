@@ -279,7 +279,7 @@ sub getTitle {
 		}
 
 	} elsif ($newtitle) {
-		dd(__LINE__.": getTitle: title = newtitle! $newtitle") if $DEBUG1;
+		dd(__LINE__.": getTitle: title equals newtitle! $newtitle") if $DEBUG1;
 		$title = decode_entities($newtitle);
 	}
 
@@ -375,23 +375,29 @@ sub count_words {
 
 sub count_same_words {
 	my ($url, $title, @rest) = @_;
-	dd(__LINE__.": count_same_words url: $url, \n title: $title") if $DEBUG1;
+	dp(__LINE__.": count_same_words url: $url, title: $title");
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
 	#dd(__LINE__.": count_same_words titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
-		#dd(__LINE__.": count_same_words: $item, count: $count1") if $DEBUG1;
 		if ($item ~~ @rows1) {
-		#if (grep /^$item/, @rows1 ) {
+		    #if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dd(__LINE__.":count_same_words item found: $item, count: $count1") if $DEBUG1;
-			if ($count1 == $titlewordCount) {
-				dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
-				return $count1, $titlewordCount;
-			}
+			dp(__LINE__.":count_same_words item found: $item, total count: $count1");
+			#if ($count1 == $titlewordCount) {
+			#	dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
+			#	return $count1, $titlewordCount;
+			#}
+		} elsif (length $item > 1 && $url =~ /"$item"/g) {
+			$count1++;
+			dp(__LINE__.": $item found from url.");
 		}
+        if ($count1 == $titlewordCount) {
+	        dp(__LINE__.": count_same_words: bingo!");
+    	    return $count1, $titlewordCount;
+        }
 	}
 	#dd(__LINE__.": >   same words: $count1");
 	return $count1, $titlewordCount;
@@ -410,7 +416,7 @@ sub split_row_to_array {
 	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
 	dd('split_row_to_array word count: ' . ($#returnArray+1)) if $DEBUG1;
-	da(@returnArray);
+	da(@returnArray) if $DEBUG1;
 	return @returnArray;
 }
 
@@ -438,6 +444,7 @@ sub replace_non_url_chars {
 	$row =~ s/"/ /g;
 
 	$row =~ s/ / /g;		# no-break space nbsp
+	$row =~ s/\*//g;		# * char
 
 	dd(__LINE__.": replace non url chars row after: $row");
 	return $row;
@@ -519,7 +526,7 @@ sub saveToDB {
 	return;
 }
 
-# Check from DB if old
+# Check from DB if old entry is found
 sub checkForPrevEntry {
 	my ($url, $newchannel, $md5hex, @rest) = @_;
 	dp(__LINE__.":checkForPrevEntry channel: $newchannel, url: $url, md5: $md5hex");
@@ -532,8 +539,7 @@ sub checkForPrevEntry {
 	$sth->bind_param(1, $md5hex);
 	#$sth->bind_param(2, $url);
 	$sth->bind_param(2, $newchannel);
-	#my $dbh = KaaosRadioClass::connectSqlite($db);
-	#da($sth);
+
 	$sth->execute();
 
 	# build elements into array
@@ -554,12 +560,10 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":api_conversion: $param") if $DEBUG1;
 
 	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/) {
 		# youtube api
 		my $videoid = $1;
-		dp(__LINE__.":api_conversion: youtube api id: ".$videoid) if $DEBUG1;
 		
 		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
 		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
@@ -570,10 +574,8 @@ sub api_conversion {
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
-		dp(__LINE__.' youtube title: '.$title);
 		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
 		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
-		dp(__LINE__.' youtube channeltitle: '. $chantitle);
 		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
 		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
 		$newUrlData->{desc} = $description;
@@ -662,11 +664,12 @@ sub url_conversion {
 	}
 
 	if ($param =~ /twitter.com/i) {
-		$param =~ s/twitter\.com/nitter\.net/i;
+		$param =~ s/twitter\.com/nitter\.eu/i;
+		# nitter.42l.fr nitter.pussthecat.org nitter.eu nitter.net nitter.dark.fail nitter.cattube.org nitter.actionsack.com
+		# nitter.mailstation.de nitter.namazso.eu nitter.himiko.cloud nitter.domain.glass nitter.unixfox.eu
 	}
 
 	return $param;
-
 }
 
 sub sig_msg_pub {
@@ -681,9 +684,8 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
-		dp(__LINE__.":sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{220})(.*)/$1 .../);
+		dp(__LINE__.":sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{260})(.*)/$1 .../);
 	
-		dp(__LINE__.":sig_msg_pub: found some results from $searchWord on channel $target. $sayline");
 		msg_to_channel($server, $target, $sayline);
 		clearUrlData();
 		return;
@@ -713,7 +715,6 @@ sub sig_msg_pub {
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_title($server, $target) =~ /np\:/i) {
-			dp(__LINE__.':np FOUND from channel title') if $DEBUG1;
 			$dontprint = 1;
 		} else {
 			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
@@ -758,16 +759,13 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
 	# shorten output message	
-	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{250})(.*)/$1.../);
+	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{260})(.*)/$1.../);
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
-	
-	#dp(__LINE__.":sig_msg_pub: TITLE: $newUrlData->{title}, DESCRIPTION: $newUrlData->{desc}");
 	
 	# if description would suit better than title, use description instead
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
 		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
-		dp(__LINE__.': sig_msg_pub new title: ' .$title) if $DEBUG_decode;
 	}
 
 	# if original url longer than 70 characters, do "shorturl"
@@ -800,7 +798,6 @@ sub msg_to_channel {
 	if ($title =~ /(.{260}).*/s) {
 		$title = $1 . '...';
 	}
-	dp(__LINE__.':msg_to_channel title: ' . $title.', length: '.length $title) if $DEBUG1;
 	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
 	return;
 }
@@ -821,12 +818,10 @@ sub checkIfOld {
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
 	dp(__LINE__.":checkIfOld count: $count, howmanydrunk: $howManyDrunk");
-	#da(@prevUrls) if $DEBUG1;
 	if ($count != 0 && $howManyDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
 		$mon += 1;
-		#$server->command("msg -channel $target w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		msg_to_channel($server, $target, "w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		dp(__LINE__.": w! ($prevUrls[0][0] @ $mday.$mon.$year ". sprintf("%02d", $hour).":".sprintf("%02d", $min).":".sprintf("%02d", $sec)." ($count)");
 		return 1;
@@ -850,6 +845,7 @@ sub find_keywords {
 	}
 }
 
+# find URL from database
 sub findUrl {
 	my ($searchword, @rest) = @_;
 	Irssi::print("$myname: etsi request: $searchword");
@@ -863,13 +859,11 @@ sub findUrl {
 		} else {
 			@results = searchDB($searchword);
 		}
-		da('id search result dump:',@results) if $DEBUG1;
 		return createAnswerFromResults(@results);
 	} elsif ($searchword =~ s/^kaikki:? ?//i || $searchword =~ s/^all:? ?//i) {
 		# print all found entries
 		my @results = searchDB($searchword);
 		$returnstring .= 'Loton oikeat numerot: ';
-		dp(__LINE__.':Loton oikeat numerot');
 		my $in = 0;
 		foreach my $line (@results) {
 			# TODO: Limit to 3-5 results
@@ -881,9 +875,6 @@ sub findUrl {
 		# print 1st found item
 		my @results = searchDB($searchword);
 		my $amount = @results;
-		#dp(__LINE__.":results:");
-		#da(@results);
-
 		if ($amount > 1) {
 			$returnstring = "Löytyi $amount, ID: ";
 			my $i = 0;
@@ -893,7 +884,7 @@ sub findUrl {
 				last if ($i > 13);						# max 13 items..
 			}
 		} elsif ($amount == 1) {
-			$returnstring .= "Löytyi 1, ";
+			$returnstring .= 'Löytyi 1, ';
 			$returnstring .= "ID: $results[0][0], ";
 			$returnstring .= "url: $results[0][3], ";
 			$returnstring .= "title: $results[0][4], ";
@@ -902,9 +893,6 @@ sub findUrl {
 			$returnstring = 'Ei tuloksia.';
 		}
 	}
-	#$returnstring = $returnstring.$temp,
-	dp(__LINE__.":findUrl returnstring: $returnstring");
-	#dp(__LINE__.":temp:". $temp);
 	return $returnstring;
 }
 
@@ -923,20 +911,14 @@ sub searchDB {
 	my @resultarray = ();
 	my @line = ();
 	my $index = 0;
-	#dp(__LINE__.":Results: ");
 	while(@line = $sth->fetchrow_array) {
-		#dp(__LINE__.":Line $index:");
-		#da(@line);
 		push @{ $resultarray[$index]}, @line;
 		$index++;
 	}
-	#dp(__LINE__.":searchDB '$searchWord' Dump:");
-	#da(@resultarray);
-	#dp(__LINE__.":searchDB dump end.") if $DEBUG1;
 	return @resultarray;
 }
 
-# search rowid = artist ID from database
+# search rowid = url ID from database
 sub searchIDfromDB {
 	my ($id, @rest) = @_;
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
@@ -947,8 +929,6 @@ sub searchIDfromDB {
 	@result = $sth->fetchrow_array();
 	$sth->finish();
 	$dbh->disconnect();
-	dp(__LINE__.":SEARCH ID Dump:") if $DEBUG1;
-	da(@result) if $DEBUG1;
 	return @result;
 }
 
@@ -958,10 +938,10 @@ sub count_db {
 	return KaaosRadioClass::closeDB($dbh);
 }
 
+# param: resultset (line) from DB.
 sub createShortAnswerFromResults {
 	my @resultarray = @_;
 	my $amount = @resultarray;
-	dp(__LINE__.":create short answer fom results.. how many values: $amount");
 	if ($amount == 0) {
 		return "Ei tuloksia.";
 	}
@@ -979,28 +959,22 @@ sub createShortAnswerFromResults {
 
 	if ($rowid) {
 		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
-		#Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp(__LINE__.":stringi: $returnstring") if $DEBUG1;
-	#dp($string);
 	return $returnstring;
 
 }
 
-# Create one line from one result!
+# Create one line from one resultset (from DB)!
 sub createAnswerFromResults {
-	dp(__LINE__.":createAnswerFromResults") if $DEBUG1;
 	my @resultarray = @_;
 
 	my $amount = @resultarray;
-	dp(__LINE__.": #### create answer from results.. how many values: $amount") if $DEBUG1;
-	da(@resultarray) if $DEBUG1;
 	if ($amount == 0) {
 		return "Ei tuloksia.";
 	}
 
-	my $returnstring = "";
+	my $returnstring = '';
 	my $rowid = $resultarray[0];
 	$returnstring = "ID: $rowid, ";
 	my $nick = $resultarray[1];					# who added
@@ -1009,23 +983,17 @@ sub createAnswerFromResults {
 	$returnstring .= "url: $url, ";
 	my $title = $resultarray[4];
 	$returnstring .= "title: $title, ";
-	dd(__LINE__.": title: $title");
+
 	my $desc = $resultarray[5];
 	$returnstring .= "desc: $desc, ";
 	my $channel = $resultarray[6];
-	#$returnstring .= "kanava: $channel"; }
 	my $md5hash = $resultarray[7];
-	#my $md5hash = "";
-	#my $deleted = $resultarray[8] || "";
-	
-	#if ($nick ne "") { $string .= "nick: $nick"; }
 
 	if ($rowid) {
 		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
 		Irssi::print("$myname: return string: $returnstring");
 	}
 
-	dp(__LINE__.":string: $returnstring");
 	return $returnstring;
 }
 

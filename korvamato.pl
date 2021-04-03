@@ -382,7 +382,18 @@ sub insert_into_db {
 sub if_korvamato {
 	my ($msg, $nick, $target, @rest) = @_;
 
-	if($msg =~ /^!korvamato:?\s(.{1,470})/ugi || $msg =~ /^!km:?\s(.{1,470})/ugi)
+	if($msg =~ /^!korvamato disable/) {
+		my $enabled = Irssi::settings_get_str('korvamato_enabled_channels');
+		my @enabled = split / /, $enabled;
+		my $newenabled = '';
+		foreach my $channel (@enabled) {
+			next if ($channel eq $target);
+			$newenabled .= $channel.' ';
+		}
+		$newenabled = KaaosRadioClass::ktrim($newenabled);
+		Irssi::settings_set_str('korvamato_enabled_channels', $newenabled);
+		return 'Korvamato disabloitu tällä kanavalla: '.$target;
+	} elsif($msg =~ /^!korvamato:?\s(.{1,470})/ugi || $msg =~ /^!km:?\s(.{1,470})/ugi)
 	{
 		my $command = $1;		# command the user has entered
 		my $url = '';			# song possible url
@@ -457,12 +468,9 @@ sub if_korvamato {
 		} elsif ($id != -1) {
 			# TODO: search korvamato '!korvamato id 55'
 			my @results = search_id_from_db($id);
-			#dp(__LINE__.': Search results DUMPER:');
-			#da(@results);
 			$returnstring = createAnswerFromResultsor(@results);
 			return 'Löytyi '.$returnstring;
 		}
-
 
 		if ($amount == 0) {
 			dp(__LINE__.': insert into db next');
@@ -493,7 +501,6 @@ sub event_privmsg {
 
 	return if ($nick eq $server->{nick});		# self-test
 
-	#dp(__LINE__.":msg: $msg");
 	if ($msg =~ /^!help$/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {
 		msgit($server, $nick, $helptext);
 		msgit($server, $nick, get_statistics());
@@ -523,6 +530,16 @@ sub event_pubmsg {
 
     my $enabled_raw = Irssi::settings_get_str('korvamato_enabled_channels');
     my @enabled = split / /, $enabled_raw;
+	if($msg =~ /^!korvamato enable/) {
+		if (grep /^$target$/, @enabled) {
+			sayit($server, $target, 'Korvamato on jo enabloitu kanavalla: '.$target);
+			return;
+		} else {
+			$enabled_raw .= ' '.$target;
+			Irssi::settings_set_str('korvamato_enabled_channels', $enabled_raw);
+			return;
+		}
+	}
     return unless grep /^$target$/, @enabled;
 
 	if ($msg =~ /^[\.\!]help korvamato\b/i || $msg =~ /^!korvamato$/i || $msg =~ /^!km$/i) {
@@ -536,7 +553,7 @@ sub event_pubmsg {
 	}
 
 	#my $newReturnString = encode_utf8(if_korvamato($msg, $nick, "PUB"));
-	my $newReturnString = if_korvamato($msg, $nick, 'PUB');
+	my $newReturnString = if_korvamato($msg, $nick, $target);
 	if ($newReturnString ne '') {
 		sayit($server, $target, $newReturnString);
 		return;

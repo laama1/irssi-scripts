@@ -29,7 +29,7 @@ my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdo
 
 my $debug = 0;
 
-my @weekdays = ('maanantai', 'tiistai', 'keskiviiko', 'torstai', 'perjantai', 'lauantai', 'sunnuntai');
+my @weekdays = ('maanantai', 'tiistai', 'keskiviiko', 'torstai', 'perjantai', 'lauantai', 'sunnuntai', 'maanantai');
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
 
 my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
@@ -151,6 +151,7 @@ sub grepKeyword {
 
 	my $tomorrow = strftime "%A", localtime ($currenttime + $dateseconds);
 	my $tomorrowak = '';
+	dp(@weekdays[`date +%u`].', date: '.`date +%u`);
 	chomp ($tomorrowak = @weekdays[`date +%u`]);
 
 	my $month = strftime "%B", localtime $currenttime;
