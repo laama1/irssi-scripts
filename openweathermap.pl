@@ -293,7 +293,7 @@ sub forecastloop1 {
 	my $index = 0;
 	my $returnstring = '';
 	foreach my $item (@{$json->{list}}) {
-		da(__LINE__.': item', $item);
+		da(__LINE__.': item', $item) if $DEBUG1;
 		if ($index >= 7) {
 			# max 8 items: 8x 3h = 24h
 			last;
