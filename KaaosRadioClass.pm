@@ -320,11 +320,11 @@ sub stripLinks {
 sub connectSqlite {
 	my ($dbfile, @rest) = @_;
 	unless (-e $dbfile) {
-		return -1;						# return error
+		return undef;						# return error
 	}
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1, AutoCommit => 1});
 	return $dbh if $dbh;
-	return -2;
+	return undef;
 }
 
 sub writeToOpenDB {
@@ -360,7 +360,7 @@ sub readArrayFromOpenDB {
 	while(my @line = $sth->fetchrow_array) {
 		dp(__LINE__.': --fetched a result--');
 		dp(Dumper @line);
-		push @elements, [@row];
+		push @elements, [@line];
 	}
 	return @elements;
 }
