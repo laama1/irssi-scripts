@@ -680,7 +680,7 @@ sub sig_msg_pub {
 
 	$dontprint = 0;
 	# TODO if searching for old link..
-	if ($msg =~ /\!url ?(.*)$/i) {
+	if ($msg =~ /\!url (.*)$/i) {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
