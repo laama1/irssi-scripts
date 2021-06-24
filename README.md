@@ -1,5 +1,5 @@
 # irssi-scripts
--made using Perl<br>
+-only Perl scripts<br>
 -Old and new scripts, mostly WIP (work in progress)
 
 These scripts require extra modules:
@@ -14,5 +14,3 @@ lastspoke.pl
 
 msg_telegram.pl
 - URI::Encode
-
-Webhook for Kaaosradio-discord-server added. (meaning what? -- LAama1)

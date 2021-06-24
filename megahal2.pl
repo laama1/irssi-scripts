@@ -23,10 +23,9 @@ use AI::MegaHAL;
 use vars qw($VERSION %IRSSI);
 use File::Copy;
 use POSIX;
-# LAama1
 use Data::Dumper;
 use KaaosRadioClass;      # LAama1 8.11.2017
-#use utf8;
+use utf8;
 use Encode;
 
 $VERSION = '0.25';
@@ -68,7 +67,8 @@ my @wordlist = (
 	'terve',
 	'niinist',
 	'trump',
-	'biden'
+	'biden',
+	'hytty',
 );
 
 my @ignorenicks = (
@@ -81,7 +81,7 @@ my @channelnicks = ();               # value of nicks from the current channel
 my $currentchan = '';						# used in flood protect
 my $currentnetwork = '';						# used in flood protect
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'megahal2.pl';
 
 
@@ -259,16 +259,15 @@ sub public_responder {
 	return if $data =~ /tps?:\/\//i || $data =~ /www\./i;
 	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin
 	$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/);
-	dp(__LINE__." $myname: Giving data to Oraakkeli: ". $skip_oraakkeli_but_learn);
+	dp(__LINE__." $myname: Giving data to Oraakkeli: ". int $skip_oraakkeli_but_learn);
 	
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
 	return unless defined $megahal;
 	# replace weird/utf8 characters from user input
-	dp(__LINE__.' is utf1; '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
 	Encode::from_to($data, 'utf-8', $charset);
 	#$data = KaaosRadioClass::replaceWeird($data);
-	dp(__LINE__.' is utf2: '.utf8::is_utf8($data). ', data: '.$data) if $DEBUG;
+
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
 		if (KaaosRadioClass::floodCheck(3) > 0) {
@@ -281,7 +280,7 @@ sub public_responder {
 		return;
 	}
 	if ($data =~ /^!/) {    # if !command
-		irssi_log("Some un understood !command found, return.");
+		irssi_log("Some un understood !command found, return.") if $DEBUG;
 		return;
 	}
 
@@ -436,7 +435,8 @@ sub learn_txt_file {
 		my $linecount = 0;
 
 		foreach my $line (@lines) {
-			dp(__LINE__.': Line: '.$line);
+			dp(__LINE__.': Line nbr: '.$linecount.', Line: '.$line);
+			Encode::from_to($line, 'utf-8', $charset);
 			$megahal->learn($line, 0) if $line;
 			$linecount++;
 		}
