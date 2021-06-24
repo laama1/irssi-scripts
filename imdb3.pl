@@ -1,4 +1,3 @@
-#omdb api http://omdbapi.com/
 use Irssi;
 use strict;
 use warnings;
@@ -11,8 +10,8 @@ use vars qw($VERSION %IRSSI);
 use Data::Dumper;
 use KaaosRadioClass;		# LAama1 26.10.2016
 
-
-$VERSION = '2019-01-22';
+#omdb api http://omdbapi.com/
+$VERSION = '2021-06-05';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => "LAama1 #kaaosleffat",
@@ -25,22 +24,22 @@ $VERSION = '2019-01-22';
 
 my $DEBUG = 1;
 my $DEBUG1 = 0;
-my $debugfilename = Irssi::get_irssi_dir(). '/scripts/urldebuglog.txt';
+my $debugfilename = Irssi::get_irssi_dir(). '/scripts/imdb3debuglog.txt';
 my $json = JSON->new();
 $json->allow_blessed(1);
-#my $ua = LWP::UserAgent->new(timeout => '4');
 
 # OMDB api
 my $apikey = 'a06b4d3f';
 
 sub print_help {
 	my ($server, $target, $is_enabled) = @_;
-	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffoja OMDB:stä hakusanalla, muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.'.
-	' Käytössä: '.$is_enabled;
+	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffojen tietoja IMDB:stä hakusanalla. Muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.
+	kts. http://8-b.fi:82/kd_butt.html#i'.
+	' Käytössä (kanavalla: '.$target.'): '.$is_enabled;
 	if ($is_enabled) {
-		$helpmessage .= '. Deaktivoi skripti kirjoittamalla: !imdb off.';
+		$helpmessage .= '. Deaktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb off.';
 	} else {
-		$helpmessage .= '. Aktivoi skripti kirjoittamalla: !imdb on.';
+		$helpmessage .= '. Aktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb on.';
 	}
 	sayit($server, $target, $helpmessage);
 	return 0;
@@ -49,30 +48,32 @@ sub print_help {
 sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   #self-test
-    my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    my @enabled = split / /, $enabled_raw;
-    
-	my $is_enabled = grep /^$target$/, @enabled;
+	return unless ($msg =~ /imdb\b/i);
+
 	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
-		print_help($server, $target, $is_enabled);
+		print_help($server, $target);
 		return;
 	}
-	
-	return unless ($msg =~ /!imdb\b/i);
+
+    my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
+    my @enabled = split / /, $enabled_raw;
+	my $is_enabled = grep /^$target$/, @enabled;
+	dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
-	if ($msg eq "!imdb on") {
+	if ($msg eq "!imdb enable" || $msg eq "!imdb on") {
 		if ($is_enabled) {
-			sayit($server, $target, 'Aktivoitu jo!');
+			sayit($server, $target, 'IMDB-skripti on jo Aktivoitu!');
 			return;
 		} else {
 			Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
 			sayit($server, $target, 'Aktivoitiin IMDB-skripti kanavalla: ' . $target);
+			Irssi::print('Aktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
 		}
-	} elsif ($msg eq "!imdb off") {
+	} elsif ($msg eq "!imdb disable" || $msg eq "!imdb off") {
 		if (!$is_enabled) {
-			sayit($server, $target, 'Deaktivoitu jo!');
+			sayit($server, $target, 'IMDB-skripti on Deaktivoitu jo! (kanavalla: '.$target.')');
 			return;
 		} else {
 			my $index = 0;
@@ -80,49 +81,52 @@ sub do_imdb {
 			splice(@enabled, $index, 1);
 			Irssi::settings_set_str('imdb_enabled_channels', join(' ',@enabled));
 			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
+			Irssi::print('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
 		}
 	}
 	return unless $is_enabled;
 	
 	my $param = 't';		# title search
-	my $query;				# search query
+	my $query = '';			# query string
+	my $request = '';		# search word
 	my $year;				# year search
-
+	
 	if ($msg =~ /\!imdb (.*)$/) {		# if search words found
-		$query = lc $1;
+		$request = lc $1;					# lower case
 	} else {
 		return 0;
 	}
 	
-	Irssi::print("!imdb request on $target from nick $nick: $msg");
+	Irssi::print("!imdb request on $target from nick $nick: request: $request");
 
-	if ($query =~ /\b(19|20)(\d{2})\b/) {
+	if ($request =~ /\b(19|20)(\d{2})\b/) {
 		# FIXME: if movie has year in it's name
-		$year = $1.$2;
-		$query =~ s/ $year$//;	#remove year from title query
-		dp("year query! query. $query, year: $year after: $msg");
+		$query .= "&y=".$1.$2;
+		$request =~ s/$1$2//;	#remove year from title query
+		$request = KaaosRadioClass::ktrim($request);
+		#dp(__LINE__.": year query! request. $request, query: $query after: $msg");
 	}
-	if ($query =~ /(\s?search\s?)/i) {
+	if ($request =~ /(\s?search\s)/i) {
 		$param = 's';
-		$query =~ s/$1//;
-	} elsif ($query =~ /(tt\d{4,10})/) {
+		$request =~ s/$1//;
+	} elsif ($request =~ /(tt\d{4,10})/) {
 		$param = 'i';
-		$query = $1;
-	} elsif ($query =~ /(\s?leffa\s?|\s?movie\s?)/i) {
-		$query.='&type=movie';
-		$query =~ s/$1//;
-	} elsif ($query =~ /(\s?sarja\s?|\s?series\s?)/i) {
-		$query.='&type=series';
-		$query =~ s/$1//;
-	} elsif ($query =~ /(\s?episodi\s?|\s?episode\s?)/i) {
-		$query.='&type=episode';
-		$query =~ s/$1//;
+		$query .= $1;
+	} elsif ($request =~ /(\s?leffa\s?|\s?movie\s?)/i) {
+		$query .= '&type=movie';
+		$request =~ s/$1//;
+	} elsif ($request =~ /(\s?sarja\s?|\s?series\s?)/i) {
+		$query .= '&type=series';
+		$request =~ s/$1//;
+	} elsif ($request =~ /(\s?episodi\s?|\s?episode\s?)/i) {
+		$query .= '&type=episode';
+		$request =~ s/$1//;
 	}
 
-	return imdb_fetch($server, $target, $query, $param, $year);
-	#return 0;
+	#dp(__LINE__.": request: $request, query: $query, param: $param");
 
+	return imdb_fetch($server, $target, $request, $query, $param);
 }
 
 # Signal received from another function. URL as parameter
@@ -137,31 +141,33 @@ sub sig_imdb_search {
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';
 	imdb_fetch($server, $target, $searchword, $param);
-
 }
 
 sub imdb_fetch {
-	my ($server, $target, $query, $param, $year, @rest) = @_;
-	unless ($query) {
+	my ($server, $target, $request, $query, $param, @rest) = @_;
+	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param");
+	unless ($request) {
 		sayit($server, $target, 'En älynnyt..');
 		return 0;
 	}
-	my $url = "http://www.omdbapi.com/?${param}=${query}&apikey=$apikey" if $param and $query;
+
+	$request = strip_extra_chars($request);
+
+	my $url = "http://www.omdbapi.com/?${param}=${request}${query}&apikey=$apikey" if $param and $request;
 	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
 
-	$url .= "&y=${year}" if $year;
-	
+	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param, url: $url");
+
 	my $imdb = do_search($url);
-	#Irssi::print Dumper $imdb if $DEBUG1;
-	if (!defined($imdb)) {
+
+	if (!defined $imdb) {
 		my $saystring = search_omdb($query);
-		dp("Saystring: $saystring");
+		dp("Saystring: $saystring, query: $query");
 		#my $saystring = search_theimdb($query);
 		#my $saystring = search_theimdb($url);
-		if (defined($saystring)) {
+		if (defined $saystring) {
 			sayit($server, $target, $saystring);
 		} else {
-			#sayit($server, $target, "$nick, try harder?");
 			sayit($server, $target, "try harder?");
 		}
 		return;
@@ -169,13 +175,13 @@ sub imdb_fetch {
 
 	# OMDB-API koodia
 	if ($imdb->{Response} =~ /True/ ) {
-		dp("imdb->Response = TRUE");
+		dp(__LINE__.": imdb->Response = TRUE");
 		my $saystring = print_line_from_search_result($imdb);
 		sayit($server, $target, $saystring);
 		return 0;
 	}
 	if ($imdb ne '1' && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
-		dp('imdb total results more than one!');
+		dp(__LINE__.': imdb total results more than one!');
 		my $manyfound = $imdb->{totalResults};
 		my $sayline;
 
@@ -369,24 +375,25 @@ sub print_line_from_search_result {
 # first search
 sub do_search {
 	my ($url, @rest) = @_;
-	dp("do_search url: $url");
+	dp(__LINE__.": do_search url: $url");
 	my $got = KaaosRadioClass::fetchUrl($url, 0);
-	#Irssi::print("do_search got: $got") if $DEBUG;
-	KaaosRadioClass::writeToFile($debugfilename, $got) if $DEBUG;
+	KaaosRadioClass::writeToFile($debugfilename, $got) if $DEBUG1;
 	if ($got eq '-1') {
-		dp("imdb3.pl do_search error");
+		dp(__LINE__.": imdb3.pl do_search error");
 		return;
 	}
 
 	my $imdb = eval {$json->utf8->decode($got)};
-	#my $imdb = $json->decode($got);
 	return if $@;
 	Irssi::print "do_search IMDB: ".Dumper $imdb if $DEBUG1;
-	#if ($imdb->{Response} !~ /True/ ) {
-	#	Irssi::print("imdb3.pl debug do_search: Not found, try harder!");
-	#	return 1;
-	#}
 	return $imdb;
+}
+
+sub strip_extra_chars {
+	my ($string, @rest) = @_;
+	$string =~ s/,//g;	# remove commas
+	$string =~ s/&//g;	# remove ampersands
+	return $string;
 }
 
 sub dp {
