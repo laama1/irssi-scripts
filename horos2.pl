@@ -24,8 +24,9 @@ $VERSION = '0.35';
     url		=> 'http://www.kaaosradio.fi'
 );
 
-my $helpmessage1 = 'Kirjoita !help horoskooppi.';
-my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horoskooppi viikonloppu. Toimii myös privassa.';
+my $helpmessage1 = 'Horoskooppiskripti. Ohje: http://8-b.fi:82/kd_butt.html#h';
+#my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horoskooppi viikonloppu. Toimii myös privassa.';
+my $helpmessage2 = '!horoskooppi ohje: http://8-b.fi:82/kd_butt.html#h';
 
 my $debug = 0;
 
@@ -65,13 +66,14 @@ sub event_pub_msg {
 	return unless ($target ~~ @channels);
 	if ($msg =~ /\!help hor/i) {
 		$serverrec->command("msg -channel $target $helpmessage2");
-	}
-	elsif ($msg =~ /\!help$/i) {
+		return;
+	} elsif ($msg =~ /\!help$/i) {
 		$serverrec->command("msg -channel $target $helpmessage1");
+		return;
 	}
 
 	return unless ($msg =~ /\!h/i);
-	return if ($msg =~ /huomen/ || $msg =~ /help/ || $msg =~ /hams/);
+	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
@@ -99,7 +101,7 @@ sub throw_horo {
 	return unless $information;
 	my $amount = @$information;
 	if ($rand == -1) {					# if user not found
-		$rand = int(rand($amount));
+		$rand = int rand $amount;
 		push(@userarray, [$address, time(), $rand, $infofile]);
 	}
 	my $linecount = -1;
@@ -119,14 +121,14 @@ sub filterKeyword {
 	my ($msg, @rest) = @_;
 	$msg = decode('UTF-8', $msg);
 	dp("filterKeyword: $msg");
-	if	($msg =~ /(\bjussi.*)|(juhannus)/i)	{($infofile) = glob $irssidir . 'horoskooppeja_juhannus.txt'; }
+	if	($msg =~ /(juhannus)|(jussi)/ui)	{($infofile) = glob $irssidir . 'horoskooppeja_juhannus.txt'; }
 	elsif	($msg =~ /(kesä)/ui)			{($infofile) = glob $irssidir . 'horoskooppeja_kesa.txt'; }
 	elsif	($msg =~ /(kevä[ti])/ui)		{($infofile) = glob $irssidir . 'horoskooppeja_kevat.txt'; }
-	elsif	($msg =~ /\b(talvi)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_talvi.txt'; }
+	elsif	($msg =~ /(talvi)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_talvi.txt'; }
 	elsif	($msg =~ /(viikonl|vkl)/i)		{($infofile) = glob $irssidir . 'horoskooppeja_vkl.txt'; }
 	elsif	($msg =~ /(vappu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_vappu.txt'; }
-	elsif	($msg =~ /\b(joulu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_joulu.txt'; }
 	elsif	($msg =~ /(pikkujoulu)/i)		{($infofile) = glob $irssidir . 'horoskooppeja_pikkujoulu.txt'; }
+	elsif	($msg =~ /(joulu)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_joulu.txt'; }
 	elsif	($msg =~ /(loppiai)/i)			{($infofile) = glob $irssidir . 'horoskooppeja_loppiainen.txt'; }
 	elsif	($msg =~ /(\buv\b)|(uus[i]?vuos)/i)	{($infofile) = glob $irssidir . 'horoskooppeja_uv.txt'; }
 	elsif	($msg =~ /(syksy)|(\bsyys)/i)	{($infofile) = glob $irssidir . 'horoskooppeja_syksy.txt'; }
