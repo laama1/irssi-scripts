@@ -17,6 +17,8 @@ $VERSION = "20200911";
         changed     => $VERSION
 );
 
+my $DEBUG = 0;
+
 my $db = Irssi::get_irssi_dir(). "/scripts/tamagotchi.db";
 my $playerstats;
 
@@ -24,7 +26,7 @@ my $levelpoints = 20;	# how many points between levels
 my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human', 'trump');
 my $nicktail = '^_^';
 
-my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi');
+my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi', 'pizza');
 my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar*', '*noms*', '*nams*', 'mums nams', 'moms mums', 'noms nams', 'nam', 'kelpaa');
 my $foodcounter = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
@@ -49,12 +51,12 @@ my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fo
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
-		Irssi::print($IRSSI{name}.": Error, unable to create file: $db");
+		printc("Fatal error, unable to create file: $db");
 		die;
 	}
 	close FILE;
 	createDB();
-	Irssi::print($IRSSI{name}.": Database file created.");
+	printc('Database file created.');
 }
 readFromDb();
 #read_db();
@@ -80,7 +82,7 @@ sub msg_channel {
 
 sub msg_random {
 	my ($server, $target, @words) = @_;
-	my $rand = int(rand(scalar @words));
+	my $rand = int rand scalar @words;
 	msg_channel($server, $target, $words[$rand]);
 	return;
 }
@@ -97,7 +99,7 @@ sub change_nick {
 	my ($server, $newnick, @rest) = @_;
 	#if_nick_in_use($server, $newnick);
 	$newnick .= $nicktail;
-	Irssi::print($IRSSI{name}.' change_nick: '. $newnick);
+	printc('change_nick: '. $newnick);
 	$server->command("NICK $newnick");
 	return;
 }
@@ -108,7 +110,7 @@ sub if_lvlup {
 	my $modulo = $counter % $levelpoints;
 	if ($modulo == 0) {
 		# level up
-		Irssi::print($IRSSI{name}.': level up! ('.count_level($counter).')');
+		printc('level up! ('.count_level($counter).')');
 		return count_level($counter);
 	}
 	return 0;
@@ -126,7 +128,7 @@ sub evolve {
 	$newnick = @nicks[($level % scalar @nicks)-1];
 
 	if ($level > scalar @nicks ) {
-		Irssi::print(__LINE__.':tamagotchi.pl extralevel float: '. (($level-1) / scalar @nicks ));
+		Irssi::print(__LINE__.':tamagotchi.pl extralevel float: '. (($level-1) / scalar @nicks )) if $DEBUG;
 		my $extralevel = int(($level-1) / scalar @nicks );
 		$newnick = $ybernicks[($extralevel-1)] . $newnick;
 	}
@@ -158,25 +160,25 @@ sub pubmsg {
 		msg_random($serverrec, $target, @foodanswer_words);
 		evolve($serverrec, $target, count_level($foodcounter, @foodnicks), 'FooD', @foodnicks) if (if_lvlup($foodcounter));
 		increaseValue('food');
-		Irssi::print("tamagotchi from $nick on channel $target, foodcounter: $foodcounter");
+		printc("trigger from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
 		evolve($serverrec, $target, count_level($drugcounter, @drugnicks), 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
 		increaseValue('drugs');
-		Irssi::print("tamagotchi from $nick on channel $target, drugcounter: $drugcounter");
+		printc("trigger from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
 		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		increaseValue('love');
-		Irssi::print("tamagotchi from $nick on channel $target, lovecounter: $lovecounter");
+		printc("trigger from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
 		evolve($serverrec, $target, count_level($hatecounter, @hatenicks), 'HaT', @hatenicks) if(if_lvlup($hatecounter));
 		increaseValue('hate');
-		Irssi::print("tamagotchi from $nick on channel $target, hatecounter: $hatecounter");
+		printc("trigger from $nick on channel $target, hatecounter: $hatecounter");
 	}
 }
 
@@ -189,9 +191,9 @@ sub createDB {
 
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
 	if($rv ne 0) {
-   		Irssi::print ($IRSSI{name}." DBI Error: ". $rv);
+   		printc ("DBI Error: $rv");
 	} else {
-   		Irssi::print($IRSSI{name}." Table tama created successfully");
+   		printc('Table tama created successfully');
 		my $time = time;
 		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('love', $time)";
 		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
@@ -245,6 +247,11 @@ sub read_db {
 	$sth->finish();
 	$dbh->disconnect();
 	return @results;
+}
+
+sub printc {
+	my ($msg, @rest) = @_;
+	print $IRSSI{name}.': '. $msg;
 }
 
 Irssi::settings_add_str('tamagotchi', 'tamagotchi_enabled_channels', '');
