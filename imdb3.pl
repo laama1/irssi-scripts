@@ -11,7 +11,7 @@ use Data::Dumper;
 use KaaosRadioClass;		# LAama1 26.10.2016
 
 #omdb api http://omdbapi.com/
-$VERSION = '2021-06-05';
+$VERSION = '2021-07-06';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => "LAama1 #kaaosleffat",
@@ -22,7 +22,7 @@ $VERSION = '2021-06-05';
         changed     => $VERSION
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $debugfilename = Irssi::get_irssi_dir(). '/scripts/imdb3debuglog.txt';
 my $json = JSON->new();
@@ -93,8 +93,9 @@ sub do_imdb {
 	my $year;				# year search
 	
 	if ($msg =~ /\!imdb (.*)$/) {		# if search words found
-		$request = lc $1;					# lower case
+		$request = lc $1;				# lower case
 	} else {
+		#return 0 unless $msg =~ /imdb.com/;
 		return 0;
 	}
 	
@@ -105,7 +106,6 @@ sub do_imdb {
 		$query .= "&y=".$1.$2;
 		$request =~ s/$1$2//;	#remove year from title query
 		$request = KaaosRadioClass::ktrim($request);
-		#dp(__LINE__.": year query! request. $request, query: $query after: $msg");
 	}
 	if ($request =~ /(\s?search\s)/i) {
 		$param = 's';
@@ -123,6 +123,7 @@ sub do_imdb {
 		$query .= '&type=episode';
 		$request =~ s/$1//;
 	}
+	$request = KaaosRadioClass::ktrim($request);
 
 	#dp(__LINE__.": request: $request, query: $query, param: $param");
 
@@ -140,20 +141,21 @@ sub sig_imdb_search {
 
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';
-	imdb_fetch($server, $target, $searchword, $param);
+	imdb_fetch($server, $target, '', $searchword, $param);
 }
 
 sub imdb_fetch {
 	my ($server, $target, $request, $query, $param, @rest) = @_;
 	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param");
-	unless ($request) {
+	#unless ($request) {
+	unless ($query) {
 		sayit($server, $target, 'En älynnyt..');
 		return 0;
 	}
 
 	$request = strip_extra_chars($request);
 
-	my $url = "http://www.omdbapi.com/?${param}=${request}${query}&apikey=$apikey" if $param and $request;
+	my $url = "http://www.omdbapi.com/?${param}=${request}${query}&apikey=$apikey" if ($param and ($request or $query));
 	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
 
 	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param, url: $url");
