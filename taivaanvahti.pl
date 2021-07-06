@@ -188,10 +188,10 @@ sub if_link_in_db2 {
 	my ($link, @rest) = @_;
 	my $searchstring = 'SELECT * from taivaanvahti5 where LINK = ?';
 	while(my @line = $dbh->bindSQL_nc($dbh, $searchstring, $link)) {
-		$sth->finish();
+		#$sth->finish();
 		return 1;			# item allready found
 	}
-	$sth->finish();
+	#$sth->finish();
 	return 0;				# new item!
 }
 
