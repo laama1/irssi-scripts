@@ -38,6 +38,13 @@ $VERSION = '20210501';
 	changed     => $VERSION,
 );
 
+my @ignorenicks = (
+	'kaaosradio',
+	'ryokas',
+	'KD_Butt',
+	'micdrop',
+);
+
 my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/openweathermap_apikey';
 my $apikey = '&units=metric&appid=';
 $apikey .= KaaosRadioClass::readLastLineFromFilename($apikeyfile);
@@ -340,7 +347,6 @@ sub forecastloop2 {
 	return $returnstring;
 }
 
-
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
 	$city = stripc($city);
@@ -372,6 +378,7 @@ sub FINDAREAWEATHER {
 }
 
 sub FINDUVINDEX {
+	return undef; # poissa käytöstä toistaiseksi koska tällä ei ole juuri merkitystä. ei perustu paikallisiin havaintoihin.
 	my ($lat, $lon, @rest) = @_;
 
 	my $searchurl = $uvUrl.$lat."&lon=$lon";
@@ -704,7 +711,7 @@ sub da {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
-
+	return if $nick ~~ @ignorenicks;
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('openweathermap_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
