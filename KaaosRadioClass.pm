@@ -44,7 +44,7 @@ my $djlist = "$currentDir/dj_list.txt";
 my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
-my $floodernick;
+my $floodernick = '';
 my $floodertimes = 0;
 my $flooderdate = time;		# initialize
 
@@ -83,6 +83,22 @@ sub readLinesFromDataBase {
 	return @returnArray;
 }
 
+sub connectSqlite {
+	my ($dbfile, @rest) = @_;
+	unless (-e $dbfile) {
+		return undef;						# return error
+	}
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1, AutoCommit => 1});
+	return $dbh if $dbh;
+	return undef;
+}
+
+sub closeDB {
+	my ($dbh, @rest) = @_;
+	$dbh->disconnect() or return -1;
+	return 0;
+}
+
 sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
 	dp(__LINE__.": Reading lines from DB $db.");
@@ -108,6 +124,23 @@ sub readLineFromDataBase {
 sub bindSQL {
 	my ($db, $sql, @params, @rest) = @_;
 	my $dbh = connectSqlite($db);							# DB handle
+	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
+	$sth->execute(@params) or return $dbh->errstr;
+	my @results;
+	my $idx = 0;
+	while(my @row = $sth->fetchrow_array) {
+		#$results[$idx] = @row;
+		push @results, @row;
+		$idx++;
+	}
+	$sth->finish();
+	$dbh->disconnect();
+	dp(__LINE__.': -- How many results: '. $idx);
+	return @results;
+}
+
+sub bindSQL_nc {
+	my ($dbh, $sql, @params, @rest) = @_;
 	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
 	$sth->execute(@params) or return $dbh->errstr;
 	my @results;
@@ -317,16 +350,6 @@ sub stripLinks {
 	return $string;
 }
 
-sub connectSqlite {
-	my ($dbfile, @rest) = @_;
-	unless (-e $dbfile) {
-		return undef;						# return error
-	}
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1, AutoCommit => 1});
-	return $dbh if $dbh;
-	return undef;
-}
-
 sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
@@ -376,12 +399,6 @@ sub writeToDB {
    		return $dbh->errstr;
 	}
 	$dbh->disconnect();
-	return 0;
-}
-
-sub closeDB {
-	my ($dbh, @rest) = @_;
-	$dbh->disconnect() or return -1;
 	return 0;
 }
 
@@ -437,9 +454,9 @@ sub fetchUrl {
 			$size = $size.'B';
 		}
 		$finalURI = $response->request()->uri() || '';
-		#Irssi::print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
+		#print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
-		dp("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		#print("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
 		#return;
 	}
@@ -458,8 +475,10 @@ sub getJSON {
 		return -1;
 	}
 	return -2 unless $response;
+
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
+
 	$json = decode_json($response);
 	return $json;
 }
