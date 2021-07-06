@@ -19,7 +19,7 @@ my $kanava = '#kaaosradio';
 my $verkko = 'IRCnet';
 
 my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '20200812';
@@ -35,7 +35,7 @@ $VERSION = '20200812';
 
 unless (-e $db) {
 	unless(open FILE, '>', $db) {
-		Irssi::print($IRSSI{name}. ": Unable to create file: $db");
+		Irssi::print($IRSSI{name}. ": Fatal error: Unable to create file: $db");
 		die;
 	}
 	close FILE;
@@ -45,7 +45,6 @@ unless (-e $db) {
 
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
-	#my ($target, $text) = $msg =~ /^(\S*)\s:(.*)/;
 	return if ($nick eq $server->{nick});	#self-test
 	parseQuote($msg, $nick, $nick, $server);
 	return;
@@ -127,7 +126,7 @@ sub parseQuote {
 sub rand_line {
 	my (@values, @rest) = @_;
 	my $amount = scalar @values;
-	my $rand = int(rand($amount));
+	my $rand = int rand $amount;
 	my $linecount = -1;
   LINEFOR: for (@values) {
 			$linecount++;
