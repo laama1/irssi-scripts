@@ -45,6 +45,14 @@ my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe', '#
 
 my $myname = 'horos2.pl';
 
+# TODO: read these from filename
+my @ignorenicks = (
+	'kaaosradio',
+	'ryokas',
+	'KD_Butt',
+	'micdrop',
+);
+
 my @userarray = ();		# who has allready requested horo today
 
 # private horoscope not implemented
@@ -64,6 +72,7 @@ sub event_priv_msg {
 sub event_pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return unless ($target ~~ @channels);
+	return if $nick ~~ @ignorenicks;
 	if ($msg =~ /\!help hor/i) {
 		$serverrec->command("msg -channel $target $helpmessage2");
 		return;
