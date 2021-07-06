@@ -14,10 +14,10 @@ use DateTime::Format::Strptime;
 use Time::Piece;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
-
+# 6.7.2021: use kaaosradioclass more
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2018-09-09';
+$VERSION = '2021-07-06';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -28,7 +28,7 @@ $VERSION = '2018-09-09';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 
@@ -70,7 +70,7 @@ sub print_help {
 	return;
 }
 
-# search for ID, when signal received from urltitle3.pl
+# search DB for ID, when signal received from urltitle3.pl
 sub sig_taivaanvahti_search {
 	my ($server, $column, $target, $value) = @_;
 	DP('sig_taivaanvahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
@@ -159,12 +159,13 @@ sub msg_to_channel {
 }
 
 sub open_database_handle {
-	$dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	$dbh = KaaosRadioClass::connectSqlite($db);
+	#$dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	return;
 }
 
 sub close_database_handle {
-	$dbh->disconnect();
+	$dbh = KaaosRadioClass::closeDB($dbh);
 	return;
 }
 
@@ -176,6 +177,17 @@ sub if_link_in_db {
 	$sth->execute();
 	while(my @line = $sth->fetchrow_array) {
 		#DA(@line);
+		$sth->finish();
+		return 1;			# item allready found
+	}
+	$sth->finish();
+	return 0;				# new item!
+}
+
+sub if_link_in_db2 {
+	my ($link, @rest) = @_;
+	my $searchstring = 'SELECT * from taivaanvahti5 where LINK = ?';
+	while(my @line = $dbh->bindSQL_nc($dbh, $searchstring, $link)) {
 		$sth->finish();
 		return 1;			# item allready found
 	}
@@ -357,8 +369,8 @@ sub parse_xml {
 	my $index = 0;
 	foreach my $item (@{$parser->{items}}) {
 		$index++;
-		if (if_link_in_db($item->{'link'}) == 0) {
-			DA($item);
+		if (if_link_in_db2($item->{'link'}) == 0) {
+			#DA($item);
 			my $havaintoid = parse_id_from_link($item->{'link'});
 			my %extrainfo = parse_extrainfo_from_link($item->{'link'});
 			Irssi::print("$myname New item: $item->{title}");
