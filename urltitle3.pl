@@ -676,7 +676,7 @@ sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');
-	return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');
+	#return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');
 
 	$dontprint = 0;
 	# TODO if searching for old link..
@@ -714,7 +714,7 @@ sub sig_msg_pub {
 	# check if flooding too many times in a row
 	my $drunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
-		if (get_channel_title($server, $target) =~ /np\:/i) {
+		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			$dontprint = 1;
 		} else {
 			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
@@ -1010,6 +1010,7 @@ sub dontPrintThese {
 sub falseUtf8Pages {
 	my ($text, @rest) = @_;
 	return 1 if $text =~ /iltalehti\.fi/i;
+	return 1 if $text =~ /puhelinvertailu.com/i;	# 19.7.2021
 	
 	return 0;
 }
