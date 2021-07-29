@@ -66,7 +66,7 @@ sub DA {
 
 sub print_help {
 	my ($server, $targe, @rest) = @_;
-	my $help = 'Taivaanvahti -skripti hakee ajoittain uusimmat havainnot sivulta taivaanvahti.fi. Vastaa myös kutsuttaessa komennolla !taivaanvahti.';
+	my $help = 'Taivaanvahti -skripti hakee ajoittain uusimmat havainnot sivulta taivaanvahti.fi. Vastaa myös kutsuttaessa komennolla !taivaanvahti. TODO: better help msg';
 	return;
 }
 
@@ -81,7 +81,6 @@ sub sig_taivaanvahti_search {
 	$sth->bind_param(1, $value);
 	$sth->execute();
 	if (my @line = $sth->fetchrow_array) {
-		# sayit($server, $target, '');
 		DP('Found result');
 		DA(@line);
 		my $title = $line[0];
@@ -218,10 +217,14 @@ sub save_to_db {
 
 sub create_db {
 	open_database_handle();
-
+	
 	# Using FTS (full-text search)
-	my $stmt = 'CREATE VIRTUAL TABLE taivaanvahti5 using fts4(PVM int,TITLE,LINK, PUBDATE int, DESCRIPTION, CITY, HAVAINTOID int primary key, HAVAINTODATE int, DELETED int default 0)';
+	my $sqlquery = 'CREATE VIRTUAL TABLE taivaanvahti5 using fts4(PVM int,TITLE,LINK, PUBDATE int, DESCRIPTION, CITY, HAVAINTOID int primary key, HAVAINTODATE int, DELETED int default 0)';
+	KaaosRadioClass::writeToDB($dbh, $sqlquery);
+	close_database_handle();
+	return;
 
+=pod
 	my $rv = $dbh->do($stmt);		# return value
 	if($rv < 0) {
    		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
@@ -230,6 +233,7 @@ sub create_db {
 	}
 	close_database_handle();
 	return;
+=cut
 }
 
 sub search_db {
