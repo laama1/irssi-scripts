@@ -17,11 +17,13 @@ $VERSION = '20200404';
 );
 
 my $myname = 'fetch_areena.pl';
-my $ylescript = 'yle-dl -qq --vfat --no-overwrite --destdir /mnt/music/areena --maxbitrate best';
+my $ylescript = 'yle-dl -qq --vfat --no-overwrite --destdir /mnt/music/areena --maxbitrate best --proxy=10.7.0.4:3128';
 
 sub sig_msg_pub {
 	my ($server, $msg, $target) = @_;
 	if ($msg =~ /(https?:\/\/areena\.yle\.fi\/\S+)/i) {
+		cmd_start_dl($1);
+	} elsif ($msg =~ /(https:\/\/yle\.fi\S+)/i) {
 		cmd_start_dl($1);
 	}
 }
