@@ -101,6 +101,7 @@ my $max_size = 262144;		# bytes
 #my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; fi-FI; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/65.0';
+my $useragentBot = 'URLPreviewBot';
 my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
@@ -130,6 +131,8 @@ sub set_useragent {
 		$ua->agent($useragentOld);
 	} elsif ($choice == 2) {
 		$ua->agent($useragentNew);
+	} elsif ($choice == 3) {
+		$ua->agent($useragentBot);
 	}
 	dp(__LINE__.':current User Agent: '. $ua->agent) if $DEBUG1;
 	return;
@@ -390,7 +393,7 @@ sub count_same_words {
 			#	dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
 			#	return $count1, $titlewordCount;
 			#}
-		} elsif (length $item > 1 && $url =~ /"$item"/g) {
+		} elsif (length $item > 1 && $url =~ /\Q$item\E/g) {
 			$count1++;
 			dp(__LINE__.": $item found from url.");
 		}
@@ -661,6 +664,10 @@ sub url_conversion {
 	# set more recent headers if mixcloud or other known website
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
+	}
+
+	if ($param =~ /youtube\.com/i) {
+		set_useragent(3);
 	}
 
 	if ($param =~ /twitter.com/i) {

@@ -33,9 +33,9 @@ my $apikey = 'a06b4d3f';
 
 sub print_help {
 	my ($server, $target, $is_enabled) = @_;
-	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffojen tietoja IMDB:stä hakusanalla. Muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman.
-	kts. http://8-b.fi:82/kd_butt.html#i'.
-	' Käytössä (kanavalla: '.$target.'): '.$is_enabled;
+	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffojen tietoja IMDB:stä hakusanalla. Muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman. 
+kts. http://8-b.fi:82/kd_butt.html#i'.
+	' Käytössä (kanavalla: '.$target.'): '."$is_enabled";
 	if ($is_enabled) {
 		$helpmessage .= '. Deaktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb off.';
 	} else {
@@ -58,12 +58,12 @@ sub do_imdb {
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 	my $is_enabled = grep /^$target$/, @enabled;
-	dp(__LINE__.": isenabled: $is_enabled");
+	#dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
 	if ($msg eq "!imdb enable" || $msg eq "!imdb on") {
 		if ($is_enabled) {
-			sayit($server, $target, 'IMDB-skripti on jo Aktivoitu!');
+			sayit($server, $target, 'IMDB-skripti on jo Aktivoitu! (kanavalla: '. $target.')');
 			return;
 		} else {
 			Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
@@ -126,8 +126,12 @@ sub do_imdb {
 	$request = KaaosRadioClass::ktrim($request);
 
 	#dp(__LINE__.": request: $request, query: $query, param: $param");
-
-	return imdb_fetch($server, $target, $request, $query, $param);
+	if ($request) {
+		return imdb_fetch($server, $target, $request, $query, $param);
+	} else {
+		return undef;
+	}
+	
 }
 
 # Signal received from another function. URL as parameter
@@ -148,7 +152,7 @@ sub imdb_fetch {
 	my ($server, $target, $request, $query, $param, @rest) = @_;
 	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param");
 	#unless ($request) {
-	unless ($query) {
+	if ($query eq '' && $request eq '') {
 		sayit($server, $target, 'En älynnyt..');
 		return 0;
 	}

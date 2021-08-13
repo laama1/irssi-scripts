@@ -245,7 +245,7 @@ sub UPDATECOLUMN {
 	my $sth1 = $dbh->prepare($sqlstr1) or return; #die DBI::errstr;
 	$sth1->bind_param(1, $id, { TYPE => SQL_INTEGER });
 	$sth1->execute();
-	if($oldvalue = $sth1->fetchrow_array) {
+	if($oldvalue = decode_utf8($sth1->fetchrow_array)) {
 		dp(__LINE__.': --fetched a result-- '. $oldvalue);
 	} else {
 		$oldvalue = '<tyhjä>';
