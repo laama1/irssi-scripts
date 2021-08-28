@@ -418,6 +418,8 @@ sub changeCity {
 	} elsif ($city eq 'Jyvaskyla' || $city eq 'Jyväskylä') {
 		#$city = '🚲 Jyväskylä';
 		$city = '🚴 Jyväskylä';
+	} elsif ($city eq 'Turku') {
+		$city = '⛵ Turku';
 	}
 	return $city;
 }
