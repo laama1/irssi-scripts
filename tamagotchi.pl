@@ -74,6 +74,14 @@ sub match_word {
 	return 0;
 }
 
+sub match_word_lc {
+	my ($sentence, @compare, @rest) = @_;
+	if (grep { index (lc $sentence, $_) > 0 } @compare ) {
+		return 1;
+	}
+	return 0;
+}
+
 sub msg_channel {
 	my ($serverrec, $target, $line, @rest) = @_;
 	$serverrec->command("MSG $target $line");
@@ -155,25 +163,25 @@ sub pubmsg {
 	
 	return if ($msg =~ /\?$/);		# return if line ends with '?'
 
-	if (match_word($msg, @foods)) {
+	if (match_word_lc($msg, @foods)) {
 		$foodcounter += 1;
 		msg_random($serverrec, $target, @foodanswer_words);
 		evolve($serverrec, $target, count_level($foodcounter, @foodnicks), 'FooD', @foodnicks) if (if_lvlup($foodcounter));
 		increaseValue('food');
 		printc("trigger from $nick on channel $target, foodcounter: $foodcounter");
-	} elsif (match_word($msg, @drugs)) {
+	} elsif (match_word_lc($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
 		evolve($serverrec, $target, count_level($drugcounter, @drugnicks), 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
 		increaseValue('drugs');
 		printc("trigger from $nick on channel $target, drugcounter: $drugcounter");
-	} elsif (match_word($msg, @loves)) {
+	} elsif (match_word_lc($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @loveanswer_words);
 		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		increaseValue('love');
 		printc("trigger from $nick on channel $target, lovecounter: $lovecounter");
-	} elsif (match_word($msg, @hates)) {
+	} elsif (match_word_lc($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
 		evolve($serverrec, $target, count_level($hatecounter, @hatenicks), 'HaT', @hatenicks) if(if_lvlup($hatecounter));
