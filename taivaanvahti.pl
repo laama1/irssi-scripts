@@ -37,18 +37,17 @@ my $taivaanvahtiURL = 'https://www.taivaanvahti.fi/observations/rss';
 my $count = 0;
 my $resultarray = {};
 my $parser = new XML::RSS();
-#my $parser = XML::RSS()->new;
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
-		Irssi::print("$myname: Unable to create database file: $db");
+		print("$myname> Unable to create database file: $db");
 		die;
 	}
 	close FILE;
 	create_db();
-	Irssi::print("$myname: Database file created.");
+	print("$myname> Database file created.");
 } else {
-	Irssi::print("$myname: Database file found!");
+	print("$myname> Database file found!");
 }
 
 sub DP {
@@ -121,8 +120,8 @@ sub sig_msg_pub {
 
 sub sayit {
 	my ($server, $target, $sayline, @rest) = @_;
-	if (defined($sayline) && length($sayline) > 170) {
-		$sayline = substr $sayline, 0, 170;
+	if (defined $sayline && length $sayline > 190) {
+		$sayline = substr $sayline, 0, 190;
 		$sayline .= ' ...';
 	} else {
 		#$desc = "";
@@ -136,8 +135,8 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 
-	if (defined($desc) && length($desc) > 170) {
-		$desc = substr $desc, 0, 170;
+	if (defined $desc && length $desc > 190) {
+		$desc = substr $desc, 0, 190;
 		$desc .= ' ...';
 	} else {
 		#$desc = "";
@@ -211,7 +210,7 @@ sub save_to_db {
 	$sth->execute;
 	$sth->finish();
 
-	Irssi::print("$myname: New data saved to database: $title");
+	print("$myname> New data saved to database: $title");
 	return;
 }
 
@@ -223,17 +222,6 @@ sub create_db {
 	KaaosRadioClass::writeToDB($dbh, $sqlquery);
 	close_database_handle();
 	return;
-
-=pod
-	my $rv = $dbh->do($stmt);		# return value
-	if($rv < 0) {
-   		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
-	} else {
-   		Irssi::print "$myname: Table created successfully";
-	}
-	close_database_handle();
-	return;
-=cut
 }
 
 sub search_db {
@@ -270,7 +258,7 @@ sub parse_id_from_link {
 	return 0;
 }
 
-# example: Tue, 04 Sep 2018 22:37:34 +0300 (use with pubdate if needed)
+# argument example: Tue, 04 Sep 2018 22:37:34 +0300
 sub parseRFC822Time {
 	my ($string, $tzone, @rest) = @_;
 	#%z The time-zone as hour offset from UTC. Required to emit RFC822-conformant dates (using "%a, %d %b %Y %H:%M:%S %z").
@@ -281,7 +269,6 @@ sub parseRFC822Time {
 	DP('STRING: '. $string);
 	my $dt = $formatter->parse_datetime($string);
 	DP('formatter dt: '.$dt);	# ISO 8601
-	#DA($dt);
 	return $dt;
 }
 
@@ -325,8 +312,9 @@ sub parse_extrainfo_from_link {
 	my $text = KaaosRadioClass::fetchUrl($url);
 	my %returnObject = (
 		'unixtime' => 0,
-		'type' => ,
-		'city' => ,
+		'type' => '',
+		'city' => '',
+		'havaintodate' => ''
 	);
 
 	my $date;
@@ -334,29 +322,31 @@ sub parse_extrainfo_from_link {
 		my $heading = $1;
 		if ($heading =~ /<h1>(.*?)<\/h1>/is) {
 			my $innerdata = KaaosRadioClass::ktrim($1);
-			#DP('innerdata: '. $innerdata);
+			DP('innerdata: '. $innerdata);
 			# Parse havaintodate
-			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
+			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
+				DP('match1!');
 				my $type = $1;
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
 				my $phour = $5;
 				my $pminute = $6;
-				my $city = $12;
+				my $city = KaaosRadioClass::ktrim($12);
 
 				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
 				$returnObject{'type'} = $type;
 				$returnObject{'city'} = $city;
 			}
-			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?) </gis) {
+			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
+				DP('match2!');
 				my $type = $1;
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
 				my $phour = $5;
 				my $pminute = $6;
-				my $city = $7;
+				my $city = KaaosRadioClass::ktrim($7);
 				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
 				$returnObject{'type'} = $type;
 				$returnObject{'city'} = $city;
@@ -373,11 +363,11 @@ sub parse_xml {
 	my $index = 0;
 	foreach my $item (@{$parser->{items}}) {
 		$index++;
-		if (if_link_in_db2($item->{'link'}) == 0) {
+		if (if_link_in_db($item->{'link'}) == 0) {
 			#DA($item);
 			my $havaintoid = parse_id_from_link($item->{'link'});
 			my %extrainfo = parse_extrainfo_from_link($item->{'link'});
-			Irssi::print("$myname New item: $item->{title}");
+			DP("New item: $item->{title}");
 			my $extrainfotime = $extrainfo{'havaintodate'};
 
 			my $havaintodate = localtime($extrainfo{'havaintodate'})->strftime('%d.%m. %H:%M');
@@ -389,7 +379,7 @@ sub parse_xml {
 			save_to_db($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo{'city'}, $extrainfotime);
 
 			#msg_to_channel($item->{'title'}, $item->{'link'}, $item->{'pubDate'}, $item->{'description'}, $havaintoid, $extrainfo);
-			msg_to_channel($item->{'title'}, $item->{'link'}, $havaintodate . ', '.$extrainfo{'city'}, $item->{'description'}, $havaintoid, %extrainfo);
+			msg_to_channel($item->{'title'}, $item->{'link'}, $havaintodate . ', '.$extrainfo{'city'}, $item->{'description'});
 		}
 	}
 	close_database_handle();
@@ -420,5 +410,7 @@ Irssi::signal_add('taivaanvahti_search_id', 'sig_taivaanvahti_search');
 Irssi::timeout_add(1_800_000, 'timerfunc', undef);		# 30 minutes
 #Irssi::timeout_add(5000, 'timerfunc', undef);			# 5 aseconds
 
-Irssi::print("$myname v. $VERSION Loaded!");
-Irssi::print("$myname new commands: /taivaanvahti_update, /taivaanvahti_search");
+print("$myname> v. $VERSION Loaded!");
+print("$myname> new commands: /taivaanvahti_update, /taivaanvahti_search");
+print("$myname> /set taivaanvahti_enabled_channels #channel1 #channel2");
+print("$myname> Enabled on: ". Irssi::settings_get_str('taivaanvahti_enabled_channels'));
