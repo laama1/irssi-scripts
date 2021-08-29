@@ -9,9 +9,10 @@ use LWP::Simple;
 use Data::Dumper;
 use DBI;
 use HTTP::Date;
-use DateTime;
+#use DateTime;
 use DateTime::Format::Strptime;
 use Time::Piece;
+use Encode qw/encode decode/;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 # 6.7.2021: use kaaosradioclass more
@@ -21,14 +22,14 @@ $VERSION = '2021-07-06';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
-	name        => 'taivaanvahti',
+	name        => 'taivaanvahti.pl',
 	description => 'Fetch new data from Taivaanvahti.fi',
 	license     => 'Public Domain',
 	url         => 'http://www.kaaosradio.fi',
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 
@@ -45,21 +46,21 @@ unless (-e $db) {
 	}
 	close FILE;
 	create_db();
-	print("$myname> Database file created.");
+	print("$myname> Database file $db created.");
 } else {
-	print("$myname> Database file found!");
+	print("$myname> Database file $db found!");
 }
 
 sub DP {
 	return unless $DEBUG == 1;
-	Irssi::print("$myname: @_");
+	print("$myname debug> @_");
 	return;
 }
 
 sub DA {
 	return unless $DEBUG == 1;
-	Irssi::print("$myname-debug array:");
-	Irssi::print Dumper (@_);
+	print("$myname-debug array>");
+	print Dumper (@_);
 	return;
 }
 
@@ -72,21 +73,22 @@ sub print_help {
 # search DB for ID, when signal received from urltitle3.pl
 sub sig_taivaanvahti_search {
 	my ($server, $column, $target, $value) = @_;
-	DP('sig_taivaanvahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
+	DP(__LINE__.' sig_taivaanvahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
 	#DA($server);
 	open_database_handle();
 	my $sth = $dbh->prepare('SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti5 where HAVAINTOID = ? AND DELETED = 0');
+	#my $sth = $dbh->prepare("SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti5 where $column = ? AND DELETED = 0");
 
 	$sth->bind_param(1, $value);
 	$sth->execute();
 	if (my @line = $sth->fetchrow_array) {
-		DP('Found result');
+		DP(__LINE__.' Found result:');
 		DA(@line);
-		my $title = $line[0];
-		my $desc = $line[1];
-		my $location = $line[3];
+		my $title =  decode('UTF-8', $line[0]);
+		my $desc = decode('UTF-8', $line[1]);
+		my $location = decode('UTF-8', $line[3]);
 		#my $date = localtime($line[3]);
-		DP('Time: '. $line[2]);
+		DP(__LINE__.' Time: '. $line[2]);
 		my $timepiece = localtime($line[2])->strftime('%e.%m. %H:%M');
 		my $sayline = "$title: ($timepiece, $location) $desc";
 		sayit($server, $target, $sayline);
@@ -227,8 +229,8 @@ sub create_db {
 sub search_db {
 	my $searchword = shift;
 	open_database_handle();
-	DP($searchword);
-	my $stmt = 'SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ?';
+	DP(__LINE__.' searchword: '.$searchword);
+	my $stmt = 'SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? ORDER BY rowid DESC';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -246,7 +248,7 @@ sub search_db {
 	}
 	close_database_handle();
 	DA($resultarray);
-	DP("index: $index");
+	DP(__LINE__." how many found: $index");
 	return;
 }
 
@@ -266,9 +268,9 @@ sub parseRFC822Time {
         pattern  => '%a, %d %b %Y %H:%M:%S %z',
 		on_error => 'croak',
     );
-	DP('STRING: '. $string);
+	DP(__LINE__.' STRING: '. $string);
 	my $dt = $formatter->parse_datetime($string);
-	DP('formatter dt: '.$dt);	# ISO 8601
+	DP(__LINE__.' formatter dt: '.$dt);	# ISO 8601
 	return $dt;
 }
 
@@ -279,7 +281,7 @@ sub parse_time {
 	if ($string =~ /\w{3}, (\d{2}) (\w{3}) \d{4} (\d{2}:\d{2}):\d{2} ([+-]\d{4})/i) {
 		return parseRFC822Time($string, $tzone);
 	} else {
-		DP('no luck');
+		DP(__LINE__.' no luck');
 	}
 	return $string;
 }
@@ -289,7 +291,7 @@ sub parse_mini {
 	my ($obj_ref, $day, $month, $year, $hour, $minute, $tzone, @rest) = @_;
 	my $isotime = $year. '/' .$month. '/' .$day. ' ' .$hour. ':' .$minute;
 	my $unixtime = str2time($isotime);
-	DP("isotime: $isotime, unixtime: $unixtime\n");
+	DP(__LINE__." isotime: $isotime, unixtime: $unixtime\n");
 
 	$obj_ref->{'havaintodate'} = $unixtime;
 
@@ -302,9 +304,22 @@ sub parse_mini {
 		#time_zone => $tzone,
 	);
 	my $unixtime2 = $dt->epoch();
-	DP("unixtime: $unixtime, epoch: $unixtime2");
+	DP(__LINE__." unixtime: $unixtime, epoch: $unixtime2");
 	#return $returnitem;
 	return;
+}
+
+sub parse_extrainfo_from_link_new {
+	my ($url, @rest) = @_;
+	my $text = KaaosRadioClass::fetchUrl($url);
+	my %returnObject = (
+		'unixtime' => 0,
+		'type' => '',
+		'city' => '',
+		'havaintodate' => ''
+	);
+
+
 }
 
 sub parse_extrainfo_from_link {
@@ -320,12 +335,12 @@ sub parse_extrainfo_from_link {
 	my $date;
 	if ($text =~ /<div class="main-heading">(.*?)<\/div>/gis) {
 		my $heading = $1;
-		if ($heading =~ /<h1>(.*?)<\/h1>/is) {
+		if ($heading =~ /<h1>(.*?)<\/h1>/gis) {
 			my $innerdata = KaaosRadioClass::ktrim($1);
-			DP('innerdata: '. $innerdata);
+			DP(__LINE__.' innerdata: '. $innerdata);
 			# Parse havaintodate
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
-				DP('match1!');
+				DP(__LINE__.' match1!');
 				my $type = $1;
 				my $pday = $2;
 				my $pmonth = $3;
@@ -339,7 +354,7 @@ sub parse_extrainfo_from_link {
 				$returnObject{'city'} = $city;
 			}
 			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
-				DP('match2!');
+				DP(__LINE__.' match2!');
 				my $type = $1;
 				my $pday = $2;
 				my $pmonth = $3;
@@ -353,7 +368,7 @@ sub parse_extrainfo_from_link {
 			}
 		}
 	} else {
-		DP('NOT FOUND :(');
+		DP(__LINE__.' NOT FOUND :(');
 	}
 	return %returnObject;
 }
@@ -367,10 +382,12 @@ sub parse_xml {
 			#DA($item);
 			my $havaintoid = parse_id_from_link($item->{'link'});
 			my %extrainfo = parse_extrainfo_from_link($item->{'link'});
-			DP("New item: $item->{title}");
+			
 			my $extrainfotime = $extrainfo{'havaintodate'};
 
 			my $havaintodate = localtime($extrainfo{'havaintodate'})->strftime('%d.%m. %H:%M');
+
+			DP(__LINE__." New item: $item->{title}, havaintodate: $havaintodate, extrainfotime: $extrainfotime");
 
 			#my $pubdate_dt = parse_time($extrainfo{'unixtime'});
 			my $pubdate_dt = parse_time($item->{'pubDate'});	# publish date
