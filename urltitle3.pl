@@ -10,6 +10,12 @@
 # Settings:
 #  /set urltitle_enabled_channels #channel1 #channel2 ...
 #  Enables url fetching on these channels
+
+#	/set urltitle_wanha_channels #channel1 #channel2
+#	/set urltitle_wanha_disabled 0/1
+#	/set urltitle_dont_save_urls_channels #channel1 #channel2 -- keep these channels in secret
+#	/set urltitle_shorten_url_channels #channel1 #channel2		-- print limited amount of info to channel
+#	/set urltitle_enable_descriptions 0/1.
 #
 #
 
@@ -40,7 +46,7 @@ use Encode;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2020-07-09';
+$VERSION = '2021-09-29';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -51,9 +57,9 @@ $VERSION = '2020-07-09';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+my $DEBUG_decode = 1;
 
 my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
@@ -61,7 +67,7 @@ my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
 my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
 my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
 my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
-my $howManyDrunk = 0;
+my $howDrunk = 0;
 my $dontprint = 0;
 
 my $myname = 'urltitle3.pl';
@@ -79,17 +85,17 @@ $newUrlData->{md5} = '';			# hash of the page that was fetched
 $newUrlData->{fetchurl} = '';		# which url to actually fetch
 $newUrlData->{shorturl} = '';		# shortened url for the link
 
-my $shortModeEnabled = 0;			# don't print that much garbage
-my $shortenUrl = 0;					# enable shorten url
+my $shortModeEnabled = 0;			# if enabled, reduces garbage sent to channel
+my $shorturlEnabled = 0;			# enable short url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		Irssi::print($IRSSI{name}.": Unable to create or write file: $db");
+		print($IRSSI{name}."> Unable to create or write file: $db");
 		die;
 	}
 	close FILE;
 	createFstDB();
-	Irssi::print($IRSSI{name}.": Database file created.");
+	print($IRSSI{name}."> Database file created.");
 }
 
 
@@ -98,10 +104,10 @@ my $cookie_jar = HTTP::Cookies->new(
 	autosave => 1,
 );
 my $max_size = 262144;		# bytes
-#my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+#my $useragentOld_en = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; fi-FI; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/65.0';
-my $useragentBot = 'URLPreviewBot';
+my $useragentBot = 'URLPreviewBot 1.0';
 my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
@@ -119,7 +125,7 @@ my $ua = LWP::UserAgent->new(%headers);
 # Try to disable cert checking (lwp versions > 5.837)
 eval {
 	$ua->ssl_opts('verify_hostname' => 0);
-	#$ua->proxy(['http', 'ftp'], 'http://proxy.....fi:8080/');
+	#$ua->proxy(['http', 'ftp'], 'http://10.7.0.4:3128/');
 	1;
 } or do {
 };
@@ -149,11 +155,11 @@ sub fetch_title {
 	my $md5hex = '';					# md5 of the page
 
 	my $response = $ua->get($url);
-	dd('fetch_title: content charset: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
+	dd(__LINE__.':fetch_title: content charset from response: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
 	#da($response);
 
 	if ($response->is_success) {
-		Irssi::print("$myname: Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
+		print($IRSSI{name}."> Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
 		if ($finalURI ne '' && $finalURI ne $url) {
 			$url = $finalURI;
@@ -167,7 +173,7 @@ sub fetch_title {
 		if ($page ne $diffpage) {
 			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			dd(__LINE__.':fetch_title: Same charset / content!');
+			dd(__LINE__.':fetch_title: Same charset / content as reported!');
 		}
 
 		if ($datasize > $max_size) {
@@ -182,7 +188,7 @@ sub fetch_title {
 		if ($datasize > 0) {
 			$md5hex = md5_hex(Encode::encode_utf8($page));
 		} else {
-			Irssi::print("$myname warning: Couldn't get size of the document!");
+			print($IRSSI{name}." warning> Couldn't get size of the document!");
 		}
 		
 		if ($size / (1024*1024) > 1) {
@@ -196,7 +202,7 @@ sub fetch_title {
 		}
 
 	} else {
-		Irssi::print("$myname: Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
+		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		return 'Error: '.$response->status_line, 0,0, $md5hex;
 	}
 
@@ -224,6 +230,7 @@ sub getTitle {
 	dp(__LINE__.':getTitle') if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
+	#$countWordsUrl =~ s/\.[\w]{1.5}$//g;				# strip .html or .net from the end (dangerous and doesn't understand numbers)
 	
 	# get Charset
 	my $headercharset = $response->header('charset') || '';
@@ -232,45 +239,44 @@ sub getTitle {
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
-	dd(__LINE__.": \ngetTitle:\nresponse header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
+	dd(__LINE__.": \ngetTitle: response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
 	#dd('og:title: '.$ogtitle);
 
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
+
 	dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
 	dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
-	#dp(__LINE__.':HEADER: ');
-	dd(__LINE__.": getTitle newtitle: $newtitle, newdescription: $newdescription");
+	dd(__LINE__.":getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
-		dp(__LINE__.':getTitle script filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle script tags filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
-		dp(__LINE__.':getTitle style filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle style tags filtered..') if $DEBUG1;
 	}
 	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
-		dp(__LINE__.':getTitle comment filtered..') if $DEBUG1;
+		dp(__LINE__.':getTitle comment tags filtered..') if $DEBUG1;
 	}
 	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
 
 	#da($response);
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
-		dd(__LINE__.':getTitle: iltis!');
-		$newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
-		$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
+		$newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
+		$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
 	} elsif ($temppage =~ /charset="utf-8"/i) {
 		dd(__LINE__.':getTitle utf-8 meta charset tag found manually from source!');
-		# LAama 29.12.2017 $newtitle = checkAndEtu($newtitle, $testcharset) if $newtitle;
-		#$newdescription = checkAndEtu($newdescription, $testcharset) if $newdescription;
+		# LAama 29.12.2017 $newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
+		#$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
 		dd(__LINE__.':getTitle testcharset not UTF-8: '. $testcharset);
 		dd(__LINE__.':getTitle newtitle again: '. $newtitle);
-		$newtitle = checkAndEtu($newtitle, $testcharset);
-		$newdescription = checkAndEtu($newdescription, $testcharset);
+		$newtitle = checkAndEncode($newtitle, $testcharset);
+		$newdescription = checkAndEncode($newdescription, $testcharset);
 	}
 
 	my $title = '';
@@ -302,42 +308,42 @@ sub get_channel_title {
 }
 
 ### Encode to UTF8. Params: $string, $charset
-sub etu8 {
+sub e2U {
 	my ($string, $charset, @rest) = @_;
 	return $string if !$charset || !$string;
-	dd(__LINE__.": etu8 function. charset: $charset string before: $string");
+	dd(__LINE__.": e2U charset: $charset string before: $string");
 	Encode::from_to($string, $charset, 'utf8');
-	dd(__LINE__.": etu8 function, string after conversion to utf8: $string");
+	dd(__LINE__.": e2U string after conversion to utf8: $string");
 	return $string;
 }
 
-### Check if charset is utf8 or not, and convert. Params: 1) String to convert 2) source charset.
-sub checkAndEtu {
+### Check if charset is utf8. if not, convert to utf8. Params: 1) String to convert 2) source charset.
+sub checkAndEncode {
 	my ($string, $charset, @rest) = @_;
-	dd(__LINE__.": checkAndEtu, charset: $charset, string: $string");
+	dd(__LINE__.": checkAndEncode, charset given: $charset, string given: $string");
 	my $returnString = "";
 	if ($charset !~ /utf-8/i && $charset !~ /utf8/i) {
-		dd(__LINE__.": charset is reported different from utf8");
+		dd(__LINE__.": charset was not reported at utf8");
 		if ($string =~ /Ã/) {
 			dd(__LINE__.": most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
-			$returnString = etu8($string, $charset);
+			$returnString = e2U($string, $charset);
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
 			dd(__LINE__.": UTF-8 CHARS FOUND, most likely NOT correct! (reported as ${charset})");
 			$returnString = $string;
 		} else {
 			dd(__LINE__.": Didn't found any special characters. Converting..'");
-			$returnString = etu8($string, $charset);
+			$returnString = e2U($string, $charset);
 		}
-	} elsif ($charset =~ /UTF8/i || $charset =~ /UTF-8/i) {
-		dd(__LINE__.": charset reported as utf8");
+	} elsif ($charset =~ /utf-8/i || $charset =~ /utf8/i) {
+		dd(__LINE__.": charset was reported as utf8");
 		if ($string =~ /Ã/) {
 			dd(__LINE__.": ISO CHARS FOUND, INCORRECT! (reported as $charset)");
-			$returnString = etu8($string, $charset) || "";		
+			$returnString = e2U($string, $charset) || "";		
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
-			dd(__LINE__.": UTF-8 CHARS FOUND, CORRECT! (reported as $charset)");
+			dd(__LINE__.": UTF-8 CHARS FOUND, report was CORRECT! (reported as $charset)");
 			$returnString = $string;
 		} else {
-			dd(__LINE__.": Didn't find any special characters. Not converting.");
+			dd(__LINE__.": Didn't find any special characters. Not converting to utf8.");
 			$returnString = $string;
 		}
 	}
@@ -425,10 +431,10 @@ sub split_row_to_array {
 
 sub replace_non_url_chars {
 	my ($row, @rest) = @_;
-	dd(__LINE__.": replace non url chars row: $row");
+	dd(__LINE__.": replace_non_url_chars row: $row");
 
 	my $debugString = '';
-	if ($DEBUG1 == 1 && 0) {
+	if ($DEBUG_decode == 1 && 1) {
 		foreach my $char (split //, $row) {
 			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
 		}
@@ -492,9 +498,9 @@ sub createFstDB {
 
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
-   		Irssi::print ("$myname: DBI Error: ". DBI::errstr);
+   		print ($IRSSI{name}." DBI Error> ". DBI::errstr);
 	} else {
-   		Irssi::print("$myname: Table $db created successfully");
+   		print($IRSSI{name}."> Table $db created successfully");
 	}
 	$dbh->disconnect();
 }
@@ -524,7 +530,7 @@ sub saveToDB {
 	$sth->finish();
 	$dbh->disconnect();
 
-	Irssi::print($IRSSI{name}.": URL from $newUrlData->{chan} saved to database.");
+	print($IRSSI{name}."> URL from $newUrlData->{chan} saved to database.");
 	clearUrlData();
 	return;
 }
@@ -556,7 +562,7 @@ sub checkForPrevEntry {
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
-	dp(__LINE__.": $count previous elements found!");# if $DEBUG1;
+	dp(__LINE__.": $count previous elements found!") if $DEBUG1;
 	return @elements;		# return all rows
 	#return $elements[0];	# return first row
 }
@@ -588,7 +594,7 @@ sub api_conversion {
 	# TODO: imgur conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
 		my $image = $1;
-		Irssi::print($IRSSI{name}." imgur-klick! img: $image");
+		print($IRSSI{name}."> imgur-klick! img: $image");
 	}
 
 	# google drive
@@ -596,7 +602,7 @@ sub api_conversion {
 		# gdrive api
 		my $fileid = $1;
 		my $apiurl = "https://www.googleapis.com/drive/v3/files/".$fileid."?key=".$apikey;
-		Irssi::print($IRSSI{name}." gdrive api! fileid: $fileid, apiurl: $apiurl");
+		print($IRSSI{name}."> gdrive api! fileid: $fileid, apiurl: $apiurl");
 		my $gdriveapidata_json = KaaosRadioClass::getJSON($apiurl);
 		#dp($gdriveapidata_json);
 		if ($gdriveapidata_json eq '-1') {
@@ -612,7 +618,7 @@ sub api_conversion {
 	# instagram API
 	if ($param =~ /www.eitoimi.instagram.com/) {
 		# instagram conversion, example: https://api.instagram.com/oembed/?url=https://www.instagram.com/p/CFKNRqNhW32/
-		Irssi::print($IRSSI{name}.' Instagram url detected!');
+		print($IRSSI{name}.'> Instagram url detected!');
 		my $instapiurl = 'https://api.instagram.com/instagram_oembed/?url=' . $param;
 		dp('instapi url:'.$instapiurl);
 		my $instajson = KaaosRadioClass::getJSON($instapiurl);
@@ -631,10 +637,11 @@ sub api_conversion {
 sub signal_emitters {
 	my ($param, $server, $target, @rest) = @_;
 	dp(__LINE__.":signal_emitters") if $DEBUG1;
+	return 0 if $dontprint == 1;
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
-		Irssi::print($IRSSI{name}." IMDB signal emited!! $1");
+		print($IRSSI{name}."> IMDB signal emited!! $1");
 		# Irssi::signal_stop();
 		return 1;
 	}
@@ -642,7 +649,7 @@ sub signal_emitters {
 	# taivaanvahti id
 	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
 		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
-		Irssi::print("Taivaanvahti signal emited!! $1");
+		print($IRSSI{name}."> Taivaanvahti signal emited!! $1");
 		# Irssi::signal_stop();
 		return 1;
 	}
@@ -719,7 +726,7 @@ sub sig_msg_pub {
 	$newUrlData->{chan} = $target;
 	
 	# check if flooding too many times in a row
-	my $drunk = KaaosRadioClass::Drunk($nick);
+	my $isDrunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			$dontprint = 1;
@@ -741,10 +748,10 @@ sub sig_msg_pub {
 	}
 	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shorten_url_channels');
 	if ($target ~~ @short_raw) {
-		$shortenUrl = 1;
+		$shorturlEnabled = 1;
 		dp(__LINE__.': shorten url enabled!');
 	} else {
-		$shortenUrl = 0;
+		$shorturlEnabled = 0;
 	}
 
 	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);
@@ -766,7 +773,7 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
 	# shorten output message	
-	print "$myname: Shortening url info a bit..." if ($newtitle =~ s/(.{260})(.*)/$1.../);
+	print $IRSSI{name}."> Shortening url info a bit..." if ($newtitle =~ s/(.{260})(.*)/$1.../);
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
@@ -781,14 +788,14 @@ sub sig_msg_pub {
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
-	# increase $howManyDrunk if necessary
+	# increase $howDrunk if necessary
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
-		if ($drunk && $howManyDrunk < 1) {
+		if ($isDrunk && $howDrunk < 1) {
 			msg_to_channel($server, $target, 'tl;dr');
-			$howManyDrunk++;
-		} elsif ($drunk == 0 && $title ne '') {
+			$howDrunk++;
+		} elsif ($isDrunk == 0 && $title ne '') {
 			msg_to_channel($server, $target, $title);
-			$howManyDrunk = 0;
+			$howDrunk = 0;
 		}
 	}
 
@@ -799,6 +806,7 @@ sub sig_msg_pub {
 
 sub msg_to_channel {
 	my ($server, $target, $title, @rest) = @_;
+	if ($dontprint == 1) {return;}
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
 
@@ -824,8 +832,8 @@ sub checkIfOld {
 
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
-	dp(__LINE__.":checkIfOld count: $count, howmanydrunk: $howManyDrunk");
-	if ($count != 0 && $howManyDrunk == 0) {
+	dp(__LINE__.":checkIfOld count: $count, howDrunk: $howDrunk");
+	if ($count != 0 && $howDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
 		$mon += 1;
@@ -839,7 +847,7 @@ sub checkIfOld {
 # find with keywords comma-separated list
 sub find_keywords {
 	my ($keywords, @rest) = @_;
-	Irssi::print("$myname: find_keywords request: $keywords");
+	print($IRSSI{name}."> find_keywords request: $keywords");
 	my $returnString;
 	my @words = split /, ?/, $keywords;
 	my $search_sql = 'SELECT rowid,* from links where ';
@@ -855,7 +863,7 @@ sub find_keywords {
 # find URL from database
 sub findUrl {
 	my ($searchword, @rest) = @_;
-	Irssi::print("$myname: etsi request: $searchword");
+	print($IRSSI{name}."> etsi request: $searchword");
 	dp(__LINE__.":findUrl") if $DEBUG1;
 	my $returnstring;
 	if ($searchword =~ s/^id:? ?//i) {
@@ -908,7 +916,7 @@ sub searchDB {
 	my ($searchWord, @rest) = @_;
 	dp(__LINE__.":searchDB: $searchWord");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ?';
+	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ? ORDER BY rowid desc';
 	my $sth = $dbh->prepare($sqlString) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchWord%");
 	$sth->bind_param(2, "%$searchWord%");
@@ -965,7 +973,7 @@ sub createShortAnswerFromResults {
 	my $channel = $resultarray[6];				# channel
 
 	if ($rowid) {
-		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
+		print($IRSSI{name}."> Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
 	}
 
 	return $returnstring;
@@ -997,8 +1005,8 @@ sub createAnswerFromResults {
 	my $md5hash = $resultarray[7];
 
 	if ($rowid) {
-		Irssi::print("$myname: Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
-		Irssi::print("$myname: return string: $returnstring");
+		print($IRSSI{name}."> Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
+		print($IRSSI{name}."> return string: $returnstring");
 	}
 
 	return $returnstring;
@@ -1017,7 +1025,8 @@ sub dontPrintThese {
 sub falseUtf8Pages {
 	my ($text, @rest) = @_;
 	return 1 if $text =~ /iltalehti\.fi/i;
-	return 1 if $text =~ /puhelinvertailu.com/i;	# 19.7.2021
+	return 1 if $text =~ /puhelinvertailu\.com/i;	# 19.7.2021
+	#return 1 if $text =~ /lidl\.fi/i;
 	
 	return 0;
 }
@@ -1049,7 +1058,7 @@ sub clearUrlData {
 	$newUrlData->{md5} = '';		# md5hash
 	$newUrlData->{fetchurl} = '';	# url to fetch
 	$newUrlData->{shorturl} = '';	# short url
-	KaaosRadioClass::floodCheck();	# write to file
+	KaaosRadioClass::floodCheck();	# write to flood-file
 }
 
 
@@ -1057,7 +1066,7 @@ sub clearUrlData {
 sub dp {
 	my ($string, @rest) = @_;
 	if ($DEBUG == 1) {
-		print($IRSSI{name}." debug: ".$string);
+		print($IRSSI{name}." debug> ".$string);
 	}
 }
 
@@ -1065,14 +1074,14 @@ sub dp {
 sub dd {
 	my ($string, @rest) = @_;
 	if ($DEBUG_decode == 1) {
-		print($IRSSI{name}." debugdecode: ".$string);
+		print($IRSSI{name}." debugdecode> ".$string);
 	}
 }
 
 # debug print array
 sub da {
-	Irssi::print($IRSSI{name}." debugarray: ");
-	Irssi::print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
+	print($IRSSI{name}." debugarray> ");
+	print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
 }
 
 sub sig_msg_pub_own {
@@ -1097,12 +1106,12 @@ Irssi::signal_register($signal_config_hash2);
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
-Irssi::print("$myname v. $VERSION loaded.");
-Irssi::print("\nNew commands:");
-Irssi::print('/set urltitle_enabled_channels #channel1 #channel2');
-Irssi::print('/set urltitle_wanha_channels #channel1 #channel2');
-Irssi::print('/set urltitle_wanha_disabled 0/1');
-Irssi::print('/set urltitle_dont_save_urls_channels #channel1 #channel2');
-Irssi::print('/set urltitle_shorten_url_channels #channel1 #channel2');
-Irssi::print('/set urltitle_enable_descriptions 0/1.');
-Irssi::print('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));
+print($IRSSI{name}." v. $VERSION loaded.");
+print($IRSSI{name}."> New commands:");
+print('/set urltitle_enabled_channels #channel1 #channel2');
+print('/set urltitle_wanha_channels #channel1 #channel2');
+print('/set urltitle_wanha_disabled 0/1');
+print('/set urltitle_dont_save_urls_channels #channel1 #channel2');
+print('/set urltitle_shorten_url_channels #channel1 #channel2');
+print('/set urltitle_enable_descriptions 0/1.');
+print($IRSSI{name}.'> Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));
