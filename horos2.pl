@@ -86,7 +86,7 @@ sub event_pub_msg {
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic
-	if (get_channel_title($serverrec, $target) =~ /np\:/i) {
+	if (get_channel_title($serverrec, $target) =~ /npv?\:/i) {
 		return;
 	}
 
