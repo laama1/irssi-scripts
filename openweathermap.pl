@@ -420,6 +420,9 @@ sub changeCity {
 		$city = '🚴 Jyväskylä';
 	} elsif ($city eq 'Turku') {
 		$city = '⛵ Turku';
+	} elsif ($city eq 'Hatanpää' || $city eq 'Hatanpaa') {
+		#$city = '🍻 Hatanpää';
+		$city = '🍺 Hatanpää';
 	}
 	return $city;
 }
