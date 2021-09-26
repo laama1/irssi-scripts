@@ -28,7 +28,7 @@ use KaaosRadioClass;      # LAama1 8.11.2017
 use utf8;
 use Encode;
 
-$VERSION = '0.25';
+$VERSION = '0.26';
 %IRSSI = (
 	'authors' => 'Craig Andrews, LAama1',
 	'contact' => 'craig@simplyspiffing.com',
@@ -39,7 +39,7 @@ $VERSION = '0.25';
 );
 
 
-# Intialise the AI
+# Initialise the AI
 my $charset = 'iso-8859-1';
 my $megahal = undef;
 my $megahal_path = '';
@@ -75,13 +75,15 @@ my @ignorenicks = (
 	'kaaosradio',
 	'ryokas',
 	'KD_Butt',
+	'micdrop',
+	'KD_Bat',
 );
 
 my @channelnicks = ();               # value of nicks from the current channel
 my $currentchan = '';						# used in flood protect
 my $currentnetwork = '';						# used in flood protect
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'megahal2.pl';
 
 
@@ -257,9 +259,9 @@ sub public_responder {
 	
 	# Ignore lines containing URLs
 	return if $data =~ /tps?:\/\//i || $data =~ /www\./i;
-	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin
+	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin, ei vastata siihen
 	$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/);
-	dp(__LINE__." $myname: Giving data to Oraakkeli: ". int $skip_oraakkeli_but_learn);
+	#dp(__LINE__." $myname: Giving data to Oraakkeli: ". int $skip_oraakkeli_but_learn);
 	
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
@@ -302,7 +304,7 @@ sub public_responder {
 	my $nicklen = length $my_nick;
 	my $nickindex = index $data, $my_nick;
 	if ($nickindex >= 0 && $skip_oraakkeli_but_learn eq "") {
-		dp(__LINE__.": nick index: $nickindex, nicklen: $nicklen");
+		dp(__LINE__.": my nick found, index: $nickindex, nicklen: $nicklen");
 		dp(__LINE__.' data before: '.$data);
 		substr($data, $nickindex, ($nicklen+1)) = '';	# remove one character after nick also
 		#$data = substr $data, ($nicklen +1);
@@ -311,7 +313,7 @@ sub public_responder {
 		my $uniq = $nick . '@' . $target;	# nick@#target
 
 		# Do the right thing if the user is ignored
-		if (exists($ignore->{$uniq}) && $ignore->{$uniq} != 0) {
+		if (exists $ignore->{$uniq} && $ignore->{$uniq} != 0) {
 			# If the user has done time, release them
 			if (time - $ignore->{$uniq} > $ignore_timeout) {
 				$ignore->{$uniq} = 0;
@@ -376,6 +378,7 @@ sub public_responder {
 		#$output =~ s/^ *//g;		# replace spaces from beginning
 		#$output = KaaosRadioClass::replaceWeird($output);
 		#$output = "$nick: $output" if $referencesme;
+		$output = replace_weird($output);
 		$server->command("msg $target $nick, $output") if $output;
 
 	} else {
@@ -388,6 +391,16 @@ sub public_responder {
 		}
 		$megahal->learn($data, 0);
 	}
+}
+sub replace_weird {
+	my ($text, @rest) = @_;
+	$text =~ s/Ã¤/ä/g;          # ä
+	$text =~ s/Ã¶/ö/g;          # ö
+	$text =~ s/Ã¥/å/g;          # å
+	$text =~ s/õ/ä/g;           # ä
+	$text =~ s/Õ/Ä/g;           # Ä
+	$text =~ s/÷/ö/g;           # ö
+	return $text;
 }
 
 sub populate_nicklist {
