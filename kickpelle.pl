@@ -9,7 +9,7 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '2019-05-08';
+$VERSION = '2021-12-11';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -28,18 +28,33 @@ my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
 
 my $publicvotes = {};
 my $lastprivkick = time;
-my @badwords = ();
+my @badwords;
 
 GETBADWORDLIST();
 
-my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla !kick <nick> [kickmessage]. Kick vaatii 3 votea. 
-Operaattorit voivat käyttää myös privassa !kick #kanava <nick>, jolloin henkilö lähtee ensimmäisestä osumasta!';
+my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla: "!kick <nick> [kickmessage]". Kick vaatii 3 votea. 
+Operaattorit voivat käyttää myös privassa: "!kick #kanava <nick>", jolloin henkilö lähtee ensimmäisestä osumasta!';
+my $helptext2 = 'Kickpelleskripti. Ohje: http://8-b.fi:82/kd_butt.html#kick';
 
+my $joinmessage = 'Achtung. Olen kanavan sheriffi. Potkin väkeä jos he mainitsevat kiellettyjä sanoja. Listan kielletyistä sanoista saat privaasi komennolla: "!badwords". Opit voivat kasvattaa listaa, kirjoita "!help badword" niin saat privaasi ohjeet. (v.'.$VERSION.')';
 
 sub print_help {
 	my ($server, $target) = @_;
 	sayit($server, $target, $helptext);
 	return 0;
+}
+
+sub print_joinmsg {
+	my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
+	my @enabled = split / /, $enabled_raw;
+	my @windows = Irssi::windows();
+	foreach my $window (@windows) {
+		if ($window->{active}->{type} eq 'CHANNEL' && $window->{active}->{name} ~~ @enabled) {
+			$window->{active_server}->command("MSG $window->{active}->{name} $joinmessage");
+			return;
+		}
+	}
+	return;
 }
 
 sub msgit {
@@ -101,15 +116,18 @@ sub DELBADWORD {
 
 sub GETBADWORDLIST {
 	my @rest = @_;
-	dp(__LINE__.": bad word file: $badwordfile");
-	@badwords = KaaosRadioClass::readTextFile($badwordfile);
-	da(@badwords);
-	if ($badwords[0] == -1) {
+	my $temp_badwords = KaaosRadioClass::readTextFile($badwordfile);
+	if ($temp_badwords[0] == -1) {
 		dp(__LINE__.': no bad words!');
 		@badwords = ('____', 'russiancup');
 		SAVEBADWORDLIST();
 	}
-	da(__LINE__.': bad words loaded:',@badwords);
+	foreach my $test (@$temp_badwords) {
+		dp(__LINE__.' badword: '.$test);
+		push @badwords, $test;
+	}
+	da(@badwords);
+	derpint('Badwordfile '.$badwordfile.' loaded.');
 	return;
 }
 
@@ -230,11 +248,13 @@ sub event_pubmsg {
 	if ($msg =~ /^!help kick(pelle)?/i) {
 		print_help($server, $target);
 		return;
-	} elsif ($msg =~ /!help$/i) {
-		sayit($server, $target, 'Kickpelle. Ohje: http://8-b.fi:82/kd_butt.html#kick');
+	} elsif ($msg =~ /^!help$/i) {
+		sayit($server, $target, $helptext2);
+	} elsif ($msg =~ /^!help badword/) {
+		msgit($server, $nick, $helptext2);
 	}
 	if (badWordFilter($msg)) {
-		doKick($server, $target, $nick, 'Bad words!');
+		doKick($server, $target, $nick, 'Ei kiroilla!');
 		return;
 	}
 
@@ -257,17 +277,22 @@ sub event_pubmsg {
 		}
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
 		if (ADDBADWORD($1)) {
-			sayit($server, $target, "Added $1 to list.");
+			sayit($server, $target, "Lisättiin $1 kirosanafiltteriin.");
 		} else {
-			sayit($server, $target, 'Allready found or error.');
+			sayit($server, $target, 'Löytyi jo listasta, tai sattui virhe.');
 		}
-	} elsif ($msg =~ /^!badwords$/gi) {
+	} elsif ($msg =~ /^!kirosanat$/gi || $msg =~ /^!badwords$/gi) {
 		my $string = 'Bad words: ';
 		foreach my $badword (@badwords) {
 			$string .= "$badword, ";
 		}
-		sayit($server, $target, $string);
+		msgit($server, $nick, $string);
 	}
+}
+
+sub derpint {
+	my ($line, @rest) = @_;
+	Irssi::print($IRSSI{name}.'> '. $line);
 }
 
 sub da {
@@ -285,6 +310,7 @@ sub dp {
 
 Irssi::command_bind('kickpellestats', \&getStats);
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
+print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-Irssi::print("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
+derpint("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
