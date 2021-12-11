@@ -23,7 +23,7 @@ my $db = Irssi::get_irssi_dir(). "/scripts/tamagotchi.db";
 my $playerstats;
 
 my $levelpoints = 20;	# how many points between levels
-my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human', 'trump');
+my @ybernicks = ('super','mega','giga','hyper','ultra','moar_','god_','dog','bug','human', 'trump', 'biden', 'putin');
 my $nicktail = '^_^';
 
 my @foods = ('leipä', 'nakki', 'kastike', 'smoothie', 'maito', 'kaura', 'liha', 'limppu', 'grill', 'makkara', 'lettu', 'pirtelö', 'avocado', 'ruoka', 'chili', 'silli', 'kuha', 'kanansiipi', 'pizza');
@@ -31,22 +31,22 @@ my @foodanswer_words = ('*mums mums*', '*nams nams*', '*burp*', '*pier*', '*moar
 my $foodcounter = 0;
 my @foodnicks = ('munchlax', 'snorlax', 'swinub', 'piloswine', 'mamoswine');
 
-my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'porn', 'hyvää', 'chill', 'siisti', 'elin', 'koodi');
-my @loveanswer_words = ('*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3');
+my @loves = ('ihq', 'rakas', 'purr', 'mieletön', '<3', 'pr0n', 'pron', 'porn', 'hyvää', 'chill', 'siisti', 'elin', 'koodi', 'sanna', 'marin', 'kissa');
+#my @loveanswer_words = ('*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3', '*nus*', '*snug*', '*wonk*');
 my $lovecounter = 0;
-my @lovenicks = ('luvdisc', 'pikatsu', 'pantisy', 'soul');
+my @lovenicks = ('luvdisc', 'pikatsu', 'pantisy', 'soul', 'love');
 
-my @drugs = ('kalja', 'bisse', 'hiisi', 'pieru', 'viina', 'heroiini', 'bongi', 'juoppo', 'kahvi');
-my @druganswer_words = ('^_^', '-_-', 'o_O', 'O_o', '._.', '8-)', '(--8', 'i need');
+my @drugs = ('kalja', 'bisse', 'hiisi', 'pieru', 'viina', 'heroiini', 'bongi', 'juoppo', 'kahvi', 'nuuska', 'kofeiini', 'olut');
+my @druganswer_words = ('^_^', '-_-', 'o_O', 'O_o', '._.', '8-)', '(--8', 'i need', '*BZZ*');
 my $drugcounter = 0;
-my @drugnicks = ('psyduck', 'golduck', 'spoink', 'grumpig', 'kamatotsy');
+my @drugnicks = ('psyduck', 'golduck', 'spoink', 'grumpig', 'kamatotsy', 'kama');
 
-my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska', 'jumal', 'kapitalismi', 'raha');
+my @hates = ('twitter', 'vittu', 'perkele', 'vitun', 'paska', 'jumal', 'kapitalis', 'raha', 'satan', 'saatan');
 #my @hateanswer_words = ('');
 my $hatecounter = 0;
-my @hatenicks = ('satan_', 'devil_', 'demon_', 'antichrist_', 'mephistopheles');
+my @hatenicks = ('satan_', 'devil_', 'demon_', 'antichrist_', 'mephistopheles', 'hate');
 
-my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy');
+my @positiveanswer_words = ('miu', 'mau', 'mou', 'yea', 'yay', 'yoy', '<3', '*purr*', '<3', '*daa*', '*pier*', '*uuh*', 'uuh <3', '*nus*', '*snug*', '*wonk*');
 my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fok', 'ei!', 'EI!', 'fek', 'fik');
 
 unless (-e $db) {
@@ -136,11 +136,11 @@ sub evolve {
 	$newnick = @nicks[($level % scalar @nicks)-1];
 
 	if ($level > scalar @nicks ) {
-		Irssi::print(__LINE__.':tamagotchi.pl extralevel float: '. (($level-1) / scalar @nicks )) if $DEBUG;
+		Irssi::print(__LINE__.': tamagotchi.pl extralevel float: '. (($level-1) / scalar @nicks )) if $DEBUG;
 		my $extralevel = int(($level-1) / scalar @nicks );
 		$newnick = $ybernicks[($extralevel-1)] . $newnick;
 	}
-	msg_channel($server, $target, "*${trigger}ing* ($level)");
+	msg_channel($server, $target, "*${trigger}ing* (lvl: $level)");
 	change_nick($server, $newnick);
 	return;
 }
@@ -177,7 +177,7 @@ sub pubmsg {
 		printc("trigger from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word_lc($msg, @loves)) {
 		$lovecounter += 1;
-		msg_random($serverrec, $target, @loveanswer_words);
+		msg_random($serverrec, $target, @positiveanswer_words);
 		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		increaseValue('love');
 		printc("trigger from $nick on channel $target, lovecounter: $lovecounter");
@@ -225,11 +225,7 @@ sub increaseValue {
 sub readFromDb {
 	my $sql = 'SELECT * FROM tama';
 	my @results = read_db($sql);
-	#my @results = KaaosRadioClass::bindSQL($db, $sql);
-	#print "results next:";
-	#da(@results);
 	foreach my $result (@results) {
-		#print $IRSSI{name}.': '.$result->{FEATURE} . ' '.$result->{AMOUNT};
 		if ($result->{FEATURE} eq 'love') {
 			$lovecounter = $result->{AMOUNT};
 		} elsif ($result->{FEATURE} eq 'food') {
