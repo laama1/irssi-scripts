@@ -106,7 +106,7 @@ my $cookie_jar = HTTP::Cookies->new(
 my $max_size = 262144;		# bytes
 #my $useragentOld_en = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 my $useragentOld = 'Mozilla/5.0 (X11; U; Linux i686; fi-FI; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
-my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/65.0';
+my $useragentNew = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:96.0) Gecko/20100101 Firefox/96.0';
 my $useragentBot = 'URLPreviewBot 1.0';
 my %headers = (
 	'agent' => $useragentOld,
@@ -155,7 +155,7 @@ sub fetch_title {
 	my $md5hex = '';					# md5 of the page
 
 	my $response = $ua->get($url);
-	dd(__LINE__.':fetch_title: content charset from response: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
+	#dd(__LINE__.':fetch_title: content charset from response: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
 	#da($response);
 
 	if ($response->is_success) {
@@ -173,7 +173,7 @@ sub fetch_title {
 		if ($page ne $diffpage) {
 			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			dd(__LINE__.':fetch_title: Same charset / content as reported!');
+			#dd(__LINE__.':fetch_title: Same charset / content as reported!');
 		}
 
 		if ($datasize > $max_size) {
@@ -230,25 +230,26 @@ sub getTitle {
 	dp(__LINE__.':getTitle') if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
-	#$countWordsUrl =~ s/\.[\w]{1.5}$//g;				# strip .html or .net from the end (dangerous and doesn't understand numbers)
+	#$countWordsUrl =~ s/\.[\w\d]{1.5}$//g;				# strip .html or .net from the end (dangerous)
 	
 	# get Charset
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
 	#da('header OG: ',$response->header('property'));
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
+	#my $ogdescription = $response->header('og:description') || '';		# open graph desc
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
-	dd(__LINE__.": \ngetTitle: response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
-	#dd('og:title: '.$ogtitle);
+	#dd(__LINE__.": \ngetTitle: response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
+	#dd('og:title: '.$ogtitle.', og:description: '.$ogdescription);
 
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
 
-	dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
-	dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
-	dd(__LINE__.":getTitle newtitle: $newtitle, newdescription: $newdescription");
+	#dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
+	#dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
+	#dd(__LINE__.":getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
@@ -262,6 +263,13 @@ sub getTitle {
 		dp(__LINE__.':getTitle comment tags filtered..') if $DEBUG1;
 	}
 	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
+	
+
+	if ($temppage =~ /property="og\:description" content="(.*?)"/si) {
+		# open graph title, high priority
+		$newdescription = $1;
+		dd(__LINE__.' og description found! '. $newdescription);
+	}
 
 	#da($response);
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
@@ -659,9 +667,7 @@ sub signal_emitters {
 sub url_conversion {
 	my ($param, $server, $target, @rest) = @_;
 	dp(__LINE__.":url_conversion, param: $param") if $DEBUG1;
-	# spotify conversion
-	$param =~ s/\:\/\/play\.spotify.com/\:\/\/open.spotify.com/;
-
+	
 	# soundcloud conversion, example: https://soundcloud.com/oembed?url=https://soundcloud.com/shatterling/shatterling-different-meanings-preview
 	$param =~ s/\:\/\/soundcloud.com/\:\/\/soundcloud.com\/oembed\?url\=http\:\/\/soundcloud\.com/;
 
@@ -673,7 +679,13 @@ sub url_conversion {
 		set_useragent(2);
 	}
 
-	if ($param =~ /youtube\.com/i) {
+	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i) {
+		set_useragent(3);
+	}
+
+	# spotify conversion
+	if ($param =~ /spotify\.com/i) {
+		$param =~ s/\:\/\/play\.spotify\.com/\:\/\/open\.spotify\.com/;
 		set_useragent(3);
 	}
 
