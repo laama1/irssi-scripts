@@ -19,11 +19,6 @@ use Math::Trig; # for apparent temp
 #use URI::Escape;
 use Data::Dumper;
 
-#binmode STDIN, ':utf8';
-#binmode STDOUT, ':utf8';
-#binmode STDERR, ':utf8';
-
-use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
@@ -54,7 +49,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -748,7 +743,6 @@ sub print_cities {
 	foreach ( $users ) {
 		print Dumper @_;
 	}
-
 }
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
@@ -758,5 +752,5 @@ Irssi::signal_add('message private', 'sig_msg_priv');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
 Irssi::print($IRSSI{name}." v. $VERSION loaded.");
 Irssi::print('New commands:');
-Irssi::print('/set openweathermap_enabled_channels #channel1 #channel2, /openweathermap_cities');
+Irssi::print('/set openweathermap_enabled_channels #channel1@IRCnet #channel2@nerv, /openweathermap_cities');
 Irssi::print("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));

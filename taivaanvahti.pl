@@ -29,7 +29,7 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 
