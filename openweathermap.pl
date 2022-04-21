@@ -306,7 +306,7 @@ sub forecastloop1 {
 		}
 		if ($index == 0) {
 			my $use_this_city = $json->{city}->{name};
-			$returnstring = $use_this_city . ', '.$json->{city}->{country}.': '.$returnstring;
+			$returnstring = $use_this_city . ', '.$json->{city}->{country}." \002klo:\002 ".$returnstring;
 		}
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
 												$json->{city}->{sunset}, $item->{dt});
@@ -329,11 +329,11 @@ sub forecastloop2 {
 		my $tiem = $item->{dt_txt};
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $item->{dt};
 
-		dp(__LINE__.': tiem: ' . $tiem. ", unixtime: $hour:$min:$sec wday: $wday") if $DEBUG1;
+		#dp(__LINE__.': tiem: ' . $tiem. ", unixtime: $hour:$min:$sec wday: $wday") if $DEBUG1;
 
 		if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {
 			if ($index == 0) {
-				$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}.': ';
+				$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}." \002klo:\002 ";
 			}
 			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},	$json->{city}->{sunset}, $item->{dt});
 			if ($wday eq $daytemp) {
@@ -650,7 +650,7 @@ sub filter_keyword {
 	#$msg = Encode::decode('UTF-8', $msg);
 
 	my ($returnstring, $city);
-	if ($msg =~ /\!(sää ?|saa ?|s ?)([^ae].*)/ui) {
+	if ($msg =~ /\!(sää |saa |s )([^ae].*)/ui) {
 		dp(__LINE__.', normaali säätilan haku: '.$nick.', city: '.$2) if $DEBUG1;
 		$city = check_city($2, $nick);
 		$dbh = KaaosRadioClass::connectSqlite($db);
@@ -662,17 +662,17 @@ sub filter_keyword {
 		}
 
 		$dbh = KaaosRadioClass::closeDB($dbh);
-	} elsif ($msg =~ /\!(se ?)([^5].*)$/i) {
+	} elsif ($msg =~ /\!(se )([^5].*)$/i) {
 		dp(__LINE__.', ennustus: '.$nick.' city: '.$2) if $DEBUG1;
 		$city = check_city($2, $nick);
 		return FINDFORECAST($city);
-	} elsif ($msg =~ /\!(sa ?)(.*)$/i) {
+	} elsif ($msg =~ /\!(sa )(.*)$/i) {
 		dp(__LINE__.', lähialueen säätila: '.$nick.' city: '.$2) if $DEBUG1;
 		$city = check_city($2, $nick);
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		$returnstring = FINDAREAWEATHER($city);
 		$dbh = KaaosRadioClass::closeDB($dbh);
-	} elsif ($msg =~ /(\!se5 ?)(.*)/) {
+	} elsif ($msg =~ /(\!se5 )(.*)/) {
 		dp(__LINE__.', 5vrk ennustus: '.$nick.' city: '.$2);
 		$city = check_city($2, $nick);
 		return FINDFORECAST($city, 5);
