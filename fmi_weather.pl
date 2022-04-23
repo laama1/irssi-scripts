@@ -122,6 +122,14 @@ sub parse_extrainfo_from_link {
 	return;
 }
 
+sub event_pubmsg {
+	my ($server, $msg, $nick, $address, $target) = @_;
+	if ($msg =~ /^!meteo/) {
+		$server->command("msg $target $last_meteo");
+	}
+}
+
+
 sub timeout_stop {
 	timeout_remove($timeout_tag);
 }
@@ -143,6 +151,7 @@ sub timeout_start {
 Irssi::command_bind('fmi_update', \&parse_extrainfo_from_link, 'fmi_weather');
 Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
+Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', 'Add channels where to print meteo.');
 	
 timeout_start();
