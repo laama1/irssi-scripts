@@ -10,24 +10,25 @@ binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
 use KaaosRadioClass;		# LAama1 30.12.2016
 
-#my $tiedosto = $ENV{HOME}.'/public_html/quotes.txt';
-#my $tiedosto = '/var/www/html/quotes/quotes.txt';
 my $tiedosto = '/mnt/music/quotes.txt';
-my $publicurl = 'http://8-b.fi/quotes.txt';
+my $vitsitiedosto = '/mnt/music/vitsit.txt';
+my $publicurl = 'https://upload.8-b.fi/quotes.txt';
+my $vitsiurl = 'https://upload.8-b.fi/vitsit.txt';
 
 my $kanava = '#kaaosradio';
 my $verkko = 'IRCnet';
 
 my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
-my $DEBUG = 0;
+my $vitsidb = Irssi::get_irssi_dir(). '/scripts/vitsit.db';
+my $DEBUG = 1;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20200812';
+$VERSION = '20220716';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
 	name        => 'addquote.pl',
-	description => 'Add quote to database & textfile from channel.',
+	description => 'Add quote or joke to database & textfile from channel.',
 	license     => 'Public Domain',
 	url         => $publicurl,
 	changed     => $VERSION,
@@ -35,12 +36,22 @@ $VERSION = '20200812';
 
 unless (-e $db) {
 	unless(open FILE, '>', $db) {
-		Irssi::print($IRSSI{name}. ": Fatal error: Unable to create file: $db");
+		print($IRSSI{name}. "> Fatal error: Unable to create file: $db");
 		die;
 	}
 	close FILE;
 	createDB();
-	Irssi::print($IRSSI{name}. ': Database file created.');
+	print($IRSSI{name}. '> Quotes Database file created.');
+}
+
+unless (-e $vitsidb) {
+	unless(open FILE, '>', $vitsidb) {
+		print($IRSSI{name}. "> Fatal error: Unable to create file: $vitsidb");
+		die;
+	}
+	close FILE;
+	createVitsiDB();
+	print($IRSSI{name}. '> Jokes Database file created.');
 }
 
 sub event_privmsg {
@@ -73,7 +84,7 @@ sub parseQuote {
 		if ($pituus < 470) {
 			return if KaaosRadioClass::floodCheck();
 			KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
-			saveToDB($nick, $uusiquote, $target);
+			saveToDB($db, 'QUOTES', $nick, $uusiquote, $target);
 			print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
 			$server->command("msg $nick quote lisätty! $publicurl");
 			$server->command("msg $target :)");
@@ -85,6 +96,7 @@ sub parseQuote {
 		my $searchword = decode('UTF-8', $1);
 		dp(__LINE__." searchword: $searchword");
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
+		my $sql = 'SELECT quote from quotes where quote like ?';
 		my @answers;
 		LINE: for (@$data) {
 			if ($_ =~ /$searchword/gi ) {
@@ -104,7 +116,32 @@ sub parseQuote {
 		}
 	} elsif ($msg =~ /^!rq/gi) {
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
-		my $amount = scalar $data;
+		my $amount = @$data;
+		my $rand = int(rand($amount));
+		my $linecount = -1;
+		dp("amount: $amount, rand: $rand");
+		LINE: for (@$data) {
+			$linecount++;
+			next LINE unless ($rand == $linecount);
+			if($rand == $linecount) {
+				chomp (my $rimpsu = $_);
+				$server->command("MSG $target $rimpsu");
+				print($IRSSI{name}."> vastasi: '$rimpsu' for $nick on channel: $target");
+				last;
+			}
+		}
+	} elsif ($msg =~ /^!aj (.*)/gi) {
+		my $uusivitsi = decode('UTF-8', $1);
+		return if KaaosRadioClass::floodCheck();
+		KaaosRadioClass::addLineToFile($vitsitiedosto, $uusivitsi);
+		saveToDB($vitsidb, 'JOKES', $nick, $uusivitsi, $target);
+		print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
+		$server->command("msg $nick vitsi lisätty! $vitsiurl");
+		$server->command("msg $target xd");
+	} elsif ($msg =~ /^!rj/gi) {
+		my $data = KaaosRadioClass::readTextFile($vitsitiedosto);
+		dp($data);
+		my $amount = @$data;
 		my $rand = int(rand($amount));
 		my $linecount = -1;
 		dp("amount: $amount, rand: $rand");
@@ -148,25 +185,31 @@ sub event_pubmsg {
 }
 
 sub createDB {
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $stmt = qq(CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL));
-	my $rv = $dbh->do($stmt);
-	if($rv < 0) {
-   		print $IRSSI{name}.'> '.DBI::errstr;
-	} else {
-   		print $IRSSI{name}.'> Table created successfully';
+	my $error = '';
+	if ($error = KaaosRadioClass::writeToDB($db, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL)')) {
+		print $IRSSI{name}.'> '.$error;
+		die;
 	}
-	$dbh->disconnect();
+	print $IRSSI{name}.'> Table created successfully';
+	return;
+}
+
+sub createVitsiDB {
+	my $error = '';
+	if ($error = KaaosRadioClass::writeToDB($vitsidb, 'CREATE VIRTUAL TABLE JOKES using fts4(NICK, PVM, JOKE, CHANNEL)')) {
+		print $IRSSI{name}.'> '.$error;
+		die;
+	}
 	return;
 }
 
 # Save to sqlite DB
 sub saveToDB {
-	my ($nick, $quote, $channel, @rest) = @_;
+	my ($dbname, $table, $nick, $quote, $channel, @rest) = @_;
 	my $pvm = time;
 
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sth = $dbh->prepare("INSERT INTO quotes VALUES(?,?,?,?)") or die DBI::errstr;
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbname", "", "", { RaiseError => 1 },) or die DBI::errstr;
+	my $sth = $dbh->prepare("INSERT INTO $table VALUES(?,?,?,?)") or die DBI::errstr;
 	$sth->bind_param(1, $nick);
 	$sth->bind_param(2, $pvm, { TYPE => SQL_INTEGER });
 	$sth->bind_param(3, $quote);
@@ -174,7 +217,7 @@ sub saveToDB {
 	$sth->execute;
 	$sth->finish();
 	$dbh->disconnect();
-	Irssi::print($IRSSI{name}.": Quote saved to database. $quote");
+	Irssi::print($IRSSI{name}.": Saved to database. $quote");
 	return;
 }
 
