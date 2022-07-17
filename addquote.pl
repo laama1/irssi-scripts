@@ -12,15 +12,15 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 
 my $tiedosto = '/mnt/music/quotes.txt';
 my $vitsitiedosto = '/mnt/music/vitsit.txt';
-my $publicurl = 'https://upload.8-b.fi/quotes.txt';
+my $quoteurl = 'https://upload.8-b.fi/quotes.txt';
 my $vitsiurl = 'https://upload.8-b.fi/vitsit.txt';
 
 my $kanava = '#kaaosradio';
 my $verkko = 'IRCnet';
 
-my $db = Irssi::get_irssi_dir(). '/scripts/quotes.db';
+my $quotedb = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $vitsidb = Irssi::get_irssi_dir(). '/scripts/vitsit.db';
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '20220716';
@@ -30,13 +30,13 @@ $VERSION = '20220716';
 	name        => 'addquote.pl',
 	description => 'Add quote or joke to database & textfile from channel.',
 	license     => 'Public Domain',
-	url         => $publicurl,
+	url         => 'https://bot.8-b.fi',
 	changed     => $VERSION,
 );
 
-unless (-e $db) {
-	unless(open FILE, '>', $db) {
-		print($IRSSI{name}. "> Fatal error: Unable to create file: $db");
+unless (-e $quotedb) {
+	unless(open FILE, '>', $quotedb) {
+		print($IRSSI{name}. "> Fatal error: Unable to create file: $quotedb");
 		die;
 	}
 	close FILE;
@@ -78,57 +78,26 @@ sub sayit {
 
 sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
-	if($msg =~ /^!aq\s(.{1,470})/gi) {
+	if($msg =~ /^!aq (.{1,470})/gi) {
 		my $uusiquote = decode('UTF-8', $1);
-		my $pituus = length $uusiquote;
-		if ($pituus < 470) {
-			return if KaaosRadioClass::floodCheck();
-			KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
-			saveToDB($db, 'QUOTES', $nick, $uusiquote, $target);
-			print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
-			$server->command("msg $nick quote lisätty! $publicurl");
-			$server->command("msg $target :)");
-		} else {
-			print($IRSSI{name}."> $msg request from $nick (too long!)");
-			$server->command("msg $nick quote liiian pitkä ($pituus)! max. about 470 merkkiä!");
-		}
+		return if KaaosRadioClass::floodCheck();
+		KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
+		saveToDB($quotedb, 'QUOTES', $nick, $uusiquote, $target);
+		print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
+		$server->command("msg $nick quote lisätty! $quoteurl");
+		$server->command("msg $target :)");
 	} elsif ($msg =~ /^!rq (.{3,15})/gi) {
 		my $searchword = decode('UTF-8', $1);
-		dp(__LINE__." searchword: $searchword");
-		my $data = KaaosRadioClass::readTextFile($tiedosto);
-		my $sql = 'SELECT quote from quotes where quote like ?';
-		my @answers;
-		LINE: for (@$data) {
-			if ($_ =~ /$searchword/gi ) {
-				chomp (my $rimpsu = $_);
-				push @answers, $rimpsu;
-			}
-		}
-		my $amount_a = scalar @answers;
-		if ($amount_a > 0) {
-			dp(__LINE__." LÖYTYI!");
-			my $sayline = rand_line(@answers);
-			$server->command("MSG $target $sayline");
-		} else {
-			dp(__LINE__." EI LÖYTYNYT");
-			da(@answers);
-
+		my @answers = search_from_file($tiedosto, $searchword);
+		if (my $rimpsu = rand_line(@answers)) {
+			$server->command("MSG $target $rimpsu");
+			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rq/gi) {
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
-		my $amount = @$data;
-		my $rand = int(rand($amount));
-		my $linecount = -1;
-		dp("amount: $amount, rand: $rand");
-		LINE: for (@$data) {
-			$linecount++;
-			next LINE unless ($rand == $linecount);
-			if($rand == $linecount) {
-				chomp (my $rimpsu = $_);
-				$server->command("MSG $target $rimpsu");
-				print($IRSSI{name}."> vastasi: '$rimpsu' for $nick on channel: $target");
-				last;
-			}
+		if (my $rimpsu = rand_line(@$data)) {
+			$server->command("MSG $target $rimpsu");
+			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!aj (.*)/gi) {
 		my $uusivitsi = decode('UTF-8', $1);
@@ -137,26 +106,36 @@ sub parseQuote {
 		saveToDB($vitsidb, 'JOKES', $nick, $uusivitsi, $target);
 		print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
 		$server->command("msg $nick vitsi lisätty! $vitsiurl");
-		$server->command("msg $target xd");
+		$server->command("msg $target xD");
+	} elsif ($msg =~ /^!rj (.{3,15})/gi) {
+		my $searchword = decode('UTF-8', $1);
+		my @answers = search_from_file($vitsitiedosto, $searchword);
+		if (my $rimpsu = rand_line(@answers)) {
+			$server->command("MSG $target $rimpsu");
+			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
+		}
 	} elsif ($msg =~ /^!rj/gi) {
 		my $data = KaaosRadioClass::readTextFile($vitsitiedosto);
-		dp($data);
-		my $amount = @$data;
-		my $rand = int(rand($amount));
-		my $linecount = -1;
-		dp("amount: $amount, rand: $rand");
-		LINE: for (@$data) {
-			$linecount++;
-			next LINE unless ($rand == $linecount);
-			if($rand == $linecount) {
-				chomp (my $rimpsu = $_);
-				$server->command("MSG $target $rimpsu");
-				print($IRSSI{name}."> vastasi: '$rimpsu' for $nick on channel: $target");
-				last;
-			}
+		if (my $rimpsu = rand_line(@$data)) {
+			$server->command("MSG $target $rimpsu");
+			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
 		}
 	}
 	return;
+}
+
+sub search_from_file {
+	my ($filename, $searchword) = @_;
+	my $textdata = KaaosRadioClass::readTextFile($filename);
+	my @searchresults;
+	LINE: for (@$textdata) {
+		if ($_ =~ /$searchword/gi) {
+			chomp (my $found = $_);
+			push @searchresults, $found;
+			dp("Löytyi: $found");
+		}
+	}
+	return @searchresults;
 }
 
 # return random line from array
@@ -165,16 +144,13 @@ sub rand_line {
 	my $amount = scalar @values;
 	my $rand = int rand $amount;
 	my $linecount = -1;
-  LINEFOR: for (@values) {
-			$linecount++;
-			next LINEFOR unless ($rand == $linecount);
-			if($rand == $linecount) {
-				chomp (my $rimpsu = $_);
-				print($IRSSI{name}."> löytyi: $rimpsu");
-				return $rimpsu;
-				last;
-			}
-		}
+  	LINEFOR: for (@values) {
+		$linecount++;
+		next LINEFOR unless ($rand == $linecount);
+		chomp (my $rimpsu = $_);
+		return $rimpsu unless $rimpsu eq '';
+		last;
+	}
 	return undef;
 }
 
@@ -186,7 +162,7 @@ sub event_pubmsg {
 
 sub createDB {
 	my $error = '';
-	if ($error = KaaosRadioClass::writeToDB($db, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL)')) {
+	if ($error = KaaosRadioClass::writeToDB($quotedb, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL)')) {
 		print $IRSSI{name}.'> '.$error;
 		die;
 	}
