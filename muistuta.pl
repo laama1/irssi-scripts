@@ -11,7 +11,7 @@ use vars qw($VERSION %IRSSI);
 
 $VERSION = '0.1';
 %IRSSI = (
-	authors     => 'Matt "f0rked" Sparks, Miklos Vajna, LAama1',
+	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
 	name        => 'muistuta',
 	description => 'provides an interface to irssi via unix sockets',
@@ -21,14 +21,16 @@ $VERSION = '0.1';
 );
 
 my $socket = "/tmp/irssi_muistuta.sock";
+my $add_cron_script = "add_cron.sh";
 my $DEBUG = 1;
 my $timer = '';
-# create the socket
+# delete old
 unlink $socket;
+# create the socket
 my $server = IO::Socket::UNIX->new(Local  => $socket,
 								   Type   => SOCK_STREAM,
 								   Listen => 5) or die $@;
-
+chmod 0755, $socket;
 # set this socket as nonblocking so we can check stuff without interrupting
 # irssi.
 nonblock($server);
@@ -48,10 +50,7 @@ sub msg_to_channel {
 	foreach my $window (@windows) {
 
 		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
-		#dp("i here.. again, name: ");
-		#da($window);
-		#dp($window->{active}->{name}. ', '. $window->{active_server}->{tag});
+		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} eq $target && $window->{active_server}->{tag} eq $tag) {
 			dp("Found! $window->{active}->{name}");
@@ -64,41 +63,83 @@ sub msg_to_channel {
 # parse bad characters that might trigger linux commands when using "at"
 sub parse_bad {
 	my ($word, @test) = @_;
-	$word =~ s/\s.*//;
+	$word =~ s/\./ /g;	# .	with space
+	$word =~ s/\s.*//;  # multiple spaces
 	$word =~ s/"//g;	# "
 	$word =~ s/\///g;	# /
 	$word =~ s/\|//g;	# |
-	$word =~ s/\.//g;	# .	
+	$word =~ s/\$//g;	# $
 	return $word;
 }
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if $nick eq $server->{nick};		# self test
-	return unless $msg =~ /^!muistu/;
+	return unless $msg =~ /^!muistut/;
 
-	if ($msg =~ /^!muistuta (\d+)h ?(.*)$/) {
-		my $unit = 'hours';
-		my $time = $1;
-		my $note = $2;
-		create_command($server, $target, $nick, $note, $time.' '. $unit);
-		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${time}h)");
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday, $yday, $isdst) = localtime(time);
+	my ($unit, $value, $note);
+
+	if ($msg =~ /^!muistuta (\d)h ?(.*)$/) {
+		# less than 10 hours
+		$unit = 'hours';
+		$value = $1;
+		$note = $2;
+		$timer = Irssi::timeout_add_once(($value*1000*60*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$note);
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}h)");
+	} elsif ($msg =~ /^!muistuta (\d+)h ?(.*)$/) {
+		# 10+ hours
+		$unit = 'hours';
+		$value = $1;
+		$note = $2;
+		my $cron_hour = `date --date="$value $unit" +"%H"`;
+		my $cron_day = `date --date="$value $unit" +"%d"`;
+		my $cron_month = `date --date="" +"%m"`;
+		create_at_command($server, $target, $nick, $value.' '. $unit, $note);
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}h)");
+	} elsif ($msg =~ /^!muistuta (\d+)kk ?(.*)$/) {
+		# months
+		$value = $1;
+		$unit = 'months';
+		$note = $2;
+		my $cron_hour = `date --date="$value $unit" +"%H"`;
+		$cron_hour = chomp $cron_hour;
+		my $cron_day = `date --date="$value $unit" +"%d"`;
+		$cron_day = chomp $cron_day;
+		my $cron_month = `date --date="$value $unit" +"%m"`;
+		$cron_month = chomp $cron_month;
+		#my $cron_year = chomp `date --date="$value $unit" +"%Y"`;
+		#$cron_year = chomp $cron_year;
+		$note = parse_bad($note);
+		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan.. (${value}kk)");
+	} elsif ($msg =~ /^!muistuta (\d+)pv ?(.*)$/ || $msg =~ /^!muistuta (\d+)d ?(.*)$/) {
+		# days
+		$value = $1;
+		$unit = 'days';
+		$note = $2;
+		my $cron_hour = `date --date="$value $unit" +"%H"`;
+		$cron_hour = chomp $cron_hour;
+		my $cron_day = `date --date="$value $unit" +"%d"`;
+		$cron_day = chomp $cron_day;
+		my $cron_month = `date --date="$value $unit" +"%m"`;
+		$cron_month = chomp $cron_month;
+		#my $cron_year = chomp `date --date="$value $unit" +"%Y"`;
+		$note = parse_bad($note);
+		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan... (${value}pv)");
 	} elsif ($msg =~ /^!muistuta (\d+) ?(.*)$/) {
 		echota("$msg from: $target, $nick");
-		my $unit = 'minutes';
-		my $time = $1;
-		my $note = $2;
+		$unit = 'minutes';
+		$value = $1;
+		$note = $2;
 		$note = parse_bad($note);
-		$timer = Irssi::timeout_add_once(($time*1000*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$note);
-		#my $command = 'echo "echo '.$target.', '.$nick.', '.$note.' | nc -U '.$socket.'" | at now +'.$time.' minutes';
-		#echota("Komento: ".$command);
-		#Irssi::command("exec -name at -nosh $command");
-		#create_command($server, $target, $nick, $note, $time. ' ' .$unit);
-		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${time}m)");
+		$timer = Irssi::timeout_add_once(($value*1000*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$note);
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}m)");
 	}
 	
 	elsif ($msg =~ /!muistutukset/) {
-		Irssi::command("exec -name atq atq");
+		Irssi::command("exec -name atq -interactive atq");
 	}
 	return;
 }
@@ -114,18 +155,24 @@ sub timer_func {
 		echota("Tag: $servertag, Target: $target, nick: $nick, note: $note");
 		msg_to_channel($servertag, $target, $nick, $note);
 	}
-	#Irssi::timeout_remove($timer);
 }
 
-sub create_command {
-	my ($server, $target, $nick, $note, $time, @rest) = @_;
-	#da($server);
+sub create_at_command {
+	my ($server, $target, $nick, $time, $note, @rest) = @_;
 	my $command = 'echo "echo \"'.$server->{tag}.', '.$target.', '.$nick.', '.$note.'\" | nc -U '.$socket.'" | at now +'.$time;
-	echota("Komento: ".$command);
-	#Irssi::command("exec -name at -nosh $command");
 	my $retval = `$command`;
-	#echota("Retval: ". chomp($retval));
-	#echota("that was it");
+	echota("at-Komento luotu: ".$command.", retval: ". $retval);
+}
+
+sub create_cronjob {
+	my ($server, $target, $nick, $min, $hour, $dom, $mo, $note, @rest) = @_;
+	my $command = 'echo "'.$server->{tag}.', '.$target.', '.$nick.', '.$note.'" | nc -U '.$socket;
+	echota("Command: ".$command. "<");
+	my $commandline = '/home/laama/.irssi/scripts/irssi-scripts/add_cron.sh '.$min.' '.$hour.' '.$dom.' '.$mo.' * '. $command;
+	echota("Commandline: ".$commandline . "<");
+	Irssi::command("exec -name create_cronjob -interactive $commandline")
+	#my $retval = `/home/laama/.irssi/scripts/irssi_scripts/add_cron.sh $min $hour $dom $mo $command $note`;
+	#echota("cron-rivi luotu, retval: ". $retval . "<");
 }
 
 # check the socket for data and act upon it

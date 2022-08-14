@@ -40,7 +40,7 @@ sub sig_msg_pub {
 sub cmd_start_dl {
 	my ($url, @rest) = @_;
 	print($IRSSI{name}.'> fetching: '. $url);
-	Irssi::command("exec -name yle -nosh $ylescript $url");
+	Irssi::command("exec -name yle -interactive $ylescript $url");
 	#Irssi::command("exec -close yle");	# detach
 	# -interactive
 }

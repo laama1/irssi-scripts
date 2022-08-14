@@ -29,7 +29,7 @@ my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
-my $last_meteo;
+my $last_meteo = '';
 my $last_time;
 
 # create the socket
@@ -89,7 +89,7 @@ sub msg_to_channel {
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
+		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} ~~ @enabled) {
 			DP(__LINE__." Found! $window->{active}->{name}");
@@ -110,7 +110,7 @@ sub parse_extrainfo_from_link {
 		my $meteotext = $2;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;
 		$meteotext = KaaosRadioClass::ktrim($meteotext);
-		$meteotext = 'Meteorologin sääkatsaus ('.$date.' GMT): '.$meteotext;
+		$meteotext = "\002Meteorologin sääkatsaus ($date GMT):\002 ".$meteotext;
 		DP(__LINE__.' meteotext: '. $meteotext);
 		if ($meteotext ne $last_meteo) {
 			msg_to_channel($meteotext);
@@ -135,11 +135,11 @@ sub timeout_stop {
 }
 
 sub timeout_1h {
-	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at now + 1 hours';
+	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at now + 1 hours 2>&1';
 	my $retval = `$command`;
 }
 sub timeout_545 {
-	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at 5:45';
+	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at 5:45 2>&1';
 	my $retval = `$command`;
 }
 sub timeout_start {

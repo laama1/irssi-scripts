@@ -94,7 +94,9 @@ sub da {
 	print(Dumper(@_));
 	return;
 }
-
+sub UNLOAD {
+	unlink $socket;
+}
 my $timer = Irssi::timeout_add(250, \&check_sock_icecast, []);
 
 #Irssi::signal_add('message public', 'event_pubmsg');

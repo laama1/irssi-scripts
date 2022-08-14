@@ -122,11 +122,9 @@ sub sig_msg_pub {
 
 sub sayit {
 	my ($server, $target, $sayline, @rest) = @_;
-	if (defined $sayline && length $sayline > 190) {
-		$sayline = substr $sayline, 0, 190;
+	if (defined $sayline && length $sayline > 240) {
+		$sayline = substr $sayline, 0, 240;
 		$sayline .= ' ...';
-	} else {
-		#$desc = "";
 	}
 	$server->command("msg -channel $target $sayline");
 	return;
@@ -137,18 +135,18 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 
-	if (defined $desc && length $desc > 190) {
-		$desc = substr $desc, 0, 190;
+	if (defined $desc && length $desc > 240) {
+		$desc = substr $desc, 0, 240;
 		$desc .= ' ...';
 	} else {
 		#$desc = "";
 	}
-	my $sayline = "$title: ($date) $link $desc";
+	my $sayline = "\002$title ($date):\002 $link $desc";
 
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
+		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} ~~ @enabled) {
 			#DP("Found! $window->{active}->{name}");

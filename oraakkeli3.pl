@@ -4,7 +4,7 @@ use Irssi;
 use vars qw($VERSION %IRSSI);
 use Encode;
 
-$VERSION = '0.4';
+$VERSION = '0.41';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
@@ -49,6 +49,10 @@ sub fetchOraakkeliUrl {
 	} else {
 		print("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return undef;
+	}
+	if (defined $page && length $page > 240) {
+		$page = substr $page, 0, 240;
+		$page .= ' ...';
 	}
 	return $page;
 }

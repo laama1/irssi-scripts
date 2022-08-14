@@ -94,7 +94,8 @@ sub event_pub_msg {
 	my $newrimpsu = '';
 	if ($newrimpsu = throw_horo($msg, $nick, $address)) {
 		$serverrec->command("MSG $target $nick, $newrimpsu");
-		print($IRSSI{name}."> vastasi: '$newrimpsu' for $nick on channel: $target");
+		# 2022-06-05 print($IRSSI{name}."> vastasi: '$newrimpsu' for $nick on channel: $target");
+		print($IRSSI{name}."> vastasin: $newrimpsu");
 	}
 	return;
 }

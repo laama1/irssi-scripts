@@ -27,9 +27,7 @@ use Irssi;
 use LWP::UserAgent;
 use HTTP::Cookies;
 use HTTP::Response;
-#use Time::HiRes qw(time);
 use HTML::Entities qw(decode_entities);
-#use RDF::RDFa::Parser;
 use utf8;
 
 use Date::Parse;
@@ -59,7 +57,7 @@ $VERSION = '2021-09-29';
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 
 my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
 my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
@@ -203,6 +201,7 @@ sub fetch_title {
 
 	} else {
 		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
+		da($response);
 		return 'Error: '.$response->status_line, 0,0, $md5hex;
 	}
 
@@ -679,7 +678,8 @@ sub url_conversion {
 		set_useragent(2);
 	}
 
-	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i) {
+	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || $param =~ /google\.com\/maps/i) {
+		Irssi::print("google service detected!");
 		set_useragent(3);
 	}
 

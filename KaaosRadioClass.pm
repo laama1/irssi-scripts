@@ -183,7 +183,6 @@ sub readTextFile {
 # add one line of text to a file given in param
 sub addLineToFile {
 	my ($filename, $textToWrite, @rest) = @_;
-	#open (OUTPUT, ">>$filename") || return -1;
 	open OUTPUT, '>>:utf8', $filename || return -1;
 	print OUTPUT $textToWrite ."\n";
 	close OUTPUT || return -2;
@@ -350,6 +349,20 @@ sub stripLinks {
 	return $string;
 }
 
+sub writeToDB {
+	my ($db, $string) = @_;
+	my $dbh = connectSqlite($db);
+	return $dbh if ($dbh < 0);
+
+	my $rv = $dbh->do($string);
+	if ($rv < 0){
+		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+   		return $dbh->errstr;
+	}
+	$dbh->disconnect();
+	return 0;
+}
+
 sub writeToOpenDB {
 	my ($dbh, $string) = @_;
 	my $rv = $dbh->do($string);
@@ -388,19 +401,7 @@ sub readArrayFromOpenDB {
 	return @elements;
 }
 
-sub writeToDB {
-	my ($db, $string) = @_;
-	my $dbh = connectSqlite($db);
-	return $dbh if ($dbh < 0);
 
-	my $rv = $dbh->do($string);
-	if ($rv < 0){
-		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
-   		return $dbh->errstr;
-	}
-	$dbh->disconnect();
-	return 0;
-}
 
 # get month based on integer 1-12. Optional parameter: lowercase enabled or not
 sub getMonthString {
@@ -418,6 +419,24 @@ sub getMonthString {
 
 sub readDjList {
 	return readTextFile($djlist);
+}
+
+sub fetchResponse {
+	my ($url, @rest) = @_;
+	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+	my $cookie_file = $currentDir .'/KRCcookies.dat';
+	my $cookie_jar = HTTP::Cookies->new(
+		file => $cookie_file,
+		autosave => 1,
+	);
+	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
+	$ua->cookie_jar($cookie_jar);
+	$ua->timeout(3);				# 3 seconds
+	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
+	$ua->protocols_forbidden( [ 'file', 'mailto'] );
+	#$ua->proxy(['http', 'ftp'], 'http://proxy.jyu.fi:8080/');
+	$ua->ssl_opts('verify_hostname' => 0);
+	return $ua->get($url);
 }
 
 sub fetchUrl {
@@ -495,7 +514,6 @@ sub dp {
 	print("debug: @_");
 	return;
 }
-
 
 sub da {
 	return unless $DEBUG == 1;

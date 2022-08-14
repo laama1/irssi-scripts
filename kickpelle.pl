@@ -117,7 +117,7 @@ sub DELBADWORD {
 sub GETBADWORDLIST {
 	my @rest = @_;
 	my $temp_badwords = KaaosRadioClass::readTextFile($badwordfile);
-	if ($temp_badwords[0] == -1) {
+	if ($temp_badwords == -1) {
 		dp(__LINE__.': no bad words!');
 		@badwords = ('____', 'russiancup');
 		SAVEBADWORDLIST();
