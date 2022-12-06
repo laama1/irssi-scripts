@@ -29,7 +29,7 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 
@@ -66,7 +66,7 @@ sub DA {
 
 sub print_help {
 	my ($server, $targe, @rest) = @_;
-	my $help = 'Taivaanvahti -skripti hakee ajoittain uusimmat havainnot sivulta taivaanvahti.fi. Vastaa myös kutsuttaessa komennolla !taivaanvahti. TODO: better help msg';
+	my $help = 'https://bot.8-b.fi/#taivaanvahti';
 	return;
 }
 
@@ -90,7 +90,8 @@ sub sig_taivaanvahti_search {
 		#my $date = localtime($line[3]);
 		DP(__LINE__.' Time: '. $line[2]);
 		my $timepiece = localtime($line[2])->strftime('%e.%m. %H:%M');
-		my $sayline = "$title: ($timepiece, $location) $desc";
+		#my $sayline = "$title: ($timepiece, $location) $desc";
+		my $sayline = $line[0].': ('.$timepiece.', '.$line[3].') '.$line[1];
 		sayit($server, $target, $sayline);
 	}
 	$sth->finish();
@@ -107,7 +108,7 @@ sub sig_msg_pub {
     my @enabled = split / /, $enabled_raw;
     return unless grep /$target/, @enabled;
 
-	if ($msg =~ /^[\.\!]help\b/i) {
+	if ($msg =~ /^[\.\!]help taivaanvahti\b/i) {
 		print_help($server, $target);
 		return;
 	}
@@ -117,15 +118,15 @@ sub sig_msg_pub {
 		parse_xml();
 	}
 	return;
-
 }
 
 sub sayit {
 	my ($server, $target, $sayline, @rest) = @_;
-	if (defined $sayline && length $sayline > 240) {
-		$sayline = substr $sayline, 0, 240;
+	if (defined $sayline && length $sayline > 250) {
+		$sayline = substr $sayline, 0, 250;
 		$sayline .= ' ...';
 	}
+	$sayline = KaaosRadioClass::replaceWeird($sayline);
 	$server->command("msg -channel $target $sayline");
 	return;
 }
@@ -158,7 +159,6 @@ sub msg_to_channel {
 
 sub open_database_handle {
 	$dbh = KaaosRadioClass::connectSqlite($db);
-	#$dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	return;
 }
 

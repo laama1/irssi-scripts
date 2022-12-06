@@ -33,8 +33,7 @@ my $apikey = 'a06b4d3f';
 
 sub print_help {
 	my ($server, $target, $is_enabled) = @_;
-	my $helpmessage = '!imdb <hakusana> <leffa|sarja|episodi> <vuosi>: Hae leffojen tietoja IMDB:stä hakusanalla. Muut parametrit auttavat tarkentamaan hakua. Tulostaa ensimmäisen osuman. 
-kts. http://8-b.fi:82/kd_butt.html#i'.
+	my $helpmessage = '!imdb <hakusana> -- Hae leffojen tietoja IMDB:stä hakusanalla. Tulostaa ensimmäisen osuman. Kts. https://bot.8-b.fi/#i'.
 	' Käytössä (kanavalla: '.$target.'): '."$is_enabled";
 	if ($is_enabled) {
 		$helpmessage .= '. Deaktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb off.';
@@ -79,7 +78,7 @@ sub do_imdb {
 			my $index = 0;
 			$index++ until $enabled[$index] eq $target;
 			splice(@enabled, $index, 1);
-			Irssi::settings_set_str('imdb_enabled_channels', join(' ',@enabled));
+			Irssi::settings_set_str('imdb_enabled_channels', join(' ', @enabled));
 			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
 			Irssi::print('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;

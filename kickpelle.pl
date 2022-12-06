@@ -34,9 +34,9 @@ GETBADWORDLIST();
 
 my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla: "!kick <nick> [kickmessage]". Kick vaatii 3 votea. 
 Operaattorit voivat käyttää myös privassa: "!kick #kanava <nick>", jolloin henkilö lähtee ensimmäisestä osumasta!';
-my $helptext2 = 'Kickpelleskripti. Ohje: http://8-b.fi:82/kd_butt.html#kick';
+my $helptext2 = 'Kickpelleskripti. Ohje: https://bot.8-b.fi/#kick';
 
-my $joinmessage = 'Achtung. Olen kanavan sheriffi. Potkin väkeä jos he mainitsevat kiellettyjä sanoja. Listan kielletyistä sanoista saat privaasi komennolla: "!badwords". Opit voivat kasvattaa listaa, kirjoita "!help badword" niin saat privaasi ohjeet. (v.'.$VERSION.')';
+my $joinmessage = 'Achtung. Olen kanavan sheriffi. Potkin väkeä jos he mainitsevat kiellettyjä sanoja. Listan kielletyistä sanoista saat privaasi komennolla: "!badwords". Opit voivat kasvattaa listaa, kirjoita "!help badword" niin saat privaasi ohjeet.';
 
 sub print_help {
 	my ($server, $target) = @_;
@@ -108,7 +108,6 @@ sub DELBADWORD {
 	}
 
 	if ($found == 1) {
-		#KaaosRadioClass::writeArrayToFile($badwordfile, @badwords);
 		SAVEBADWORDLIST();
 	}
 	return;
@@ -248,10 +247,11 @@ sub event_pubmsg {
 	if ($msg =~ /^!help kick(pelle)?/i) {
 		print_help($server, $target);
 		return;
-	} elsif ($msg =~ /^!help$/i) {
-		sayit($server, $target, $helptext2);
+	#} elsif ($msg =~ /^!help$/i) {
+		#sayit($server, $target, $helptext2);
 	} elsif ($msg =~ /^!help badword/) {
 		msgit($server, $nick, $helptext2);
+		return;
 	}
 	if (badWordFilter($msg)) {
 		doKick($server, $target, $nick, 'Ei kiroilla!');
@@ -292,7 +292,7 @@ sub event_pubmsg {
 
 sub derpint {
 	my ($line, @rest) = @_;
-	Irssi::print($IRSSI{name}.'> '. $line);
+	print($IRSSI{name}.'> '. $line);
 }
 
 sub da {

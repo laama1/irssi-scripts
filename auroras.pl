@@ -28,7 +28,7 @@ my $db = $ENV{HOME}.'/public_html/auroras.db';
 
 sub getHelp {
 	#return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
-	return '!kuu ja !aurora ohje: http://8-b.fi:82/kd_butt.html#rev';
+	return '!kuu ja !aurora ohje: https://bot.8-b.fi/#rev';
 }
 
 sub pubmsg {

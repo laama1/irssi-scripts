@@ -64,7 +64,7 @@ sub event_pubmsg {
     my @enabled = split(/ /, $enabled_raw);
     return unless grep(/$target/, @enabled);
 
-	if ($msg =~ /^\!help$/i) {
+	if ($msg =~ /^\!help vaihda/i) {
 		sayit($server, $target, $helptext_short);
 		Irssi::print("$myname: !help request from $nick on $target.");
 		return;

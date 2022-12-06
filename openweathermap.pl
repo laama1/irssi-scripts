@@ -53,7 +53,7 @@ my $dbh;	# database handle
 
 my $users = {};
 
-my $helptext = 'Sää-skripti. Ohje: http://8-b.fi:82/kd_butt.html#s';
+my $helptext = 'Sää-skripti. Ohje: https://bot.8-b.fi/#s';
 
 =pod
 UTF8 emojis:
@@ -458,7 +458,6 @@ sub getSayLine {
 	my $weatherdesc = '';
 	my $index = 1;
 	foreach my $item (@{$json->{weather}}) {
-		#da(__LINE__.': getSayLine weather', $item);
 		if ($index > 1) {
 			$weatherdesc .= ', ';
 		}
@@ -466,12 +465,12 @@ sub getSayLine {
 		$index++;
 	}
 	my $uv_index = '';
-	if (defined $json->{uvindex} && $json->{uvindex} ne "" && $json->{uvindex} > 1) {
-		$uv_index = ', UVI: '.$json->{uvindex};
-	}
+	#if (defined $json->{uvindex} && $json->{uvindex} ne "" && $json->{uvindex} > 1) {
+	#	$uv_index = ', UVI: '.$json->{uvindex};
+	#}
 	da(__LINE__.': getSayLine weatherdesc: '.$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt});
-	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$temp.$apptemp.', '.$newdesc.'. '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index;
+	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$newdesc.' '.$temp.$apptemp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index;
 	return $returnvalue;
 }
 
@@ -658,7 +657,7 @@ sub filter_keyword {
 		dp(__LINE__.', 5vrk ennustus: '.$nick.' city: '.$2);
 		$city = check_city($2, $nick);
 		return FINDFORECAST($city, 5);
-	} elsif ($msg =~ /!help$/ || $msg =~ /!help sää/) {
+	} elsif ($msg =~ /!help sää/) {
 		dp(__LINE__.', help:');
 		return $helptext;
 	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!sa') && defined $users->{$nick}) {

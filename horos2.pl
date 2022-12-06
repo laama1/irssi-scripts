@@ -24,9 +24,9 @@ $VERSION = '0.35';
     url		=> 'http://www.kaaosradio.fi'
 );
 
-my $helpmessage1 = 'Horoskooppiskripti. Ohje: http://8-b.fi:82/kd_butt.html#h';
+my $helpmessage1 = 'Horoskooppiskripti. Ohje: https://bot.8-b.fi/#h';
 #my $helpmessage2 = '!horoskkoppi <aihesana>: Tulostaa sinulle horoskoopin, mahdollisesti jostain aihepiiristä. Kokeile esim. !horoskooppi viikonloppu. Toimii myös privassa.';
-my $helpmessage2 = '!horoskooppi ohje: http://8-b.fi:82/kd_butt.html#h';
+my $helpmessage2 = '!horoskooppi ohje: https://bot.8-b.fi/#h';
 
 my $debug = 0;
 
@@ -61,9 +61,10 @@ sub event_priv_msg {
 	return if ($nick eq $server->{nick});		# self-test
 	if ($msg =~ /\!help hor/i) { 
 		$server->command("msg -nick $nick $helpmessage2");
-	} elsif ($msg =~ /!help$/) {
-		$server->command("msg -nick $nick $helpmessage1");
 	}
+	# elsif ($msg =~ /!help$/) {
+	#	$server->command("msg -nick $nick $helpmessage1");
+	#}
 	return unless ($msg =~ /\!h!(a|e|u)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
@@ -76,10 +77,11 @@ sub event_pub_msg {
 	if ($msg =~ /\!help hor/i) {
 		$serverrec->command("msg -channel $target $helpmessage2");
 		return;
-	} elsif ($msg =~ /\!help$/i) {
-		$serverrec->command("msg -channel $target $helpmessage1");
-		return;
 	}
+	# elsif ($msg =~ /\!help$/i) {
+	#	$serverrec->command("msg -channel $target $helpmessage1");
+	#	return;
+	#}
 
 	return unless ($msg =~ /\!h/i);
 	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/);
@@ -177,6 +179,7 @@ sub grepKeyword {
 	my $moonphase = omaconway();
 	
 	$rimpsu =~ s/\$weekday/$weekday/g;
+	$rimpsu =~ s/\$today/$weekday/g;
 	$rimpsu =~ s/\$weekdak/$weekdak/g;
 	$rimpsu =~ s/\$tomorrowak/$tomorrowak/g;
 	$rimpsu =~ s/\$month/$month/g;
