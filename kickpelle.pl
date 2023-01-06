@@ -9,7 +9,7 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '2021-12-11';
+$VERSION = '2022-12-29';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -32,7 +32,7 @@ my @badwords;
 
 GETBADWORDLIST();
 
-my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla: "!kick <nick> [kickmessage]". Kick vaatii 3 votea. 
+my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla: "!kick pelle [kickmessage]". Kick vaatii 3 votea. 
 Operaattorit voivat käyttää myös privassa: "!kick #kanava <nick>", jolloin henkilö lähtee ensimmäisestä osumasta!';
 my $helptext2 = 'Kickpelleskripti. Ohje: https://bot.8-b.fi/#kick';
 
@@ -79,7 +79,7 @@ sub getStats {
 
 sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
-	# TODO: Check that badsword does not allready exist
+	# TODO: sanitize
 	if ($badsword ~~ @badwords) {
 		return '';
 	}
@@ -99,9 +99,11 @@ sub DELBADWORD {
 	my $index = 0;
 	my $found = 0;
 	foreach my $word (@badwords) {
-		if ($badword == $word) {
+		if ($badword eq $word) {
 			splice @badwords, $index, 1;
 			$found = 1;
+			dp(__LINE__.': del found: ' . $badword);
+			#return 1;
 			last;
 		}
 		$index++;
@@ -109,8 +111,8 @@ sub DELBADWORD {
 
 	if ($found == 1) {
 		SAVEBADWORDLIST();
+		return 1;
 	}
-	return;
 }
 
 sub GETBADWORDLIST {
@@ -252,9 +254,13 @@ sub event_pubmsg {
 	} elsif ($msg =~ /^!help badword/) {
 		msgit($server, $nick, $helptext2);
 		return;
-	}
-	if (badWordFilter($msg)) {
-		doKick($server, $target, $nick, 'Ei kiroilla!');
+	} elsif ($msg =~ /^!kirosanat$/gi || $msg =~ /^!badwords$/gi) {
+		my $string = 'Bad words: ';
+		foreach my $badword (@badwords) {
+			$string .= "$badword, ";
+		}
+		#msgit($server, $nick, $string);
+		sayit($server, $target, $string);
 		return;
 	}
 
@@ -268,6 +274,7 @@ sub event_pubmsg {
 		if (get_nickrec($server, $target, $nick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
+		return;
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
 		dp(__LINE__.": msg: $msg");
 		my $kicknick = $1;
@@ -275,18 +282,26 @@ sub event_pubmsg {
 		if (get_nickrec($server, $target, $kicknick)) {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
+		return;
+	} elsif ($msg =~ /^!badword del ([^\s]*)/gi) {
+		if (DELBADWORD($1)) {
+			sayit($server, $target, "Poistettiin '$1' kirosanafiltteristä.");
+		} else {
+			sayit($server, $target, 'Ei löytynyt filtteristä, tai sattui virhe.');
+		}
+		return;
 	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
 		if (ADDBADWORD($1)) {
-			sayit($server, $target, "Lisättiin $1 kirosanafiltteriin.");
+			sayit($server, $target, "Lisättiin '$1' kirosanafiltteriin.");
 		} else {
-			sayit($server, $target, 'Löytyi jo listasta, tai sattui virhe.');
+			sayit($server, $target, 'Löytyi jo filtteristä, tai sattui virhe.');
 		}
-	} elsif ($msg =~ /^!kirosanat$/gi || $msg =~ /^!badwords$/gi) {
-		my $string = 'Bad words: ';
-		foreach my $badword (@badwords) {
-			$string .= "$badword, ";
-		}
-		msgit($server, $nick, $string);
+		return;
+	}
+
+	if (badWordFilter($msg)) {
+		doKick($server, $target, $nick, 'Ei kiroilla!');
+		return;
 	}
 }
 
@@ -310,7 +325,7 @@ sub dp {
 
 Irssi::command_bind('kickpellestats', \&getStats);
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
-print_joinmsg();
+#print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
 derpint("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
