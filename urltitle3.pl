@@ -25,7 +25,8 @@ use strict;
 use Irssi;
 #use Irssi::Signals;
 use LWP::UserAgent;
-use HTTP::Cookies;
+#use HTTP::Cookies;
+use HTTP::CookieJar::LWP;
 use HTTP::Response;
 use HTML::Entities qw(decode_entities);
 use utf8;
@@ -88,7 +89,7 @@ my $shorturlEnabled = 0;			# enable short url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		print($IRSSI{name}."> Unable to create or write file: $db");
+		print($IRSSI{name}."> Stop. Unable to create or write file: $db");
 		die;
 	}
 	close FILE;
@@ -97,7 +98,8 @@ unless (-e $db) {
 }
 
 
-my $cookie_jar = HTTP::Cookies->new(
+#my $cookie_jar = HTTP::Cookies->new(
+my $cookie_jar = HTTP::CookieJar::LWP->new (
 	file => $cookie_file,
 	autosave => 1,
 );
@@ -110,8 +112,8 @@ my %headers = (
 	'agent' => $useragentOld,
 	'max_redirect' => 6,							# default 7
 	'max_size' => $max_size,
-	#'ssl_opts' => ['verify_hostname' => 0],			# disable cert checking
-	'protocols_allowed' => ['http', 'https', 'ftp'],
+	#'ssl_opts' => ['verify_hostname' => 0],			# disable cert checking. Ei toimi jos LWP::Useragent käytössä.
+	'protocols_allowed' => ['http', 'https', 'ftp', 'gopher'],
 	'protocols_forbidden' => [ 'file', 'mailto'],
 	'timeout' => 4,									# default 180 seconds
 	'cookie_jar' => $cookie_jar,
@@ -119,7 +121,9 @@ my %headers = (
 	#'requests_redirectable' => ['GET'],		# defaults GET HEAD
 	#'parse_head' => 1,
 );
+
 my $ua = LWP::UserAgent->new(%headers);
+$ua->ssl_opts('verify_hostname' => 0);
 # Try to disable cert checking (lwp versions > 5.837)
 eval {
 	$ua->ssl_opts('verify_hostname' => 0);
@@ -127,7 +131,7 @@ eval {
 	1;
 } or do {
 };
-
+print(%headers);
 # new headers for youtube and mixcloud etc.
 sub set_useragent {
 	my ($choice, @rest) = @_;
@@ -138,13 +142,16 @@ sub set_useragent {
 	} elsif ($choice == 3) {
 		$ua->agent($useragentBot);
 	}
-	dp(__LINE__.':current User Agent: '. $ua->agent) if $DEBUG1;
 	return;
+}
+
+sub add_header {
+	my ($name, $value, @rest) = @_;
+	#$headers{$name} = $value;
 }
 
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
-	# TODO: add soundcloud etc. parsers here.
 	my ($url, @rest) = @_;
 
 	my $page = '';						# page source decoded to utf8
@@ -153,13 +160,12 @@ sub fetch_title {
 	my $md5hex = '';					# md5 of the page
 
 	my $response = $ua->get($url);
-	#dd(__LINE__.':fetch_title: content charset from response: ' .($response->content_charset || 'none'));		# usually utf8 or ISO-8859-1
-	#da($response);
 
 	if ($response->is_success) {
 		print($IRSSI{name}."> Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
 		if ($finalURI ne '' && $finalURI ne $url) {
+			# save redirect url
 			$url = $finalURI;
 		}
 
@@ -171,7 +177,7 @@ sub fetch_title {
 		if ($page ne $diffpage) {
 			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			#dd(__LINE__.':fetch_title: Same charset / content as reported!');
+			dd(__LINE__.':fetch_title: Same charset / content as reported!');
 		}
 
 		if ($datasize > $max_size) {
@@ -206,6 +212,7 @@ sub fetch_title {
 	}
 
 	if ($response->content_type !~ /(text)|(xml)/) {
+		# if not text or xml
 		if ($shortModeEnabled == 1) {
 			dp(__LINE__.':Short mode enabled = 1');
 			return '', 0 , 0, $md5hex;
@@ -226,7 +233,6 @@ sub fetch_title {
 # getTitle params. useragent response
 sub getTitle {
 	my ($response, $url, @rest) = @_;
-	dp(__LINE__.':getTitle') if $DEBUG1;
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
 	#$countWordsUrl =~ s/\.[\w\d]{1.5}$//g;				# strip .html or .net from the end (dangerous)
@@ -234,7 +240,7 @@ sub getTitle {
 	# get Charset
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
-	#da('header OG: ',$response->header('property'));
+
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
 	#my $ogdescription = $response->header('og:description') || '';		# open graph desc
 	
@@ -245,10 +251,6 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
-
-	#dd(__LINE__.':getTitle: Header x-meta-description found: '.$response->header('x-meta-description')) if $response->header('x-meta-description');
-	#dd(__LINE__.':getTitle: Header description found: '. $response->header('Description')) if $response->header('Description');
-	#dd(__LINE__.":getTitle newtitle: $newtitle, newdescription: $newdescription");
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
@@ -270,7 +272,6 @@ sub getTitle {
 		dd(__LINE__.' og description found! '. $newdescription);
 	}
 
-	#da($response);
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
 		$newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
 		$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
@@ -307,7 +308,7 @@ sub getTitle {
 	return $title, decode_entities($newdescription), $titleInUrl;
 }
 
-sub get_channel_title {
+sub get_channel_topic {
 	my ($server, $channel) = @_;
 	my $chanrec = $server->channel_find($channel);
 	return '' unless defined $chanrec;
@@ -659,6 +660,11 @@ sub signal_emitters {
 		print($IRSSI{name}."> Taivaanvahti signal emited!! $1");
 		# Irssi::signal_stop();
 		return 1;
+
+	} elsif ($param =~ /(https?.*areena\.yle\.fi.*)/) {
+		Irssi::signal_emit('yle_url', $server, $target, $1);
+		print($IRSSI{name}."> Yle_url signal emited!! $1");
+		return 1;
 	}
 	return 0;	# not emitting signal
 }
@@ -679,7 +685,7 @@ sub url_conversion {
 	}
 
 	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || $param =~ /google\.com\/maps/i) {
-		Irssi::print("google service detected!");
+		dp(__LINE__.": google service detected!");
 		set_useragent(3);
 	}
 
@@ -690,9 +696,16 @@ sub url_conversion {
 	}
 
 	if ($param =~ /twitter.com/i) {
-		$param =~ s/twitter\.com/nitter\.eu/i;
+		# TODO: test mobile m.twitter.com
+		$param =~ s/twitter\.com/nitter\.it/i;
 		# nitter.42l.fr nitter.pussthecat.org nitter.eu nitter.net nitter.dark.fail nitter.cattube.org nitter.actionsack.com
 		# nitter.mailstation.de nitter.namazso.eu nitter.himiko.cloud nitter.domain.glass nitter.unixfox.eu
+	}
+
+	if ($param =~ /yle.fi/i) {
+		# add header x-forwarded-for to circumvent geo-blocking
+		# print($IRSSI{'name'}.'> yle.fi detected!');
+		# does not seem to work yet.. add_header('X-Forwarded-For', '54.192.99.2');
 	}
 
 	return $param;
@@ -740,7 +753,7 @@ sub sig_msg_pub {
 	# check if flooding too many times in a row
 	my $isDrunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
-		if (get_channel_title($server, $target) =~ /npv?\:/i) {
+		if (get_channel_topic($server, $target) =~ /npv?\:/i) {
 			$dontprint = 1;
 		} else {
 			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
@@ -752,7 +765,7 @@ sub sig_msg_pub {
 	my $isTitleInUrl = 0;	# title or file
 	my $md5hex = '';		# MD5 of requested page
 
-	# if we want to censore
+	# if we want to censor
 	if (dontPrintThese($newUrlData->{url}) == 1) {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 		saveToDB();
@@ -822,10 +835,10 @@ sub msg_to_channel {
 	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
 
-	if ($title =~ /(.{260}).*/s) {
+	if ($title =~ /(.{260}).*$/s) {
 		$title = $1 . '...';
 	}
-	$server->command("msg -channel $target $title") if grep /$target/, @enabled;
+	$server->command("msg -channel $target $title") if grep /$target/, @enabled;	# poor mans check
 	return;
 }
 
@@ -1070,7 +1083,7 @@ sub clearUrlData {
 	$newUrlData->{md5} = '';		# md5hash
 	$newUrlData->{fetchurl} = '';	# url to fetch
 	$newUrlData->{shorturl} = '';	# short url
-	KaaosRadioClass::floodCheck();	# write to flood-file
+	KaaosRadioClass::floodCheck();	# write current timestamp to flood file
 }
 
 
@@ -1115,6 +1128,10 @@ Irssi::signal_register($signal_config_hash);
 
 my $signal_config_hash2 = { 'imdb_search_id' => [ qw/iobject string string string/ ] };
 Irssi::signal_register($signal_config_hash2);
+
+my $signal_config_hash3 = { 'yle_url' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash3);
+
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');

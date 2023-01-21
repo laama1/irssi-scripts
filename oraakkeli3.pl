@@ -4,7 +4,7 @@ use Irssi;
 use vars qw($VERSION %IRSSI);
 use Encode;
 
-$VERSION = '0.41';
+$VERSION = '0.42';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => 'LAama1@Ircnet',
@@ -18,7 +18,7 @@ $VERSION = '0.41';
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $serverrec->{nick});	# self-test
-	return if $nick eq 'kaaosradio';			# ignore this nick
+	return if $nick eq 'kaaosradio';			# ignore this nick, a known bot
 	my @targets = split / /, Irssi::settings_get_str('oraakkeli_enabled_channels');
     return unless $target ~~ @targets;
 	my $nickindex = index $msg, $serverrec->{nick};
@@ -28,6 +28,10 @@ sub pubmsg {
 		my $querystr = substr $msg, ((length $serverrec->{nick}) +2);
 		my $urli = "https://www.lintukoto.net/viihde/oraakkeli/index.php?html&kysymys=${querystr}";
 		my $stats = fetchOraakkeliUrl($urli);
+		if ($stats =~ /html/) {
+			$serverrec->command("MSG $target $nick: nyt ei natsaa.. sorry");
+			return;
+		}
 		$serverrec->command("MSG $target $nick: ${stats}") if defined $stats;
 		my $finalstring = '!oraakkeli request from '.$nick.' on channel '.$target.': '.$querystr.' -- answer: '.$stats;
 		Irssi::print($finalstring);

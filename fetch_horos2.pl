@@ -10,8 +10,8 @@ use vars qw($VERSION);
 
 $VERSION = 0.4;
 
-my $DEBUG = 0;
-my $DEBUG1 = 0;
+my $DEBUG = 1;
+my $DEBUG1 = 1;
 #my %args;
 #GetOptions(\%args, "arg1=s") or die "KAPUT";
 
@@ -19,7 +19,7 @@ my $DEBUG1 = 0;
 #dp("Arg1: ". $args{arg1});
 
 my $mydir = $ENV{HOME}.'/.irssi/scripts/newhoro2';	# output dir
-my ($seconds, $minutes, $hours, $mday, $month, $year, $weekday, $yearday, $isdst) = localtime(time);
+my ($seconds, $minutes, $hours, $mday, $month, $year, $weekday, $yearday, $isdst) = localtime time;
 $year += 1900;
 $month += 1;
 #print( "Seconds: $seconds, Minutes: $minutes, Hours $hours, Monthday: $mday, Month: $month, Year: $year, Weekday: $weekday, Yearday: $yearday, ISDST: $isdst \n");
@@ -42,7 +42,7 @@ my @astrourls = (
 my $iltisUrl = 'https://www.iltalehti.fi/horoskooppi';
 my $menaisetUrl = 'https://www.menaiset.fi/artikkeli/horoskooppi/paivan-horoskooppi/paivan-horoskooppi-';
 $menaisetUrl .= $mday.$month;
-#dp("menaiset url: $menaisetUrl");
+dp("menaiset url: $menaisetUrl");
 #print $menaisetUrl . "\n";
 
 
@@ -198,17 +198,18 @@ sub grepIltis {
 	my $logtext;
 	#logmsg($page);
 	#if ($page != -1 && $page =~ /<p class="ingressi"><\/p>(.*?)<\/div>/si) {
-	if ($page ne '-1' && $page =~ /itemProp="articleBody"/si) {
+	if ($page ne '-1' && $page =~ s/(.*)itemProp="articleBody">//si) {
 		$page = KaaosRadioClass::ktrim($page);
 		#my $parsethis = $1;
 		my $allHoros = '';
 		my $index = 0;
-		#dw("parse this: ".$page);
+		dw("parse this: ".$page);
 		
 		# open database connection
 		$dbh = KaaosRadioClass::connectSqlite($db);
-		
-		while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi && $index < 100) {
+
+		while($page =~ m/<p class="paragraph">(\w+) (\d+\.\d+\.–\d+\.\d+\.) (.*?)<\/p>/sgi && $index < 100) {
+		#while($page =~ m/<b>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/b> (.*?)<\/p>/sgi && $index < 100) {
 		#while($page =~ m/<p>(\w+) (\d+\.\d+\.-\d+\.\d+\.) (.*?)<\/p>/sgi) {
 			my $sign = $1;
 			my $datum = $2;
@@ -223,43 +224,7 @@ sub grepIltis {
 			}
 			$index++;
 		}
-		if ($index == 0 ) {
-			dp('iltis regexp 2..');
-			# iltis regex #2, if nothing found
-			#<p>OINAS 21.3.–19.4. Voimiasi ja hermojasi koetellaan tänään toden teolla, mutta kun pidät tavoitteesi mielessäsi etkä antaudu häiriötekijöiden edessä, huomaat, että lopussa kiitos seisoo.</p>
-			while($page =~ m/<p>(\w+) (\d+\.\d+\.[–-]\d+\.\d+\.) (.*?)<\/p>/sgi) {
-				my $sign = $1;
-				my $datum = $2;
-				my $horo = $3;
-				dp("grepIltis2 sign: $sign");
-				dp("grepIltis2 datum: $datum");
-				dp("grepIltis2 horo: $horo");
-				if (defined($horo) && $horo ne '') {
-					saveHoroToDB($horo, $iltisUrl, $sign);
-					$horo = filterKeyword($horo);
-					$allHoros .= $horo . "\n" if $horo;
-				}
-				$index++;
-			}
-		}
-		if ($index == 0 ) {
-			# iltis regex #3, if nothing found
-			dp('iltis regexp 3..');
-			while($page =~ m/<p><em>(\w+) (\d+\.\d+\.-\d+\.\d+\.)<\/em> (.*?)<\/p>/sgi) {
-				my $sign = $1;
-				my $datum = $2;
-				my $horo = $3;
-				dp("grepIltis3 sign: $sign");
-				dp("grepIltis3 datum: $datum");
-				dp("grepIltis3 horo: $horo");
-				if (defined($horo) && $horo ne '') {
-					saveHoroToDB($horo, $iltisUrl, $sign);
-					$horo = filterKeyword($horo);
-					$allHoros .= $horo . "\n" if $horo;
-				}
-				$index++;
-			}
-		}
+
 		dp("grepIltis allhoros ($index): ".$allHoros);
 		$logtext = "iltis horo done. ($index)";
 		saveHoroToFile($allHoros);

@@ -29,7 +29,7 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 
@@ -414,8 +414,8 @@ sub timerfunc {
 	return;
 }
 
-Irssi::command_bind('taivaanvahti_update', \&timerfunc);
-Irssi::command_bind('taivaanvahti_search', \&search_db);
+Irssi::command_bind('taivaanvahti_update', \&timerfunc, 'taivaanvahti');
+Irssi::command_bind('taivaanvahti_search', \&search_db, 'taivaanvahti');
 
 Irssi::settings_add_str('taivaanvahti', 'taivaanvahti_enabled_channels', '');
 
