@@ -24,6 +24,12 @@ my $filename = "/tmp/irssi_icecast_bridge";
 my $DEBUG = 1;
 my $timer = '';
 
+unlink $filename;
+open FH, ">$filename";
+print FH "";
+close FH;
+chmod 0777, $filename;
+
 sub msg_to_channel {
 	my ($tag, $target, $note, @rest) = @_;
 	#dp("i here.. tag: $tag, target: $target, nick: $nick, note: $note");
@@ -44,7 +50,7 @@ sub msg_to_channel {
 # check the socket for data and act upon it
 sub check_file_icecast {
 	my $msg = KaaosRadioClass::readLastLineFromFilename($filename);
-	if ($msg != '') {
+	if ($msg ne '' && $msg ne '-3') {
 		echota("Got message from file: $msg");
 		if ($msg =~ /(.*?)$/) {
 			my $data = $1;
@@ -53,6 +59,7 @@ sub check_file_icecast {
 			echota("Tag: $tag, Channel: $channel, data: $data");
 			msg_to_channel($tag, $channel, $data);
 		}
+        KaaosRadioClass::writeToFile($filename, '');
 	}
 }
 

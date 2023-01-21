@@ -9,7 +9,7 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
-$VERSION = '2022-12-29';
+$VERSION = '2023-01-09';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -50,7 +50,7 @@ sub print_joinmsg {
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		if ($window->{active}->{type} eq 'CHANNEL' && $window->{active}->{name} ~~ @enabled) {
-			$window->{active_server}->command("MSG $window->{active}->{name} $joinmessage");
+			#$window->{active_server}->command("MSG $window->{active}->{name} $joinmessage");
 			return;
 		}
 	}
@@ -249,8 +249,6 @@ sub event_pubmsg {
 	if ($msg =~ /^!help kick(pelle)?/i) {
 		print_help($server, $target);
 		return;
-	#} elsif ($msg =~ /^!help$/i) {
-		#sayit($server, $target, $helptext2);
 	} elsif ($msg =~ /^!help badword/) {
 		msgit($server, $nick, $helptext2);
 		return;
@@ -268,7 +266,7 @@ sub event_pubmsg {
 		return;
 	}
 	if ($msg =~ /^!kick ([^\s]*) (.*)$/gi)	{
-		dp(__LINE__.": msg: $msg");
+		dp(__LINE__.": kickmsg: $msg");
 		my $kicknick = $1;		# nick to kick
 		my $reason = $2;
 		if (get_nickrec($server, $target, $nick)) {
@@ -283,14 +281,14 @@ sub event_pubmsg {
 			kickPerson($server, $target, $kicknick, $reason, $nick);
 		}
 		return;
-	} elsif ($msg =~ /^!badword del ([^\s]*)/gi) {
+	} elsif ($msg =~ /^!badword del (.*)/gi) {
 		if (DELBADWORD($1)) {
 			sayit($server, $target, "Poistettiin '$1' kirosanafiltteristä.");
 		} else {
 			sayit($server, $target, 'Ei löytynyt filtteristä, tai sattui virhe.');
 		}
 		return;
-	} elsif ($msg =~ /^!badword ([^\s]*)/gi) {
+	} elsif ($msg =~ /^!badword add (.*)$/gi) {
 		if (ADDBADWORD($1)) {
 			sayit($server, $target, "Lisättiin '$1' kirosanafiltteriin.");
 		} else {

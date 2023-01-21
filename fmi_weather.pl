@@ -27,19 +27,20 @@ $VERSION = '2022-01-31';
 
 my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
-my $socket = "/tmp/irssi_fmi_weather.sock";
+my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
 my $last_meteo = '';
 my $last_time;
 
 # create the socket
-unlink $socket;
-my $server = IO::Socket::UNIX->new(Local  => $socket,
+unlink $socket_file;
+my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
 								   Type   => SOCK_STREAM,
 								   Listen => 5) or die $@;
 # set this socket as nonblocking so we can check stuff without interrupting
 # irssi.
-nonblock($server);
+nonblock($my_socket);
+$my_socket->autoflush();
 
 # method to set a socket handle as nonblocking
 sub nonblock {
@@ -51,17 +52,23 @@ sub nonblock {
 # check the socket for data and act upon it
 sub check_sock {
 	my $msg;
-	if (my $client = $server->accept()) {
-		$client->recv($msg, 10);
-		DP("Got message from socket: $msg") if $msg;
-		if ($msg =~ /Aja$/) {
-			DP("AJA!");
-			parse_extrainfo_from_link($fmiURL);
-			timeout_1h();
+	if (my $client = $my_socket->accept()) {
+		$client->recv($msg, 1024);
+		echota("Got message from socket: $msg");# if $msg;
+		#if ($msg =~ /Aja$/) {
+		if ($msg =~ /^Aja/) {
+			DP(__LINE__." AJA!");
+			if (parse_extrainfo_from_link($fmiURL)) {
+				timeout_1h();
+			}
 		}
 	}
 }
 
+sub echota {
+	my ($texti, @rest) = @_;
+	print($IRSSI{name}."> ". $texti);
+}
 sub DP {
 	return unless $DEBUG == 1;
 	print($IRSSI{name}." debug> @_");
@@ -101,11 +108,14 @@ sub msg_to_channel {
 
 sub parse_extrainfo_from_link {
 	my ($url, @rest) = @_;
+	DP(__LINE__.' going stronk!0');
 	my $text = KaaosRadioClass::fetchUrl($url);
 	my $date = '';
 	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
 		$date = $2;
+		DP(__LINE__.' date found: '.$date);
 	}
+	DP(__LINE__.' going stronk!1');
 	if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
 		my $meteotext = $2;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;
@@ -118,28 +128,37 @@ sub parse_extrainfo_from_link {
 		}
 	} else {
 		DP(__LINE__.' NOT FOUND :(');
+		return undef;
 	}
-	return;
+	return 1;
 }
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	if ($msg =~ /^!meteo/) {
+		if ($last_meteo eq '') {
+			fmi_update();
+		}
 		$server->command("msg $target $last_meteo");
 	}
 }
 
+sub fmi_update {
+	echota("Fetching new weather data...");
+	parse_extrainfo_from_link($fmiURL);
+}
 
 sub timeout_stop {
 	timeout_remove($timeout_tag);
 }
 
 sub timeout_1h {
-	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at now + 1 hours 2>&1';
+	echota(__LINE__.": Aja1");
+	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now + 1 hours 2>&1';
 	my $retval = `$command`;
 }
 sub timeout_545 {
-	my $command = 'echo "echo \"Aja\" | nc -U '.$socket.'" | at 5:45 2>&1';
+	my $command = 'echo "echo \"Aja2\" | nc -U '.$socket_file.'" | at 5:45 2>&1';
 	my $retval = `$command`;
 }
 sub timeout_start {
@@ -148,7 +167,7 @@ sub timeout_start {
 	$timeout_tag = Irssi::timeout_add(10000, 'check_sock', undef);      # 10 seconds
 }
 
-Irssi::command_bind('fmi_update', \&parse_extrainfo_from_link, 'fmi_weather');
+Irssi::command_bind('fmi_update', \&fmi_update, 'fmi_weather');
 Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');

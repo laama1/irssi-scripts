@@ -54,7 +54,7 @@ sub sig_yle_url {
 	}
 }
 
-# return first episode title
+# return first found item title and description
 sub get_title_desc {
 	my ($yleurl, @rest) = @_;
 	my $output = `yle-dl --showmetadata ${yleurl} 2>/dev/null`;
@@ -68,6 +68,7 @@ sub get_title_desc {
 	}
 }
 
+# check if metadata available and how many items
 sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
 	debu('checking: '. $url);
@@ -102,8 +103,9 @@ sub exec_remove {
 }
 
 sub exec_input {
-	debu('exec_input');
-	#print(Dumper(@_));
+	my ($info, $line, @rest) = @_;
+	$line =~ s/\t/  /;
+	debu('exec_input: '. $line);
 }
 
 sub debu {
