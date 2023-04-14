@@ -108,8 +108,6 @@ sub readLineFromDataBase {
 	$sth->execute();
 
 	if(my @line = $sth->fetchrow_array) {
-		dp(__LINE__.': --fetched a result--');
-		dp(Dumper @line);
 		$sth->finish();
 		$dbh->disconnect();
 		return @line;
@@ -146,13 +144,11 @@ sub bindSQL_nc {
 	my @results;
 	my $idx = 0;
 	while(my @row = $sth->fetchrow_array) {
-		#$results[$idx] = @row;
 		push @results, @row;
 		$idx++;
 	}
 	$sth->finish();
 	$dbh->disconnect();
-	dp(__LINE__.': -- How many results: '. $idx);
 	return @results;
 }
 
