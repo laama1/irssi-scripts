@@ -7,14 +7,14 @@ use IO::Socket;
 use Fcntl;
 
 #use Data::Dumper;
-#use DateTime::Format::Strptime;
+use DateTime::Format::Strptime;
 #use Time::Piece;
 #use Encode qw/encode decode/;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2022-01-31';
+$VERSION = '2022-03-11';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -108,22 +108,33 @@ sub msg_to_channel {
 
 sub parse_extrainfo_from_link {
 	my ($url, @rest) = @_;
-	DP(__LINE__.' going stronk!0');
 	my $text = KaaosRadioClass::fetchUrl($url);
 	my $date = '';
 	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
 		$date = $2;
 		DP(__LINE__.' date found: '.$date);
+		# TODO: Convert date to correct TZ
+		# argument example: Tue, 04 Sep 2018 22:37:34 +0300 (using "%a, %d %b %Y %H:%M:%S %z")
+		# We need: 15.3.2023 15:56
+		my $formatter = DateTime::Format::Strptime->new(
+        	pattern  => '%d.%m.%Y %H:%M',
+			on_error => 'croak',
+			time_zone => 'UTC'
+    	);
+		my $dt = $formatter->parse_datetime($date);
+		$dt->set_time_zone('Europe/Helsinki');
+		$date = $dt->strftime('%d.%m. %H:%M');
+		DP(__LINE__.' ' .join ' ', $dt->ymd, $dt->hms); # shows 2016-12-22 07:16:29
 	}
 	DP(__LINE__.' going stronk!1');
 	if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
 		my $meteotext = $2;
-		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;
+		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;		# div inside span
 		$meteotext = KaaosRadioClass::ktrim($meteotext);
-		$meteotext = "\002Meteorologin sääkatsaus ($date GMT):\002 ".$meteotext;
+		$meteotext = "\002Meteorologin sääkatsaus ($date):\002 ".$meteotext;
 		DP(__LINE__.' meteotext: '. $meteotext);
 		if ($meteotext ne $last_meteo) {
-			msg_to_channel($meteotext);
+			#msg_to_channel($meteotext);
 			$last_meteo = $meteotext;
 		}
 	} else {
@@ -139,22 +150,40 @@ sub event_pubmsg {
 		if ($last_meteo eq '') {
 			fmi_update();
 		}
+		# if string: 'np:' found in channel topic
+		if (get_channel_title($server, $target) =~ /npv?\:/i) {
+			# FIXME: if $nick == $target eg. kaaosradio
+			return;
+		}
 		$server->command("msg $target $last_meteo");
 	}
 }
 
+sub event_priv {
+	my ($server, $msg, $nick, $address) = @_;
+	return if ($nick eq $server->{nick});	#self-test
+	event_pubmsg($server, $msg, $nick, $address, $nick);
+}
+
+sub get_channel_title {
+	my ($server, $channel) = @_;
+	my $chanrec = $server->channel_find($channel);
+	return '' unless defined $chanrec;
+	return $chanrec->{topic};
+}
+
 sub fmi_update {
-	echota("Fetching new weather data...");
+	echota(__LINE__." Fetching new weather data...");
 	parse_extrainfo_from_link($fmiURL);
 }
 
 sub timeout_stop {
-	timeout_remove($timeout_tag);
+	Irssi::timeout_remove($timeout_tag);
 }
 
 sub timeout_1h {
 	echota(__LINE__.": Aja1");
-	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now + 1 hours 2>&1';
+	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
 }
 sub timeout_545 {
@@ -171,6 +200,7 @@ Irssi::command_bind('fmi_update', \&fmi_update, 'fmi_weather');
 Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');
+Irssi::signal_add_last('message private', 'event_priv');
 Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', 'Add channels where to print meteo.');
 	
 timeout_start();
