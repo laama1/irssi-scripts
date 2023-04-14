@@ -26,7 +26,6 @@ my $kaaos_server;
 my $handle = undef;
 
 
-
 start_server();
 sub start_server {
 	Irssi::print("KAaosd - starting...");
@@ -37,7 +36,7 @@ sub start_server {
     	return;
   	}
 
-  Irssi::print(sprintf("KAaosd - waiting for connections on %s:%s...", $kaaos_server->sockhost, $kaaos_server->sockport));
+  Irssi::print(sprintf("KAaosd - waiting for socket connections on %s:%s...", $kaaos_server->sockhost, $kaaos_server->sockport));
   $handle = Irssi::input_add($kaaos_server->fileno, INPUT_READ, 'handle_connection', $kaaos_server);
 }
 
@@ -45,27 +44,27 @@ sub handle_connection {
 	my $sock = $_[0]->accept;
   	my $iaddr = inet_aton($sock->peerhost); # or whatever address
   	my $peer  = gethostbyaddr($iaddr, AF_INET); # $sock->peerhost;
-	Irssi::print("KAaosd - handling connection from $peer");
+	print("KAaosd> handling connection from $peer");
 
 	$sock->autoflush(1);
 	my $incoming = <$sock>;
-	Irssi::print("KAaosd - got: $incoming from: $peer");
+	print("KAaosd> got: $incoming from: $peer");
 	parse_msg($incoming);
 }
 
 # check the socket for data and act upon it
 sub parse_msg {
 	my ($msg, @rest) = @_;
-	DP("Got message from socket: $msg") if $msg;
+	#DP("Got message from socket: $msg") if $msg;
 	if ($msg =~ /nytsoivideo (.*)$/ && $msg ne $lastmesg) {
 		DP("Joku päivitti videostreamin metan: $1");
-		Irssi::signal_emit('krnytsoivideo-remote-msg', $1);
+		Irssi::signal_emit('krnytsoivideo-remote-msg', $msg, $1);
 	} elsif ($msg =~ /nytsoivideotwitch (.*)$/ && $msg ne $lastmesg) {
 		DP("Joku päivitti twitch-tiedon: $1");
-		Irssi::signal_emit('krnytsoivideotwitch-remote-msg', $1);
+		Irssi::signal_emit('krnytsoivideotwitch-remote-msg', $msg, $1);
 	} elsif ($msg =~ /nytsoi (.*)$/ && $msg ne $lastmesg) {
 		DP("Joku päivitti icecastin: $1");
-		Irssi::signal_emit('krnytsoi-remote-msg', $1);
+		Irssi::signal_emit('krnytsoi-remote-msg', $msg, $1);
 	}
 	$lastmesg = $msg;
 }
