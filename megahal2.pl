@@ -19,6 +19,7 @@
 use warnings;
 use strict;
 use Irssi;
+#use lib $ENV{HOME}."/code/AI-MegaHAL/blib";
 use AI::MegaHAL;
 use vars qw($VERSION %IRSSI);
 use File::Copy;
@@ -89,7 +90,7 @@ my $myname = 'megahal2.pl';
 
 sub irssi_log {
 	my $msg = shift;
-	Irssi::print("MegaHAL:: $msg");
+	print("MegaHAL:: $msg");
 }
 
 ##
@@ -118,7 +119,7 @@ sub populate_brain {
 			'Wrap' => 0,
 		);
 	}
-	irssi_log("Brain populated..");      # LAama1
+	irssi_log("Brain populated..");
 }
 
 ## TODO: 
@@ -250,22 +251,22 @@ sub give_me_a_haiku {
 sub public_responder {
 	my ($server, $data, $nick, $mask, $target) = @_;
 	my $my_nick = $server->{'nick'};
-	my $skip_oraakkeli_but_learn = 0;   # if oraakkeli.pl script enabled this is a fix.
+	my $skip_oraakkeli_but_learn = 0;   # if oraakkeli.pl script is enabled, this is a fix.
 	return if $nick ~~ @ignorenicks;
 	return unless $target ~~ @valid_targets;
-	# Don't talk to yourself
-	return if $nick eq $my_nick;
+	return if $nick eq $my_nick;		# Don't talk to yourself
 	return if $data =~ /kaaos/i && $target =~ /\#kaaosradio/i;
 	
 	# Ignore lines containing URLs
 	return if $data =~ /tps?:\/\//i || $data =~ /www\./i;
-	#$skip_oraakkeli_but_learn = ($data =~ /$my_nick/i && $data =~ /(.*)\?/);    # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin, ei vastata siihen
-	$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/);
+
+	#$skip_oraakkeli_but_learn = ((index $data, $my_nick) >= 0 && $data =~ /(.*)\?/); # oraakkeli parseri. Jos lause päättyy kysymysmerkkiin, ei vastata siihen
 	#dp(__LINE__." $myname: Giving data to Oraakkeli: ". int $skip_oraakkeli_but_learn);
-	
+	#dp("test1");
 	# Get the megahal instance for this channel
 	my $megahal = get_megahal($target);
 	return unless defined $megahal;
+	#dp("test2");
 	# replace weird/utf8 characters from user input
 	Encode::from_to($data, 'utf-8', $charset);
 	#$data = KaaosRadioClass::replaceWeird($data);
@@ -282,28 +283,28 @@ sub public_responder {
 		return;
 	}
 	if ($data =~ /^!/) {    # if !command
-		irssi_log("Some un understood !command found, return.") if $DEBUG;
+		irssi_log("Some un understood !command found, return: ".$data) if $DEBUG;
 		return;
 	}
-
+	dp("test3");
 	# check nicks from the channel
 	populate_nicklist($target, $server);
 	foreach my $currentnick (@channelnicks) {
 		# go through all nicks from channel
 		if ($data =~ $currentnick) {
 			# if somebodys nick is found from the data
-			# exit loop if it'smine.
+			# exit loop if it's mine.
 			last if $currentnick eq $my_nick;
 
 			# OR, remove nick from data instead
-			substr($data, (index $data, $currentnick), (length $currentnick)) = '';
+			substr($data, (index $data, $currentnick), (length $currentnick + 1)) = '';
 		}
 	}
 
 	# Does the data contain my nick?
 	my $nicklen = length $my_nick;
 	my $nickindex = index $data, $my_nick;
-	if ($nickindex >= 0 && $skip_oraakkeli_but_learn eq "") {
+	if ($nickindex >= 0 && $skip_oraakkeli_but_learn == 0) {
 		dp(__LINE__.": my nick found, index: $nickindex, nicklen: $nicklen");
 		dp(__LINE__.' data before: '.$data);
 		substr($data, $nickindex, ($nicklen+1)) = '';	# remove one character after nick also
@@ -321,6 +322,7 @@ sub public_responder {
 				$flood->{$uniq}->{'count'} = 0;
 				irssi_log("Not ignoring $uniq any more. He has suffered enough.");
 			} else {
+				dp("test1666");
 				# Otherwise ignore them
 				return;
 			}
@@ -389,6 +391,7 @@ sub public_responder {
 				last;
 			}
 		}
+		dp("test learn: ". $data);
 		$megahal->learn($data, 0);
 	}
 }
@@ -434,6 +437,10 @@ sub populate_nicklist {
 sub return_reply {
 	my ($data, @rest) = @_;
 	my $output = $megahal->do_reply($data, 0);
+
+	# experimental 2023-03-06
+	Encode::from_to($output, $charset, 'utf8');
+
 	$output = KaaosRadioClass::ktrim($output);
 	# $output = KaaosRadioClass::replaceWeird($output);
 	return $output;
@@ -474,7 +481,7 @@ sub dp {
 
 
 Irssi::signal_add("message public", \&public_responder);
-Irssi::signal_add("setup changed", \&load_settings);
+# LAama1 2022-04-20 Irssi::signal_add("setup changed", \&load_settings);
 Irssi::signal_add("setup reread", \&load_settings);
 Irssi::command_bind('savebrain', \&save_brain);
 Irssi::command_bind('save', \&save_brain);
