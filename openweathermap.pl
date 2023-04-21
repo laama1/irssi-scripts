@@ -18,7 +18,7 @@ use Data::Dumper;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20220605';
+$VERSION = '20230420';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
@@ -46,14 +46,14 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
 
 my $users = {};
 
-my $helptext = 'Sää-skripti. Ohje: https://bot.8-b.fi/#s';
+my $helptext = 'Openweathermap sääskripti. Ohje: https://bot.8-b.fi/#s';
 
 =pod
 UTF8 emojis:
@@ -129,7 +129,6 @@ unless (-e $db) {
 
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, @rest) = @_;
-	# TODO: light intensity rain
 	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime") if $DEBUG1;
 	my $sunmoon = get_sun_moon($sunrise, $sunset, $comparetime);
 	$string =~ s/fog|mist/🌫️ /ui;
@@ -259,7 +258,8 @@ sub FINDWEATHER {
 
 sub FINDFORECAST {
 	my ($searchword, $days, @rest) = @_;
-	my $returnstring = "\002klo\002 ";	# bold
+	#my $returnstring = "\002klo\002 ";	# bold
+	#my $returnstring = "";	# bold
 	my $json;
 
 	$searchword = stripc($searchword);
@@ -301,7 +301,7 @@ sub forecastloop1 {
 		}
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
 												$json->{city}->{sunset}, $item->{dt});
-		my ($sec, $min, $hour, $mday) = localtime($item->{dt});
+		my ($sec, $min, $hour, $mday) = localtime $item->{dt};
 		$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 		$index++;
 	}
@@ -309,24 +309,28 @@ sub forecastloop1 {
 }
 
 sub forecastloop2 {
-	# print temp every 12 hours for the next 5d
+	# print temperature for every 12 h in the next 5d
 	my ($json, @rest) = @_;
 	my $index = 0;
 	my $returnstring = '';
 	my $daytemp = '';
+	my @weekdayarray = ('su','ma', 'ti','ke','to','pe','la','su');
 	foreach my $item (@{$json->{list}}) {
 		my $tiem = $item->{dt_txt};
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $item->{dt};
-
+		my $weekdaystring = $weekdayarray[$wday];
 		if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {
+			#dp(__LINE__." weekday: $wday or " . $weekdaystring);
 			if ($index == 0) {
-				$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}." \002klo:\002 ";
+				#$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}." \002klo:\002 ";
+				$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country} . ' ';
 			}
 			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},	$json->{city}->{sunset}, $item->{dt});
 			if ($wday eq $daytemp) {
-				$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) ."°C\002)\002 ";
+				$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) ."°C\002)\002, ";
 			} else {
-				$returnstring .= "\002".$mday.'.'.($mon+1).' (klo '.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
+				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
+				$returnstring .= "\002".$weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 			}
 			$daytemp = $wday;
 			$index++;
@@ -609,18 +613,18 @@ sub bind_sql {
 
 sub check_city {
 	my ($checkcity, $nick, @rest) = @_;
-	return undef if KaaosRadioClass::floodCheck() > 0;
+	return undef if KaaosRadioClass::floodCheck();
 	$checkcity = KaaosRadioClass::ktrim($checkcity);
 	if ($checkcity eq '') {
-		dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
 		if (defined $users->{$nick}) {
+			dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
 			return $users->{$nick};
 		} else {
 			return undef;
 		}
 	} else {
 		$users->{$nick} = $checkcity;
-		dp(__LINE__.', tallennettiin uusi city: '.$checkcity.', käyttäjälle: '.$nick) if $DEBUG1;
+		dp(__LINE__.', tallennettiin uusi city: '.$checkcity.', käyttäjälle: '.$nick);
 		return $checkcity;
 	}
 }
@@ -643,7 +647,7 @@ sub filter_keyword {
 		}
 
 		$dbh = KaaosRadioClass::closeDB($dbh);
-	} elsif ($msg =~ /\!(se )([^5].*)$/i) {
+	} elsif ($msg =~ /\!(se )(.*)$/i) {
 		dp(__LINE__.', ennustus: '.$nick.' city: '.$2) if $DEBUG1;
 		$city = check_city($2, $nick);
 		return FINDFORECAST($city);
@@ -664,7 +668,7 @@ sub filter_keyword {
 		# when user's city is allready saved and he writes the short command only
 		dp(__LINE__.', herecy: '.$users->{$nick});
 		return filter_keyword($msg . ' ' . $users->{$nick}, $nick);
-	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!sa') && not defined $users->{$nick}) {
+	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!se5' || $msg eq '!sa') && not defined $users->{$nick}) {
 		dp(__LINE__.', unohdin missä asut') if $DEBUG1;
 		return 'Unohdin, missä asut..';
 	}
