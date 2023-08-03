@@ -263,7 +263,7 @@ sub ktrim {
 	return $text;
 }
 
-# replace weird html characters
+# replace weird html or json characters to visible characters
 sub replaceWeird {
 	my ($text, @rest) = @_;
 	return unless defined $text;

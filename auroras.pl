@@ -24,7 +24,7 @@ my $DEBUG = 1;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
 #my $db = $ENV{HOME}. '/.irssi/scripts/newauroras.db';
-#my @channels = ('#salamolo', '#botti', '#kaaosradio');
+my @not_channels = ('#kaaosradio.fi');
 
 sub getHelp {
 	#return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
@@ -33,8 +33,7 @@ sub getHelp {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	#return unless ($msg =~ /$serverrec->{nick}/i);
-	#return unless ($target ~~ @channels);
+	return if ($target ~~ @not_channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(!help aurora)/gi || $msg =~ /(!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
@@ -54,6 +53,11 @@ sub pubmsg {
 		Irssi::print("auroras.pl: $keyword request from $nick on channel $target");
 		$serverrec->command("MSG $target Kuun vaihe: $outputstring") if $outputstring;
 	}
+}
+
+sub privmsg {
+	my ($server, $msg, $nick, $address) = @_;
+	pubmsg($server, $msg, $nick, $address, $nick);
 }
 
 sub fetchAuroraData {
@@ -110,4 +114,5 @@ sub omaconway {
 }
 
 Irssi::signal_add_last('message public', 'pubmsg');
+Irssi::signal_add_last('message private', 'privmsg');
 

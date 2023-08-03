@@ -34,15 +34,18 @@ sub pub_msg {
 	#return unless ($msg =~ /$serverrec->{nick}/i);
 	#return unless ($target ~~ @channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help ham)/sgi) {
-		return if KaaosRadioClass::floodCheck() == 1;
+	if ($msg =~ /(!help hams)/sgi) {
+		return if KaaosRadioClass::floodCheck();
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /(!hams)/sgi) {
-		return if KaaosRadioClass::floodCheck() == 1;
+		print("1");
+		return if KaaosRadioClass::floodCheck();
+		print("2");
 		my $xml = fetch_hams_data();
-        my $newdata = parse_hams_data($xml);
-
+        print("3");
+		my $newdata = parse_hams_data($xml);
+		print("4");
 		$serverrec->command("MSG $target $newdata");
 		Irssi::print($IRSSI{"name"}.": request from $nick on channel $target");
 	}
@@ -60,7 +63,7 @@ sub parse_hams_data {
     my $solarwind = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/solarwind'));
     my $magfield = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/magneticfield'));
     return "Solar Flux: $solarflux, A_ind: $aindex, K_ind (kp): $kindex, Xray: $xray, Sunspot number: $sunspots, Proton Flux: $protonflux, Electron Flux: $electronflux, Solar Wind: $solarwind km/s";
-    Irssi::print(Dumper($solarflux));
+    #Irssi::print(Dumper($solarflux));
 }
 
 sub fetch_hams_data {

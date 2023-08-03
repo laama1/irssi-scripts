@@ -25,7 +25,8 @@ my $runningnumber = 0;
 my $download_dir = "/mnt/music/areena";
 #my $ylescript = 'yle-dl -qq --vfat --no-overwrite --destdir '.$download_dir.' --maxbitrate best';
 my $ylescript = 'yle-dl -qq --vfat --destdir '.$download_dir.' --maxbitrate best';
-my $execscript = 'exec -msg yle-dl -name ';
+#my $execscript = 'exec -msg yle-dl -name ';
+my $execscript = 'exec -window -name yledl';
 
 print($IRSSI{name}.'> download dir: '.$download_dir);
 
@@ -63,7 +64,7 @@ sub get_title_desc {
 	$json->convert_blessed(1);
 	$json = decode_json($output);
 	foreach my $item (@$json) {
-		debu("episode title: ".$item->{'episode_title'});
+		debu(__LINE__." episode title: ".$item->{episode_title}. ', episode description: '.$item->{description});
 		return $item->{episode_title}, $item->{description};
 	}
 }
@@ -71,7 +72,7 @@ sub get_title_desc {
 # check if metadata available and how many items
 sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
-	debu('checking: '. $url);
+	debu(__LINE__.' checking: '. $url);
 	
 	my $output = `yle-dl -V --showmetadata ${url} 2>/dev/null`;
 	if ($output eq "") { return; }
@@ -85,9 +86,9 @@ sub cmd_check_if_exist {
 
 sub cmd_start_dl {
 	my ($url, @rest) = @_;
-	debu('fetching: '. $url);
+	debu(__LINE__.' fetching: '. $url);
 	$runningnumber++;
-	Irssi::command($execscript .'yle-dl'. $runningnumber. " $ylescript $url");
+	Irssi::command($execscript. $runningnumber. " $ylescript $url");
 	#Irssi::command("exec -close yle");	# detach
 	# -interactive
 }

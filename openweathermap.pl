@@ -129,7 +129,7 @@ unless (-e $db) {
 
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, @rest) = @_;
-	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime") if $DEBUG1;
+	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime");
 	my $sunmoon = get_sun_moon($sunrise, $sunset, $comparetime);
 	$string =~ s/fog|mist/🌫️ /ui;
 	$string =~ s/wind/💨 /ui;
@@ -143,7 +143,8 @@ sub replace_with_emoji {
 	$string =~ s/thunderstorm with rain/⛈️ /u;
 	$string =~ s/thunderstorm/⚡ /u;
 	$string =~ s/light rain/☔ /u;
-	$string =~ s/light intensity rain/☔ /u;
+	$string =~ s/light intensity rain/🌂 /u;
+	$string =~ s/heavy intensity shower rain/🌊 🌧️ /u;
 	$string =~ s/scattered clouds/☁ /u;
 	$string =~ s/shower rain/🌧️ /su;
 	my $sunup = is_sun_up($sunrise, $sunset, $comparetime);
@@ -218,7 +219,6 @@ sub omaconway {
 # param: searchword, returns json answer for current weather or undef if not found
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
-	$searchword = stripc($searchword);
 	dp(__LINE__." FINDWEATHER Searchword: $searchword");
 	my $newurl;
 	my $urltail = $searchword;
@@ -258,11 +258,7 @@ sub FINDWEATHER {
 
 sub FINDFORECAST {
 	my ($searchword, $days, @rest) = @_;
-	#my $returnstring = "\002klo\002 ";	# bold
-	#my $returnstring = "";	# bold
 	my $json;
-
-	$searchword = stripc($searchword);
 	
 	if ($searchword =~ /(\d{5})/) {
 		my $urltail = 'zip='.$1.',fi';		# Search post numbers only from finland
@@ -320,35 +316,40 @@ sub forecastloop2 {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $item->{dt};
 		my $weekdaystring = $weekdayarray[$wday];
 		if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {
-			#dp(__LINE__." weekday: $wday or " . $weekdaystring);
 			if ($index == 0) {
-				#$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country}." \002klo:\002 ";
 				$returnstring = $json->{city}->{name} . ', '.$json->{city}->{country} . ' ';
 			}
 			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},	$json->{city}->{sunset}, $item->{dt});
 			if ($wday eq $daytemp) {
-				$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) ."°C\002)\002, ";
+				$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
 			} else {
 				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 				$returnstring .= "\002".$weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
+			}
+			if ($tiem =~ /12:00:00/) {
+				# end of temperature pair
+				#print("Time: " . $tiem);
+				$returnstring .= "\002)\002, ";
+				#print("returnstring: " . $returnstring);
 			}
 			$daytemp = $wday;
 			$index++;
 		}
 	}
+
+	$returnstring .= "\002)\002";
 	return $returnstring;
 }
 
 sub FINDAREAWEATHER {
 	my ($city, @rest) = @_;
-	$city = stripc($city);
 	my ($lat, $lon, $name) = GETCITYCOORDS($city);   # 1) find existing city from DB by search word
 	dp('name found?: '.$name);
 	my $rubdata = FINDWEATHER($city);                # 2) find one weather from API for sunrise & sunset times
 	if (!defined $lat && !defined $lon && !defined $name && defined $rubdata->{coord}) {
 													# 3) if city was not found from DB
-		$lat = $rubdata->{coord}->{lon};
-		$lon = $rubdata->{coord}->{lat};
+		$lat = $rubdata->{coord}->{lat};
+		$lon = $rubdata->{coord}->{lon};
 		$name = $rubdata->{name};
 	}
 	#($lat, $lon, $name) = GETCITYCOORDS($city) unless ($lat && $lon && $name);      # 3) find existing city again from DB
@@ -428,6 +429,7 @@ sub getSayLine {
 	}
 	my $tempmin = $fi->format_number($json->{main}->{temp_min}, 1);
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
+	my $pressure = $json->{main}->{pressure} . 'hPa';
 	my $temp;
 	if ($tempmin ne $tempmax) {
 		$temp = "($tempmin…$tempmax)°C"
@@ -469,12 +471,12 @@ sub getSayLine {
 		$index++;
 	}
 	my $uv_index = '';
-	#if (defined $json->{uvindex} && $json->{uvindex} ne "" && $json->{uvindex} > 1) {
-	#	$uv_index = ', UVI: '.$json->{uvindex};
-	#}
+	if (defined $json->{uvindex} && $json->{uvindex} ne "" && $json->{uvindex} > 1) {
+		$uv_index = ', UVI: '.$json->{uvindex};
+	}
 	da(__LINE__.': getSayLine weatherdesc: '.$weatherdesc, 'weather descriptions:',$json->{weather}) if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt});
-	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$newdesc.' '.$temp.$apptemp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index;
+	my $returnvalue = $city.', '.$json->{sys}->{country}.': '.$newdesc.' '.$temp.$apptemp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index.', '. $pressure;
 	return $returnvalue;
 }
 
@@ -632,7 +634,6 @@ sub check_city {
 
 sub filter_keyword {
 	my ($msg, $nick, @rest) = @_;
-	#$msg = Encode::decode('UTF-8', $msg);
 
 	my ($returnstring, $city);
 	if ($msg =~ /\!(sää |saa |s )(.*)/ui) {
@@ -677,7 +678,7 @@ sub filter_keyword {
 
 sub stripc {
 	my ($word, @rest) = @_;
-	$word =~ s/['~"`;]//g;
+	$word =~ s/['~"`;\:]//ug;
 	return $word;
 }
 
@@ -720,13 +721,12 @@ sub filter_channel {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	dp(__LINE__." channel: $target, nick: $nick, my nick: " . $server->{nick}) if $DEBUG1;
 	return if ($nick eq $server->{nick});   # self-test
 	return if $nick ~~ @ignorenicks;
 	# Check we have an enabled channel@network
 	if (filter_channel($target, $server->{chatnet}) == 1) {
 		$msg = Encode::decode('UTF-8', $msg);
-		my $sayline = filter_keyword($msg, $nick);
+		my $sayline = filter_keyword(stripc($msg), $nick);
 		$server->command("msg -channel $target $sayline") if $sayline;
 	}
 	return;
@@ -736,7 +736,7 @@ sub sig_msg_priv {
 	my ($server, $msg, $nick, $address) = @_;
 	return if ($nick eq $server->{nick});		# self-test
 	$msg = Encode::decode('UTF-8', $msg);
-	my $sayline = filter_keyword($msg, $nick);
+	my $sayline = filter_keyword(stripc($msg), $nick);
 	$server->command("msg $nick $sayline") if $sayline;
 	return;
 }
