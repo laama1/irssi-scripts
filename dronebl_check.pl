@@ -39,26 +39,26 @@ sub dronebl_check {
     print Dumper $data;
 }
 
+# when user joined your channel
 sub event_msg_joined {
     my ($server, $channel, $nick, $address, $account, $realname) = @_;
     my @ip_parts = split '\@', $address;
-    my $data = $server->send_raw("whois $nick");
-    #print "data:";
-    #print Dumper $data;
+    $server->send_raw("whois $nick");
+
     my $host = $ip_parts[1];
     my $ident = $ip_parts[0];
-    #print "Got: $nick $ident $ip";
+    print "Got nick: $nick, ident: $ident, host: $host";
     dronebl_check($host);
     save_stuff($nick, $ident, $host);
 }
 
 sub event_whois {
-    my ($server, $data, @rest) = @_;
+    my ($server, $data, $srv_addr, @rest) = @_;
     my ($me, $nick, $user, $host) = split(" ", $data);
     my $network = $server->{tag};
     
     #$nick = fc $nick;
-    print("Nick: $nick, me: $me, user: $user, host: $host, rest:");
+    print("Nick: $nick, me: $me, user: $user, host: $host, server address: $srv_addr");
     print Dumper @rest;
 }
 
