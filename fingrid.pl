@@ -21,6 +21,9 @@ $VERSION = '0.1';
 );
 
 =pod
+https://data.fingrid.fi/open-data-api/
+https://data.fingrid.fi/en/pages/apis
+
 variableID's:
 74  Sähköntuotanto suomessa, tuntikohtainen
 75  Tuulivoimatuotanto, tuntienergiatieto
@@ -42,6 +45,8 @@ variableID's:
 198 Sähköntuotanto, yli-/alijäämä
 209 Sähköjärjestelmän käyttötilanne, liikennevalo, reaaliaika
 248 Aurinkovoiman tuotantoennuste, tuntikohtainen
+267 Aurinkovoimaennusteessa käytetty kokonaiskapasiteetti
+306 
 336 Sähköpula, tilannetieto
 
 icons:
@@ -50,7 +55,7 @@ icons:
 
 
 my $DEBUG = 1;
-my $variable_id = 0;
+#my $variable_id = 0;
 #my $apiurl = 'https://api.fingrid.fi/v1/variable/'.$variable_id.'/event/json';
 my $sahkourl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
 #my $apikey = 'OmRf6NFvAaa4DQLeLuMVC6bIbFYCBs0a2o5bO2fo';
@@ -59,13 +64,12 @@ my $apikey;
 our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
 open( AK, '<', $localdir . 'fingrid_api.key') or die "$!";
 while (<AK>) { $apikey = $_; }
-#$apikey =~ s/\n//g;
 chomp($apikey);
 close(AK);
 
 sub get_fingrid_url {
     my ($variable_id, @rest) = @_;
-    return 'https://api.fingrid.fi/v1/variable/event/json/192,193,181,177,188,191';
+    return 'https://api.fingrid.fi/v1/variable/event/json/177,181,188,191,192,193,209,248,336';
 }
 
 sub get_sahko_url {
@@ -97,7 +101,7 @@ sub pub_msg {
         
 		my $newdata = parse_sahko_data($json);
 		
-		$serverrec->command("MSG $target Pörssisähkön hinta: $price, $newdata");
+		$serverrec->command("MSG $target Pörssisähkön hinta veroineen: $price. $newdata");
 		Irssi::print($IRSSI{name}.": request from $nick on channel $target");
 	}
 }
@@ -110,6 +114,8 @@ sub parse_sahko_data {
     my $taajuus = '';       # 177
     my $ydinvoima = '';     # 188
     my $vesivoima = '';     # 191
+    my $liikennevalo = '';  # 209
+    my $aurinkoennuste = '';
     foreach my $element (@$jsondata) {
         if ($element->{variable_id} == 192) {
             $tuotanto = $element->{value} . 'MW';
@@ -123,10 +129,16 @@ sub parse_sahko_data {
             $ydinvoima = '☢️ ' . $element->{value} . 'MW';
         } elsif ($element->{variable_id} == 191) {
             $vesivoima = '🌊 ' . $element->{value} . 'MW';
+        } elsif ($element->{variable_id} == 209) {
+            my $lv_temp = $element->{value};
+            if ($lv_temp > 0) {
+                $liikennevalo = $lv_temp . '!';
+            }
+        } elsif ($element->{variable_id} == 267) {
+            $aurinkoennuste = '😎 ' . $element->{value} . 'MW';
         }
     }
-    return "kokonaistuotanto: $tuotanto, kulutus: $kulutus, $tuulivoima, $ydinvoima, $vesivoima, taajuus: $taajuus";
-
+    return "Kokonaiskulutus: $kulutus. Tuotanto: $tuotanto, $tuulivoima, $ydinvoima, $vesivoima, $aurinkoennuste ~{$taajuus}";
 }
 
 sub fetch_price_data {
@@ -141,13 +153,12 @@ sub fetch_fingrid_data {
     $ua->default_header('x-api-key' => $apikey);
     my $res = $ua->get($uri);
     if ($res->is_success) {
-        my $JSON = JSON->new->utf8;
-        $JSON->convert_blessed(1);
+        #my $JSON = JSON->new->utf8;
+        #$JSON->convert_blessed(1);
         my $json_decd = decode_json($res->decoded_content);
         return $json_decd;
     }
     return;
 }
-
 
 Irssi::signal_add_last('message public', 'pub_msg');
