@@ -5,7 +5,7 @@ use vars qw($VERSION %IRSSI);
 use Data::Dumper;
 use JSON;
 use POSIX;
-
+use DateTime;
 #require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
 use KaaosRadioClass;
 
@@ -51,6 +51,9 @@ variableID's:
 
 icons:
 ☢️ radioactive
+🔌 töpseli
+🌊 water wave
+💨 wind blow
 =cut
 
 
@@ -58,7 +61,6 @@ my $DEBUG = 1;
 #my $variable_id = 0;
 #my $apiurl = 'https://api.fingrid.fi/v1/variable/'.$variable_id.'/event/json';
 my $sahkourl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
-#my $apikey = 'OmRf6NFvAaa4DQLeLuMVC6bIbFYCBs0a2o5bO2fo';
 
 my $apikey;
 our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
@@ -69,21 +71,35 @@ close(AK);
 
 sub get_fingrid_url {
     my ($variable_id, @rest) = @_;
-    return 'https://api.fingrid.fi/v1/variable/event/json/177,181,188,191,192,193,209,248,336';
+    return 'https://api.fingrid.fi/v1/variable/event/json/177,181,188,191,192,193,209,248,267,336';
 }
 
 sub get_sahko_url {
     my ($sec,$min,$hour,$mday,$mon,$year,$wday, $yday, $isdst) = gmtime(time);
-    my $datestring = strftime "%Y-%m-%d", gmtime time;
-    my $timestring = strftime "%H", gmtime time;
+    #my $datestring = strftime "%Y-%m-%d", gmtime time;
+    my $datestring = DateTime->now->ymd;
+    #my $timestring = strftime "%H", gmtime time;
+    my $timestring = DateTime->now->hour;
     # FIXME: hardcoded timezone +3
     my $newurl = $sahkourl . $datestring . '&hour=' .($timestring+3);
     Irssi::print($IRSSI{name} . '> newurl: ' . $newurl);
     return $newurl;
 }
 
+sub get_aurinkovoima_arvio {
+    my $dt = DateTime->now;
+    my $dura_begin = DateTime::Duration->new(hours => -1);
+    my $timestring_begin = ($dt + $dura_begin)->iso8601 . 'Z';
+    my $timestring_end = DateTime->now->iso8601 . 'Z';
+    my $aurinkourl = 'https://api.fingrid.fi/v1/variable/248/events/json?start_time=' . $timestring_begin . '&end_time=' .$timestring_end;
+    my $jsondata = fetch_fingrid_data($aurinkourl);
+    foreach my $data (@$jsondata) {
+        return $data->{value};
+    }
+}
+
 sub get_help {
-	return '!sähkö tulostaa kanavalle tietoja Suomen sähköverkon tilasta. Data haetaan Fingridin rajapinnasta."';
+	return '!sähkö tulostaa kanavalle tietoja Suomen sähköverkon tilasta. Data haetaan Fingridin rajapinnasta. Sähkön hinta tulee muualta!"';
 }
 
 sub pub_msg {
@@ -96,10 +112,11 @@ sub pub_msg {
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /(!sähkö)/sgi) {
 		return if KaaosRadioClass::floodCheck();
-		my $json = fetch_fingrid_data();
+		my $json = fetch_fingrid_data(get_fingrid_url());
+        my $av_arvio = get_aurinkovoima_arvio();
         my $price = fetch_price_data() . 'c/kWh';
         
-		my $newdata = parse_sahko_data($json);
+		my $newdata = parse_sahko_data($json, $av_arvio);
 		
 		$serverrec->command("MSG $target Pörssisähkön hinta veroineen: $price. $newdata");
 		Irssi::print($IRSSI{name}.": request from $nick on channel $target");
@@ -107,7 +124,8 @@ sub pub_msg {
 }
 
 sub parse_sahko_data {
-    my ($jsondata, @rest) = @_;
+    my ($jsondata, $av_arvio, @rest) = @_;
+    #print Dumper $jsondata;
     my $tuotanto = '';      # 192
     my $kulutus = '';       # 193
     my $tuulivoima = '';    # 181
@@ -115,7 +133,9 @@ sub parse_sahko_data {
     my $ydinvoima = '';     # 188
     my $vesivoima = '';     # 191
     my $liikennevalo = '';  # 209
-    my $aurinkoennuste = '';
+    my $aurinkoennuste = '';    # 248 and 267
+    my $aurinkokapa = '';   # 267
+    my $sahkopula = '';     # 336
     foreach my $element (@$jsondata) {
         if ($element->{variable_id} == 192) {
             $tuotanto = $element->{value} . 'MW';
@@ -134,27 +154,34 @@ sub parse_sahko_data {
             if ($lv_temp > 0) {
                 $liikennevalo = $lv_temp . '!';
             }
+            print($IRSSI{name} . '> liikennevalo: ' . $lv_temp);
         } elsif ($element->{variable_id} == 267) {
-            $aurinkoennuste = '😎 ' . $element->{value} . 'MW';
+            # solar production capacity
+            $aurinkokapa =  $element->{value} . 'MW';
+        } elsif ($element->{variable_id} == 248) {
+            #$aurinkoennuste = '😎 ' . $element->{value} . '/';
+        } elsif ($element->{variable_id} == 336) {
+            $sahkopula = $element->{value};
         }
     }
-    return "Kokonaiskulutus: $kulutus. Tuotanto: $tuotanto, $tuulivoima, $ydinvoima, $vesivoima, $aurinkoennuste ~{$taajuus}";
+    $aurinkoennuste = '😎 ' . $av_arvio . '/';
+    return "Kokonaiskulutus: $kulutus. Tuotanto: $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}${aurinkokapa} ~${taajuus}";
 }
 
 sub fetch_price_data {
     my $uri = get_sahko_url();
     my $json_string = KaaosRadioClass::getJSON($uri);
+    return undef if $json_string eq '-1';
     return $json_string->{price};
 }
 
 sub fetch_fingrid_data {
-    my $uri = URI->new(get_fingrid_url());
+    my ($url, @rest) = @_;
+    my $uri = URI->new($url);
     my $ua = LWP::UserAgent->new;
     $ua->default_header('x-api-key' => $apikey);
     my $res = $ua->get($uri);
     if ($res->is_success) {
-        #my $JSON = JSON->new->utf8;
-        #$JSON->convert_blessed(1);
         my $json_decd = decode_json($res->decoded_content);
         return $json_decd;
     }
