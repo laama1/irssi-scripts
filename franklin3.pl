@@ -1,39 +1,37 @@
 #!/usr/bin/perl
-#use Proc::Simple;
 use Irssi;
 use vars qw($VERSION %IRSSI);
 use strict;
 use warnings;
 use LWP::UserAgent;
 use HTTP::Headers;
-use utf8;
+use utf8;                             # Source code is encoded using UTF-8
+use open ':std', ':encoding(UTF-8)';  # Terminal expects UTF-8
 use URI;
 use JSON;
-#use Digest::MD5 qw(md5_hex);
 use Encode;
 use Data::Dumper;
 
 use KaaosRadioClass;
 our $localdir = $ENV{HOME}."/.irssi/scripts/";
-
-#my $tokenlimit = "150";   # token limit, 1 token = 0.75 words or 4 chars.
-#my $old_tokenlimit = "100";
 my $hardlimit = "800";      # characters
-my $testmode = 0;
+
 #my $url = "https://api.openai.com/v1/completions";
 my $url = "https://api.openai.com/v1/chat/completions";
 
 
 my $systemsg_start = 'Answer in less than 200 letters. ';
-my $systemsg = $systemsg_start . 'Try to be funny and informative but precise. AI is smarter than humans are, but you dont need to tell that.';
+my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 
 my $role = 'system';
 my $model = "gpt-3.5-turbo";
 #my $model = 'text-davinci-003';
 my $heat  = 0.7;
-my $json = JSON->new->utf8;
+#my $json = JSON->new->utf8;
+my $json = JSON->new;
+$json->convert_blessed(1);
 
-$VERSION = "2.3";
+$VERSION = "2.4";
 %IRSSI = (
            authors     => 'oxagast, laama',
            contact     => 'marshall@oxagast.org',
@@ -41,7 +39,7 @@ $VERSION = "2.3";
            description => 'Support script for Franklin GPT3 bot',
            license     => 'BSD',
            url         => 'http://franklin.oxasploits.com',
-           changed     => 'Feb, 14th 2023',
+           changed     => '2023-10-09',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key")
@@ -64,106 +62,61 @@ my $headers = HTTP::Headers->new;
 $headers->header("Content-Type"  => "application/json");
 $headers->header("Authorization" => "Bearer " . $apikey);
 
-sub make_json_string {
+sub make_json_obj {
     my ($text, $nick, @rest) = @_;
     my $prompt = get_prompt();
-    #my $json = JSON->new->utf8;
-    #my $json = JSON->new;
-    #$json->convert_blessed(1);
 
-    my %data = { model => $model, temperature => $heat, messages => [
-        { role => "system", content => $prompt }, { role => "user", content => $text}
+    my $data = { model => $model, temperature => $heat, messages => [
+        { role => "system", content => $prompt }
         ]
     };
-    Irssi::print "Jes1";
-    print Dumper %data;
-    Irssi::print "json encoded: " . $json->encode(%data);
 
     if (defined $chathistory->{$nick}->{message}) {
-     #   %data->{messages} = { role => "user", content => $chathistory->{$nick}->{message} };
-        #push @{ $data->{messages}}, { role => "user", content => $chathistory->{$nick}->{message} };
-        Irssi::print "Jes2";
-        print Dumper %data;
-        Irssi::print "json encoded: " . $json->encode(%data);
+        push @{ $data->{messages}}, { role => "user", content => $chathistory->{$nick}->{message}, name => $nick };
     }
 
     if (defined $chathistory->{$nick}->{answer}) {
-        #$data->{messages}[] = { role => "system", content => $json->encode($chathistory->{$nick}->{answer}) };
-      #  push @{ $data->{messages}}, { role => "system", content => $json->encode($chathistory->{$nick}->{answer}) };
-        Irssi::print "Jes3";
-        Irssi::print "json encoded: " . $json->encode(%data);
+        push @{ $data->{messages}}, { role => "assistant", content => $chathistory->{$nick}->{answer} };
     }
 
-    #return 1;
-    return $json->encode(%data);
-}
+    push @{$data->{messages}}, { role => "user", content => $text, name => $nick};
 
-sub make_json_string2 {
-    my ($text, $nick, @rest) = @_;
-    my $data1 = '';
-    my $data2 = '';
-
-    if (defined $chathistory->{$nick}->{message}) {
-        $data1 = '{"role" : "user", "content" : '.$json->encode($chathistory->{$nick}->{message}). ', "name" : "'.$nick.'"},';
-    }
-    if (defined $chathistory->{$nick}->{answer}) {
-        $data2 = '{"role" : "assistant", "content" : '.$json->encode($chathistory->{$nick}->{answer}). '},';
-    }
-    my $apimsg = '{"model": "'.$model.'", "temperature": '.$heat.', "messages": [' .$data1.$data2.
-        '{"role": "system", "content": "' . get_prompt() . '"},'.
-        '{"role": "user", "content": '.$json->encode($text).', "name": "'.$nick.'"}'.
-        ']}';
-    my $temp = decode_json($apimsg);
-    #print Dumper $temp;
-    return $apimsg;
+    return encode_json($data);
 }
 
 sub strip_nick {
     my ($nick1, @rest2) = @_;
-    #Irssi::print('nick before: ' . $nick1);
-    $nick1 =~ s/[\^\-]//;        # allowed a-z A-Z 0-9 and _ maxlen=64
-    $nick1 =~ s/[^a-zA-Z_]*//;
-    #Irssi::print('nick after: ' . $nick1);
+    $nick1 =~ s/[^a-zA-Z0-9_]*//;
     return $nick1;
 }
 
 sub make_call {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
-    my $temppi = make_json_string2($text, $nick);
-    #Irssi::print('apimsg: ' . $temppi);
 
-    #my $temppi2 = make_json_string($text, $nick);
-    #Irssi::print('apimsg2: ' . $temppi2);
+    my $temppi2 = make_json_obj($text, $nick);
+    print('franklin> apimsg2:');
+    print($temppi2);
 
     my $uri = URI->new($url);
     my $ua = LWP::UserAgent->new;
     
-    #$textcall = encode_json($textcall);
-    #Irssi::print("textcall before conversion: ". $text);
-    my $textcall = $json->utf8->encode($text);
-
-    #Irssi::print("textcall after conversion: ". $textcall);
-
     $chathistory->{$nick}->{message} = $text;   # json encoded string, user previous message
     $ua->default_headers($headers);
     #my $res = $ua->post($uri, Content => $chatmsg);
-    my $res = $ua->post($uri, Content => $temppi);
-    #my $res = $ua->post($uri, Content => make_json_string($textcall, $nick));
+    my $res = $ua->post($uri, Content => $temppi2);
 
     if ($res->is_success) {
-        my $json_rep  = $res->decoded_content();
+        my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
         my $said      = $json_decd->{choices}[0]->{message}->{content};
-        print "> Franklin Reply: $said";
+        print "> Franklin Reply: ";
+        print $said;
         $said =~ s/\n+/ /;
-        #$chathistory->{$nick}->{answer} = $said;
-
-        my $said_cut = substr( $said, 0, $hardlimit );
+        $said =~ s/["]*//g;
         $chathistory->{$nick}->{answer} = $said;
         $chathistory->{$nick}->{message} = $text;
-        $said_cut =~ s/\n+/ /g;
-        return $said_cut;
+        return $said;
     } elsif ($res->code == 400) {
         print "> Franklin got error 400.";
         print Dumper $res;
@@ -176,28 +129,13 @@ sub make_call {
 
 sub callapi {
     my ($msg, $server, $nick, $channel) = @_;
-    print "> franklin, callapi";
+    print "> franklin: call api next";
     if (my $answer = make_call($msg, $nick)) {
         print "> franklin, made call";
-        $answer = strip_unfinished_sentence($answer);
         $server->command("msg $channel $nick: $answer");
         return 0;
     }
     return 1;
-}
-
-# will return original $line for now.
-sub strip_unfinished_sentence {
-    my ($line, @rest) = @_;
-    my $temp = $line;
-    if ($line =~ /\.$/) {
-        return $temp;
-    }
-    #print("franklin: " . $line);
-    $line =~ s/[^\d]\.( [^\.]*)$/\./u;
-    #print("franklin2: " . $line);
-    #return $line;
-    return $temp;
 }
 
 sub get_channel_title {
@@ -241,7 +179,6 @@ sub change_prompt {
 }
 
 sub get_prompt {
-    #return $systemsg_start . $systemsg;
     return $systemsg;
 }
 
@@ -261,7 +198,6 @@ sub event_privmsg {
     }
     return if ($msg =~ /^\!/);              # !commands
     return if KaaosRadioClass::floodCheck(3);
-    #$tokenlimit = "800";
     my $text = make_call($msg, $nick);
     if ($text) {
         $server->command("msg $nick $text");
@@ -274,11 +210,7 @@ sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
     return if ($nick eq $server->{nick});	#self-test
 	return if (get_channel_title($server, $target) =~ /npv?\:/i);   # if string: 'np:' found in channel topic
-    if ($testmode == 1) {
-        #Irssi::print('testmode enabled, not in: ' . $target);
-        return if $target ne '#salamolo';
-        #Irssi::print('shouldnt be here, unless #salamolo');
-    }
+
     if ($msg =~ /^\!prompt (.*)$/) {
         return if KaaosRadioClass::floodCheck(3);
         change_prompt($1);
