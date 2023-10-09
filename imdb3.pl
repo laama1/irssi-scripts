@@ -11,7 +11,7 @@ use Data::Dumper;
 use KaaosRadioClass;		# LAama1 26.10.2016
 
 #omdb api http://omdbapi.com/
-$VERSION = '2021-07-06';
+$VERSION = '2023-10-08';
 %IRSSI = (
         authors     => 'LAama1',
         contact     => "LAama1 #kaaosleffat",
@@ -29,19 +29,40 @@ my $json = JSON->new();
 $json->allow_blessed(1);
 
 # OMDB api
-my $apikey = 'a06b4d3f';
+our $localdir = $ENV{HOME}."/.irssi/scripts/";
+my $apikey = '';
+open(AK, '<', $localdir . "omdb_api.key") or die('Define OMDB api key.');
+while (<AK>) {
+    $apikey = $_;
+}
+#$apikey =~ s/\n//g;
+chomp($apikey);
+close(AK);
+
+my $helpmessage = '!imdb <hakusana> -- Hae leffojen tietoja IMDB:stä hakusanalla. Tulostaa ensimmäisen osuman. Kts. https://bot.8-b.fi/#i';
 
 sub print_help {
 	my ($server, $target, $is_enabled) = @_;
-	my $helpmessage = '!imdb <hakusana> -- Hae leffojen tietoja IMDB:stä hakusanalla. Tulostaa ensimmäisen osuman. Kts. https://bot.8-b.fi/#i'.
-	' Käytössä (kanavalla: '.$target.'): '."$is_enabled";
+	my $msg = $helpmessage . ' Käytössä (kanavalla: '.$target.'): '."$is_enabled";
 	if ($is_enabled) {
-		$helpmessage .= '. Deaktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb off.';
+		$msg .= '. Deaktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb off.';
 	} else {
-		$helpmessage .= '. Aktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb on.';
+		$msg .= '. Aktivoi skripti (kanavalla: '.$target.') kirjoittamalla: !imdb on.';
 	}
-	sayit($server, $target, $helpmessage);
+	sayit($server, $target, $msg);
 	return 0;
+}
+
+sub event_privmsg {
+	my ($server, $msg, $nick, $address) = @_;
+	return if ($nick eq $server->{nick});   #self-test
+	return unless ($msg =~ /^!imdb/i);
+	return if KaaosRadioClass::floodCheck() == 1;
+	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
+		sayit($server, $nick, $helpmessage);
+		return;
+	}
+
 }
 
 sub do_imdb {
@@ -149,8 +170,6 @@ sub sig_imdb_search {
 
 sub imdb_fetch {
 	my ($server, $target, $request, $query, $param, @rest) = @_;
-	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param");
-	#unless ($request) {
 	if ($query eq '' && $request eq '') {
 		sayit($server, $target, 'En älynnyt..');
 		return 0;
@@ -161,15 +180,10 @@ sub imdb_fetch {
 	my $url = "http://www.omdbapi.com/?${param}=${request}${query}&apikey=$apikey" if ($param and ($request or $query));
 	#my $url = "http://www.theimdbapi.org/api/find/movie?title=${query}";
 
-	dp(__LINE__.": target: $target, request: $request, query: $query, param: $param, url: $url");
-
 	my $imdb = do_search($url);
 
 	if (!defined $imdb) {
 		my $saystring = search_omdb($query);
-		dp("Saystring: $saystring, query: $query");
-		#my $saystring = search_theimdb($query);
-		#my $saystring = search_theimdb($url);
 		if (defined $saystring) {
 			sayit($server, $target, $saystring);
 		} else {
@@ -219,7 +233,7 @@ sub search_omdb {
 	dp('search_omdb url: '.$url);
 	my $imdb = eval {$json->utf8->decode($got)};
 	
-	return if $@;
+	return "error" if $@;
 	#return -1 unless $imdb;
 	
 	if ($imdb ne "0" && $imdb->{totalResults} && $imdb->{totalResults} > 1) {
@@ -421,3 +435,4 @@ Irssi::signal_add('imdb_search_id', 'sig_imdb_search');
 Irssi::settings_add_str('imdb', 'imdb_enabled_channels', 'Kaaos-komennot');
 Irssi::signal_add('message public', 'do_imdb');
 Irssi::signal_add('message own_public', 'sig_msg_pub_own');
+Irssi::signal_add_last('message private', 'event_privmsg');
