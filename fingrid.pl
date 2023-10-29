@@ -114,11 +114,16 @@ sub pub_msg {
 		return if KaaosRadioClass::floodCheck();
 		my $json = fetch_fingrid_data(get_fingrid_url());
         my $av_arvio = get_aurinkovoima_arvio();
-        my $price = fetch_price_data() . 'c/kWh';
+        my $price = '';
+        if ($price = fetch_price_data()) {
+             $price = 'Pörssisähkön hinta veroineen: '.$price.'c/kWh.'
+        } else {
+            $price = 'Sähkön hintatietoa ei saatu.'
+        };
         
 		my $newdata = parse_sahko_data($json, $av_arvio);
 		
-		$serverrec->command("MSG $target Pörssisähkön hinta veroineen: $price. $newdata");
+		$serverrec->command("MSG $target $price $newdata");
 		Irssi::print($IRSSI{name}.": request from $nick on channel $target");
 	}
 }
