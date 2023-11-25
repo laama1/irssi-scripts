@@ -5,6 +5,8 @@ use DBI qw(:sql_types);
 use warnings;
 use strict;
 use utf8;
+binmode STDOUT, ':utf8';
+binmode STDIN, ':utf8';
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
@@ -19,10 +21,12 @@ $VERSION = '2023-01-09';
 	url         => '#salamolo',
 	changed     => $VERSION
 );
+#TODO
+# check if you are op
 
 # config
 my $DEBUG = 1;
-my $votelimit = 3;		# how many votes needed to kick someone
+my $votelimit = 3;		# how many votes is needed to kick someone
 my $myname = 'kickpelle.pl';
 my $badwordfile = Irssi::get_irssi_dir().'/scripts/badwordlist.txt';
 
@@ -36,7 +40,7 @@ my $helptext = 'Votea pelle ulos kanavalta kirjoittamalla kanavalla: "!kick pell
 Operaattorit voivat käyttää myös privassa: "!kick #kanava <nick>", jolloin henkilö lähtee ensimmäisestä osumasta!';
 my $helptext2 = 'Kickpelleskripti. Ohje: https://bot.8-b.fi/#kick';
 
-my $joinmessage = 'Achtung. Olen kanavan sheriffi. Potkin väkeä jos he mainitsevat kiellettyjä sanoja. Listan kielletyistä sanoista saat privaasi komennolla: "!badwords". Opit voivat kasvattaa listaa, kirjoita "!help badword" niin saat privaasi ohjeet.';
+my $joinmessage = 'Achtung. Olen kanavan sheriffi. Potkin väkeä jos he mainitsevat kiellettyjä sanoja. Listan kielletyistä sanoista saat privaasi komennolla: !badwords tai !kirosanat. Opit voivat kasvattaa listaa, kirjoita "!help badword" niin saat privaasi ohjeet.';
 
 sub print_help {
 	my ($server, $target) = @_;
@@ -57,6 +61,7 @@ sub print_joinmsg {
 	return;
 }
 
+# private message to nick
 sub msgit {
 	my ($server, $nick, $text, @rest) = @_;
 	$server->command("msg $nick $text");
@@ -79,7 +84,7 @@ sub getStats {
 
 sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
-	# TODO: sanitize
+	# TODO: sanitize badsword
 	if ($badsword ~~ @badwords) {
 		return '';
 	}
@@ -127,7 +132,7 @@ sub GETBADWORDLIST {
 		dp(__LINE__.' badword: '.$test);
 		push @badwords, $test;
 	}
-	da(@badwords);
+	#da(@badwords);
 	derpint('Badwordfile '.$badwordfile.' loaded.');
 	return;
 }
@@ -144,7 +149,7 @@ sub kickPerson {
 	}
 
 	$publicvotes->{$nick}->{$channel}->{votecount} += 1;
-	$publicvotes->{$nick}->{when} = localtime time;
+	$publicvotes->{$nick}->{when} = localtime time;		# format like this for informational purposes
 	$publicvotes->{$nick}->{$channel}->{reason} = $reason;
 
 	my $howmany = $publicvotes->{$nick}->{$channel}->{votecount};
@@ -198,7 +203,6 @@ sub event_privmsg {
 		dp(__LINE__.": event_privmsg kickban 3 params: $1 $2 $3");
 		my $banchannel = $1;
 		my $bannick = $2;
-		#my $banreason = 'dat ass';
 		my $banreason = $3;
 		if (get_nickrec($server, $banchannel, $bannick)) {
 			if (ifop($server, $banchannel, $nick)) {
@@ -246,11 +250,12 @@ sub event_pubmsg {
 	my @enabled = split / /, $enabled_raw;
 	return unless grep /$target/, @enabled;
 
-	if ($msg =~ /^!help kick(pelle)?/i) {
+	if ($msg =~ /^!help kick/i) {
 		print_help($server, $target);
 		return;
 	} elsif ($msg =~ /^!help badword/) {
 		msgit($server, $nick, $helptext2);
+		msgit($server, $nick, $helptext);
 		return;
 	} elsif ($msg =~ /^!kirosanat$/gi || $msg =~ /^!badwords$/gi) {
 		my $string = 'Bad words: ';
@@ -288,7 +293,7 @@ sub event_pubmsg {
 			sayit($server, $target, 'Ei löytynyt filtteristä, tai sattui virhe.');
 		}
 		return;
-	} elsif ($msg =~ /^!badword add (.*)$/gi) {
+	} elsif ($msg =~ /^!badword add (.*)$/gi || $msg =~ /^!badword (.*)$/gi) {
 		if (ADDBADWORD($1)) {
 			sayit($server, $target, "Lisättiin '$1' kirosanafiltteriin.");
 		} else {

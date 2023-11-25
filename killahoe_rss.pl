@@ -3,15 +3,14 @@ use strict;
 use Irssi;
 use utf8;
 use KaaosRadioClass;		# LAama1 9.5.2018
-use XML::RSS;
+use XML::RSS;				# https://metacpan.org/pod/XML::RSS
 use LWP::Simple;
 use Data::Dumper;
 use DBI;
 use HTTP::Date;
 use HTML::Entities qw(decode_entities);
 
-# http://www.perl.com/pub/1998/12/cooper-01.html
-
+# http://www.perl.com/pub/1998/12/cooper-01.html (obosolete link for XML::Parser)
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '2018-05-11';

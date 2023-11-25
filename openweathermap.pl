@@ -46,7 +46,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -82,6 +82,7 @@ UTF8 emojis:
 🌇 sunset over buildings
 🌞 Sun With Face
 ☀️ Sun
+😎 Smiling face with sunglasses
 🌆 cityscape at dusk
 🌉 bridge at night
 🌃 night with stars
@@ -261,7 +262,7 @@ sub FINDFORECAST {
 	my $json;
 	
 	if ($searchword =~ /(\d{5})/) {
-		my $urltail = 'zip='.$1.',fi';		# Search post numbers only from finland
+		my $urltail = 'zip='.$1.',fi';		# Search postcode numbers only from finland
 		$json = request_api($forecastUrl.$urltail);
 	} else {
 		$json = request_api($forecastUrl.'q='.$searchword);
@@ -685,6 +686,7 @@ sub stripc {
 sub request_api {
 	my ($url, @rest) = @_;
 	$url .= $apikey;
+	dp(__LINE__ . ' url: ' . $url);
 	return KaaosRadioClass::getJSON($url);
 }
 

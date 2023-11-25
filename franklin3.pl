@@ -88,9 +88,8 @@ sub make_json_obj {
     my $prompt = get_prompt();
     my $timediff = 3600;    # 1h in seconds
 
-    if (defined $chathistory->{$nick}->{timestamp}) {
+    defined $chathistory->{$nick}->{timestamp} && 
         $timediff = (time - $chathistory->{$nick}->{timestamp});
-    }
 
     my $data = { model => $model, temperature => $heat, messages => [
             { role => "system", content => $prompt }
@@ -162,7 +161,7 @@ sub frank {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     return if $nick eq $server->{nick};	#self-test
 	# if string 'npv?:' found in channel topic. np: or npv:
-	return if (get_channel_title($server, $channel) =~ /npv?\:/i);
+	# removed 2023-11-01 return if (get_channel_title($server, $channel) =~ /npv?\:/i);
 
     my $mynick = quotemeta $server->{nick};
     if ($msg =~ /^$mynick[\:,]? (.*)/ ) {
@@ -183,15 +182,19 @@ sub frank {
 
 sub make_dalle_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howMany, size => "256x256", response_format => "b64_json"};
+    my $data = {prompt => $prompt, n => $howMany, size => "512x512", response_format => "b64_json"};
     return encode_json($data);
+}
+
+sub make_vision_json {
+    
 }
 
 sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     return if $nick eq $server->{nick};	#self-test
 	# if string 'npv?:' found in channel topic. np: or npv:
-	return if (get_channel_title($server, $channel) =~ /npv?\:/i);
+	# removed 2023-11-01 return if (get_channel_title($server, $channel) =~ /npv?\:/i);
     #my $mynick = quotemeta $server->{nick};
     if ($msg =~ /^!dalle (.*)/ ) {
         my $query = $1;
@@ -219,7 +222,7 @@ sub dalle {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
                     if (save_file_blob($json_decd->{data}[$index]->{b64_json}, $filename) >= 0) {
                         #$server->command("msg -channel $channel $nick: https://bot.8-b.fi/dale/$filename");
-                        $answer .= "https://bot.8-b.fi/dale/$filename, ";
+                        $answer .= "https://bot.8-b.fi/dale/$filename ";
                     }
                     $index++;
                 }
@@ -287,7 +290,7 @@ sub event_privmsg {
 sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
     return if ($nick eq $server->{nick});	#self-test
-	return if (get_channel_title($server, $target) =~ /npv?\:/i);   # if string: 'np:' found in channel topic
+	# removed 2023-11-01 return if (get_channel_title($server, $target) =~ /npv?\:/i);   # if string: 'np:' found in channel topic
 
     if ($msg =~ /^\!prompt (.*)$/) {
         return if KaaosRadioClass::floodCheck(3);

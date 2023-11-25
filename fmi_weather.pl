@@ -8,8 +8,6 @@ use Fcntl;
 
 #use Data::Dumper;
 use DateTime::Format::Strptime;
-#use Time::Piece;
-#use Encode qw/encode decode/;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
@@ -25,7 +23,7 @@ $VERSION = '2022-03-11';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
@@ -113,7 +111,6 @@ sub parse_extrainfo_from_link {
 	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
 		$date = $2;
 		DP(__LINE__.' date found: '.$date);
-		# TODO: Convert date to correct TZ
 		# argument example: Tue, 04 Sep 2018 22:37:34 +0300 (using "%a, %d %b %Y %H:%M:%S %z")
 		# We need: 15.3.2023 15:56
 		my $formatter = DateTime::Format::Strptime->new(
@@ -138,7 +135,6 @@ sub parse_extrainfo_from_link {
 			$last_meteo = $meteotext;
 		}
 	} else {
-		DP(__LINE__.' NOT FOUND :(');
 		return undef;
 	}
 	return 1;
@@ -153,7 +149,7 @@ sub event_pubmsg {
 		# if string: 'np:' found in channel topic
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			# FIXME: if $nick == $target eg. kaaosradio
-			return;
+			# removed 2023-11-01 return;
 		}
 		$server->command("msg $target $last_meteo");
 	}
@@ -173,7 +169,7 @@ sub get_channel_title {
 }
 
 sub fmi_update {
-	echota(__LINE__." Fetching new weather data...");
+	echota(" Fetching new weather data...");
 	parse_extrainfo_from_link($fmiURL);
 }
 
@@ -182,9 +178,10 @@ sub timeout_stop {
 }
 
 sub timeout_1h {
-	echota(__LINE__.": Aja1");
+	echota("Aja1");
 	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
+	DP($retval);
 }
 sub timeout_545 {
 	my $command = 'echo "echo \"Aja2\" | nc -U '.$socket_file.'" | at 5:45 2>&1';

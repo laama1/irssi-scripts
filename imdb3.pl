@@ -29,7 +29,7 @@ my $json = JSON->new();
 $json->allow_blessed(1);
 
 # OMDB api
-our $localdir = $ENV{HOME}."/.irssi/scripts/";
+our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
 my $apikey = '';
 open(AK, '<', $localdir . "omdb_api.key") or die('Define OMDB api key.');
 while (<AK>) {
