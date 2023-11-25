@@ -23,7 +23,7 @@
 use warnings;
 use strict;
 use Irssi;
-#use Irssi::Signals;
+
 use LWP::UserAgent;
 #use HTTP::Cookies;
 use HTTP::CookieJar::LWP;
@@ -715,6 +715,7 @@ sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');
+	#return if ($nick eq 'mx');
 	#return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');
 
 	$dontprint = 0;
@@ -754,9 +755,8 @@ sub sig_msg_pub {
 	my $isDrunk = KaaosRadioClass::Drunk($nick);
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_topic($server, $target) =~ /npv?\:/i) {
-			$dontprint = 1;
-		} else {
-			dp(__LINE__.':np NOT FOUND from channel title') if $DEBUG1;
+			# disabled 2023-11-01 $dontprint = 1;
+			$dontprint = 0;
 		}
 	}
 
@@ -1039,14 +1039,14 @@ sub createAnswerFromResults {
 
 # Dont spam these domains.
 sub dontPrintThese {
-	my ($text, @rest) = @_;
-	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*aamulehti\.fi/i;
-	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*kuvaton\.com/i;
-	#return 1 if $text =~ /http:\/\/(m\.)?(www\.)*explosm\.net/i;
-	
+	my ($url, @rest) = @_;
+	#return 1 if $url =~ /aamulehti\.fi/i;
+	#return 1 if $text =~ /kuvaton\.com/i;
+	#return 1 if $text =~ /explosm\.net/i;
 	return 0;
 }
 
+# sites that report utf8 encoding falsely
 sub falseUtf8Pages {
 	my ($text, @rest) = @_;
 	return 1 if $text =~ /iltalehti\.fi/i;
@@ -1056,6 +1056,7 @@ sub falseUtf8Pages {
 	return 0;
 }
 
+# we dont want to show description for these
 sub noDescForThese {
 	my ($url, @rest) = @_;
 	return 1 if $url =~ /youtube\.com/i;
