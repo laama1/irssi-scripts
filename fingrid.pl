@@ -75,14 +75,26 @@ sub get_fingrid_url {
 }
 
 sub get_sahko_url {
-    my ($sec,$min,$hour,$mday,$mon,$year,$wday, $yday, $isdst) = gmtime(time);
+    #my ($sec,$min,$hour,$mday,$mon,$year,$wday, $yday, $isdst) = gmtime(time);
     #my $datestring = strftime "%Y-%m-%d", gmtime time;
-    my $datestring = DateTime->now->ymd;
+    my $datetime = DateTime->now(time_zone => 'Europe/Helsinki');
+    #my $datestring = DateTime->now->ymd;
+    my $datestring = $datetime->ymd;
     #my $timestring = strftime "%H", gmtime time;
-    my $timestring = DateTime->now->hour;
-    # FIXME: hardcoded timezone +3
-    my $newurl = $sahkourl . $datestring . '&hour=' .($timestring+3);
-    Irssi::print($IRSSI{name} . '> newurl: ' . $newurl);
+    #my $timestring = DateTime->now->hour;
+    my $timestring = $datetime->hour;
+    # FIXED: hardcoded timezone +3
+
+    my @localtime = localtime();
+
+    # Get the current GMT time
+    my @gmtime = gmtime();
+
+    # Calculate the time difference in hours
+    my $timezone = ($localtime[2] - $gmtime[2]);
+
+    my $newurl = $sahkourl . $datestring . '&hour=' .($timestring);
+    Irssi::print($IRSSI{name} . '> pörssisähkö-url (timezone: '.$timezone.'h, offset: '.$datetime->offset.'): ' . $newurl);
     return $newurl;
 }
 
