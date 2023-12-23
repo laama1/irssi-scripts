@@ -31,7 +31,7 @@ my $role = 'system';
 my $model = "gpt-3.5-turbo";
 #my $model = 'text-davinci-003';
 my $heat  = 0.7;
-
+my $hardlimit = 500;
 #my $json = JSON->new->utf8;
 my $json = JSON->new;
 $json->convert_blessed(1);
@@ -129,7 +129,7 @@ sub make_call {
         print __LINE__;
         print Dumper $json_decd;
         print Dumper $json_decd->{usage};
-        my $said      = $json_decd->{choices}[0]->{message}->{content};
+        my $said = $json_decd->{choices}[0]->{message}->{content};
         print $IRSSI{name}." reply> " . $said;
         $said =~ s/\n+/ /;
         $said =~ s/\s{2,}//g;
@@ -169,10 +169,11 @@ sub frank {
         return if KaaosRadioClass::floodCheck(3);
         print $IRSSI{name}."> $nick asked: $textcall";
         my $wrote = 1;
-        for (my $i = 0; $i < 2; $i++) {
+        for (0..2) {
             # @todo fork or something
             if (my $answer = make_call($textcall, $nick)) {
-                $server->command("msg -channel $channel $nick: $answer");
+                my $answer_cut = substr($answer, 0, $hardlimit);
+                $server->command("msg -channel $channel $nick: $answer_cut");
                 last;
             }
             sleep 1;
@@ -193,13 +194,8 @@ sub make_vision_json {
 sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     return if $nick eq $server->{nick};	#self-test
-	# if string 'npv?:' found in channel topic. np: or npv:
-	# removed 2023-11-01 return if (get_channel_title($server, $channel) =~ /npv?\:/i);
-    #my $mynick = quotemeta $server->{nick};
     if ($msg =~ /^!dalle (.*)/ ) {
         my $query = $1;
-        #print $IRSSI{name}.'> dalle query: ' . $query);
-
         my $request = make_dalle_json($query, $nick);
         print('request dalle json: ' . $request);
         
@@ -209,19 +205,14 @@ sub dalle {
         if ($res->is_success) {
             my $json_rep  = $res->content();
             my $json_decd = decode_json($json_rep);
-            print "dalle request success!";
-            #print __LINE__;
-            #print Dumper $res;
             
             if (defined $json_decd->{data}) {
-                #print "url1: " . $json_decd->{data}[0]->{url};
                 my $time = time;
                 my $answer = 'DALL-e results: ';
                 my $index = 0;
                 while ($index < $howMany) {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
                     if (save_file_blob($json_decd->{data}[$index]->{b64_json}, $filename) >= 0) {
-                        #$server->command("msg -channel $channel $nick: https://bot.8-b.fi/dale/$filename");
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
                     }
                     $index++;
@@ -290,8 +281,6 @@ sub event_privmsg {
 sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
     return if ($nick eq $server->{nick});	#self-test
-	# removed 2023-11-01 return if (get_channel_title($server, $target) =~ /npv?\:/i);   # if string: 'np:' found in channel topic
-
     if ($msg =~ /^\!prompt (.*)$/) {
         return if KaaosRadioClass::floodCheck(3);
         change_prompt($1);

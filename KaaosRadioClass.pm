@@ -41,7 +41,7 @@ my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 my $tsfile = "$currentDir/ts";
 my $djlist = "$currentDir/dj_list.txt";
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
 my $floodernick = '';
@@ -436,8 +436,8 @@ sub fetchResponse {
 }
 
 sub fetchUrl {
-	my ($url, $getsize);
-	($url, $getsize) = @_;
+	my ($url, $getsize, $headers);
+	($url, $getsize, $headers) = @_;
 	dp(__LINE__.': fetchUrl url: '. $url);
 	#$url = decode_entities($url);
 	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
@@ -447,6 +447,9 @@ sub fetchUrl {
 		autosave => 1,
 	);
 	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
+	if (defined $headers) {
+		$ua->default_headers($headers);
+	}
 	$ua->cookie_jar($cookie_jar);
 	$ua->timeout(3);				# 3 seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
@@ -483,8 +486,8 @@ sub fetchUrl {
 }
 
 sub getJSON {
-	my ($url, @rest) = @_;
-	my $response = fetchUrl($url, 0);
+	my ($url, $headers, @rest) = @_;
+	my $response = fetchUrl($url, 0, $headers);
 	if ($response && $response eq '-1') {
 		dp(__LINE__.': error fetching url!');
 		return -1;
@@ -507,13 +510,13 @@ sub getXML {
 sub dp {
 	return unless $DEBUG == 1;
 	#Irssi::print("$myname-debug: @_");
-	print("debug: @_");
+	print("krc-debug: @_");
 	return;
 }
 
 sub da {
 	return unless $DEBUG == 1;
-	print('debug array:');
+	print('krc-debug array:');
 	print Dumper (@_);
 	return;
 }
