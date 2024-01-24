@@ -24,6 +24,8 @@ my $howMany = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
+my $DEBUG = 0;
+
 my $systemsg_start = 'Answer in less than 200 letters. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 my $systemsg = $systemsg_start;
@@ -70,7 +72,6 @@ sub make_json_obj2 {
             { role => "system", content => $prompt }
         ]
     };
-    print __LINE__;
     if (defined $chathistory->{$nick}->{id}) {
         print __LINE__;
         push @{$data->{messages}}, { role => "user", content => $text, name => $nick, id => $chathistory->{$nick}->{id}};
@@ -81,16 +82,15 @@ sub make_json_obj2 {
     return encode_json($data);
 }
 
-
 sub make_json_obj {
     my ($text, $nick, @rest) = @_;
-    print "nick: " . $nick;
+
     my $prompt = get_prompt();
     my $timediff = 3600;    # 1h in seconds
 
-    defined $chathistory->{$nick}->{timestamp} && 
+    if (defined $chathistory->{$nick}->{timestamp}) {
         $timediff = (time - $chathistory->{$nick}->{timestamp});
-
+    }
     my $data = { model => $model, temperature => $heat, messages => [
             { role => "system", content => $prompt }
         ]
@@ -109,7 +109,8 @@ sub make_json_obj {
 
 sub strip_nick {
     my ($nick1, @rest2) = @_;
-    $nick1 =~ s/[^a-zA-Z0-9_]*//;
+    $nick1 =~ s/[^a-zA-Z0-9_]*//ug;
+    $nick1 =~ s/[\[\]]*//ug;
     return $nick1;
 }
 
@@ -126,15 +127,15 @@ sub make_call {
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        print __LINE__;
-        print Dumper $json_decd;
-        print Dumper $json_decd->{usage};
+        #print __LINE__;
+        #print Dumper $json_decd;
+        #print Dumper $json_decd->{usage};
         my $said = $json_decd->{choices}[0]->{message}->{content};
-        print $IRSSI{name}." reply> " . $said;
-        $said =~ s/\n+/ /;
-        $said =~ s/\s{2,}//g;
-        $said =~ s/```//g;
-        #$said =~ s/["]*//g;
+        #print $IRSSI{name}." reply> " . $said;
+        $said =~ s/\n+/ /ug;
+        $said =~ s/\s{2,}//ug;
+        $said =~ s/```//ug;
+        #$said =~ s/["]*//ug;
         $chathistory->{$nick}->{answer} = $said;
         $chathistory->{$nick}->{message} = $text;
         $chathistory->{$nick}->{timestamp} = time;
@@ -160,6 +161,7 @@ sub get_channel_title {
 sub frank {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     return if $nick eq $server->{nick};	#self-test
+    #$nick = strip_nick($nick);
 	# if string 'npv?:' found in channel topic. np: or npv:
 	# removed 2023-11-01 return if (get_channel_title($server, $channel) =~ /npv?\:/i);
 
@@ -167,6 +169,7 @@ sub frank {
     if ($msg =~ /^$mynick[\:,]? (.*)/ ) {
         my $textcall = $1;
         return if KaaosRadioClass::floodCheck(3);
+        return if KaaosRadioClass::Drunk();
         print $IRSSI{name}."> $nick asked: $textcall";
         my $wrote = 1;
         for (0..2) {
@@ -176,6 +179,7 @@ sub frank {
                 $server->command("msg -channel $channel $nick: $answer_cut");
                 last;
             }
+            # retry
             sleep 1;
         }
     }
@@ -245,7 +249,7 @@ sub save_file_blob {
 
 sub change_prompt {
     my ($newprompt, @rest) = @_;
-    $newprompt =~ s/[\"]*//g;
+    $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
     $systemsg = $systemsg_start . $newprompt;
     print($IRSSI{name} . "> new prompt: $systemsg");
@@ -281,8 +285,10 @@ sub event_privmsg {
 sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
     return if ($nick eq $server->{nick});	#self-test
+
     if ($msg =~ /^\!prompt (.*)$/) {
         return if KaaosRadioClass::floodCheck(3);
+        return if KaaosRadioClass::Drunk($nick);
         change_prompt($1);
         print($IRSSI{name} . "> $nick commanded: $1");
         $server->command("msg -channel $target *kling*");
