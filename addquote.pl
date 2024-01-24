@@ -12,11 +12,8 @@ use KaaosRadioClass;		# LAama1 30.12.2016
 
 my $tiedosto = '/mnt/music/quotes.txt';
 my $vitsitiedosto = '/mnt/music/vitsit.txt';
-my $quoteurl = 'https://upload.8-b.fi/quotes.txt';
-my $vitsiurl = 'https://upload.8-b.fi/vitsit.txt';
-
-my $kanava = '#kaaosradio';
-my $verkko = 'IRCnet';
+my $quoteurl = 'https://ul.8-b.fi/quotes.txt';
+my $vitsiurl = 'https://ul.8-b.fi/vitsit.txt';
 
 my $quotedb = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $vitsidb = Irssi::get_irssi_dir(). '/scripts/vitsit.db';
@@ -61,21 +58,6 @@ sub event_privmsg {
 	return;
 }
 
-# msg to $kanava
-sub sayit {
-	my ($msg) = @_;
-	my @windows = Irssi::windows();
-	foreach my $window (@windows) {
-		if ($window->{active_server}->{tag} eq $verkko) {
-			if ($window->{active}->{type} eq 'CHANNEL' && $window->{active}->{name} eq $kanava) {
-				$window->{active_server}->command("MSG $kanava $msg");
-				return;
-			}
-		}
-	}
-	return;
-}
-
 sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
 	if($msg =~ /^!aq (.{1,470})/gi) {
@@ -83,17 +65,19 @@ sub parseQuote {
 		return if KaaosRadioClass::floodCheck();
 		KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
 		saveToDB($quotedb, 'QUOTES', $nick, $uusiquote, $target);
-		print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
+		print($IRSSI{name}."> $msg -- request from $nick on channel: $target");
 		$server->command("msg $nick quote lisätty! $quoteurl");
 		$server->command("msg $target :)");
 	} elsif ($msg =~ /^!rq (.{3,15})/gi) {
 		my $searchword = decode('UTF-8', $1);
+		return if KaaosRadioClass::floodCheck();
 		my @answers = search_from_file($tiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
 			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rq/gi) {
+		return if KaaosRadioClass::floodCheck();
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");
@@ -109,12 +93,14 @@ sub parseQuote {
 		$server->command("msg $target xD");
 	} elsif ($msg =~ /^!rj (.{3,15})/gi) {
 		my $searchword = decode('UTF-8', $1);
+		return if KaaosRadioClass::floodCheck();
 		my @answers = search_from_file($vitsitiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
 			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rj/gi) {
+		return if KaaosRadioClass::floodCheck();
 		my $data = KaaosRadioClass::readTextFile($vitsitiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");
