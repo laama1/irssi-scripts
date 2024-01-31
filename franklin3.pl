@@ -30,7 +30,8 @@ my $systemsg_start = 'Answer in less than 200 letters. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 my $systemsg = $systemsg_start;
 my $role = 'system';
-my $model = "gpt-3.5-turbo";
+#my $model = "gpt-3.5-turbo";
+my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
 my $heat  = 0.7;
 my $hardlimit = 500;
@@ -169,7 +170,7 @@ sub frank {
     if ($msg =~ /^$mynick[\:,]? (.*)/ ) {
         my $textcall = $1;
         return if KaaosRadioClass::floodCheck(3);
-        return if KaaosRadioClass::Drunk();
+        return if KaaosRadioClass::Drunk($nick);
         print $IRSSI{name}."> $nick asked: $textcall";
         my $wrote = 1;
         for (0..2) {
@@ -187,12 +188,14 @@ sub frank {
 
 sub make_dalle_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howMany, size => "512x512", response_format => "b64_json"};
+    my $data = {prompt => $prompt, n => $howMany, size => "640x640", response_format => "b64_json"};
     return encode_json($data);
 }
 
 sub make_vision_json {
-    
+    my ($prompt, $nick) = @_;
+    my $data = {prompt => $prompt, n => $howMany, size => "1024x1024", response_format => "b64_json"}; # dalle3
+    return encode_json($data); 
 }
 
 sub dalle {
@@ -200,8 +203,9 @@ sub dalle {
     return if $nick eq $server->{nick};	#self-test
     if ($msg =~ /^!dalle (.*)/ ) {
         my $query = $1;
-        my $request = make_dalle_json($query, $nick);
-        print('request dalle json: ' . $request);
+        #my $request = make_dalle_json($query, $nick);
+        my $request = make_vision_json($query, $nick);
+        #print('request dalle json: ' . $request);
         
         # @todo fork or something
         my $res = $ua->post($duri, Content => $request);
@@ -263,10 +267,15 @@ sub event_privmsg {
   	my ($server, $msg, $nick, $address) = @_;
 	return if ($nick eq $server->{nick});	#self-test
     if ($msg =~ /^\!prompt (.*)$/) {
-        my $newprompt = $1;
-        $server->command("msg $nick Nykyinen system prompt: " . get_prompt());
-        change_prompt($newprompt);
-        $server->command("msg $nick Uusi system prompt: " . get_prompt());
+        my $newprompt = KaaosRadioClass::ktrim($1);
+        if (length $newprompt > 1) {
+            $server->command("msg $nick Nykyinen system prompt: " . get_prompt());
+            change_prompt($newprompt);
+            $server->command("msg $nick Uusi system prompt: " . get_prompt());
+        } else {
+            $server->command("msg $nick Nykyinen system prompt on: " . get_prompt());
+        }
+
         return;
     }
     if ($msg =~ /^\!prompt/) {
