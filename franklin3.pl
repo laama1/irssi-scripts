@@ -20,20 +20,22 @@ our $localdir = $ENV{HOME}."/.irssi/scripts/";
 #my $apiurl = "https://api.openai.com/v1/completions";
 my $apiurl = 'https://api.openai.com/v1/chat/completions';
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
+
 my $howMany = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
-my $systemsg_start = 'Answer in less than 200 letters. ';
+my $systemsg_start = 'Answer at most in 20 tokens. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 my $systemsg = $systemsg_start;
 my $role = 'system';
 #my $model = "gpt-3.5-turbo";
 my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
-my $heat  = 0.7;
+my $visionmodel = 'gpt-4-vision-preview';
+my $heat  = 0.4;
 my $hardlimit = 500;
 #my $json = JSON->new->utf8;
 my $json = JSON->new;
@@ -47,7 +49,7 @@ $VERSION = "2.5";
     description => 'OpenAI chatgpt api script',
     license     => 'BSD',
     url         => 'https://bot.8-b.fi',
-    changed     => '2023-10-11',
+    changed     => '2024-02-13',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -66,24 +68,7 @@ $headers->header("Authorization" => "Bearer " . $apikey);
 my $ua = LWP::UserAgent->new;
 $ua->default_headers($headers);
 
-sub make_json_obj2 {
-    my ($text, $nick, @rest) = @_;
-    my $prompt = get_prompt();
-    my $data = { model => $model, temperature => $heat, messages => [
-            { role => "system", content => $prompt }
-        ]
-    };
-    if (defined $chathistory->{$nick}->{id}) {
-        print __LINE__;
-        push @{$data->{messages}}, { role => "user", content => $text, name => $nick, id => $chathistory->{$nick}->{id}};
-    } else {
-        push @{$data->{messages}}, { role => "user", content => $text, name => $nick};
-    }
-    
-    return encode_json($data);
-}
-
-sub make_json_obj {
+sub make_json_obj_f {
     my ($text, $nick, @rest) = @_;
 
     my $prompt = get_prompt();
@@ -92,19 +77,24 @@ sub make_json_obj {
     if (defined $chathistory->{$nick}->{timestamp}) {
         $timediff = (time - $chathistory->{$nick}->{timestamp});
     }
-    my $data = { model => $model, temperature => $heat, messages => [
+    my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
             { role => "system", content => $prompt }
         ]
     };
 
-    if ($timediff < 3600) {
-        defined $chathistory->{$nick}->{message} && 
-            push @{ $data->{messages}}, { role => "user", content => $chathistory->{$nick}->{message}, name => $nick };
-        defined $chathistory->{$nick}->{answer} && 
-            push @{ $data->{messages}}, { role => "assistant", content => $chathistory->{$nick}->{answer} };
+    if ($timediff < 3600 && defined $chathistory->{$nick}->{history}) {
+        foreach my $history ($chathistory->{$nick}->{history}) {
+            foreach my $unit (@$history) {
+                push @{ $data->{messages}}, { role => "user", content => $unit->{message}, name => $nick };
+                push @{ $data->{messages}}, { role => "assistant", content => $unit->{answer} };
+            }
+        }
+    } else {
+        undef $chathistory->{$nick}->{history};
+        $chathistory->{$nick}->{floodcount} = 0;
     }
 
-    push @{$data->{messages}}, { role => "user", content => $text, name => $nick};
+    push @{ $data->{messages}}, { role => "user", content => $text, name => $nick};
     return encode_json($data);
 }
 
@@ -118,34 +108,42 @@ sub strip_nick {
 sub make_call {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
-
-    my $request = make_json_obj($text, $nick);
-    print $IRSSI{name}.' JSON request>';
-    print $request;
+    #print $IRSSI{name}." nick: $nick";
+    my $request = make_json_obj_f($text, $nick);
+    print $IRSSI{name}.' JSON request>' if $DEBUG;
+    print $request if $DEBUG;
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        #print __LINE__;
-        #print Dumper $json_decd;
+        print __LINE__ if $DEBUG;
+        print Dumper $json_decd if $DEBUG;
         #print Dumper $json_decd->{usage};
-        my $said = $json_decd->{choices}[0]->{message}->{content};
-        #print $IRSSI{name}." reply> " . $said;
-        $said =~ s/\n+/ /ug;
-        $said =~ s/\s{2,}//ug;
-        $said =~ s/```//ug;
-        #$said =~ s/["]*//ug;
-        $chathistory->{$nick}->{answer} = $said;
-        $chathistory->{$nick}->{message} = $text;
+        my $answered = $json_decd->{choices}[0]->{message}->{content};
+        print $IRSSI{name}." reply> " . $answered;
+        $answered =~ s/\n+/ /ug;
+        $answered =~ s/\s{2,}//ug;
+        $answered =~ s/```//ug;
+
+        if (!defined $chathistory->{$nick}->{history}) {
+            print $IRSSI{name}."> zig zag" if $DEBUG;
+            # HACK BUGFIX
+            #$chathistory->{$nick}->{history} = {};
+            print __LINE__ if $DEBUG;
+        }
+        print Dumper $chathistory->{$nick} if $DEBUG;
+
+        #push @{ $chathistory->{$nick}}, {message => $text};
         $chathistory->{$nick}->{timestamp} = time;
-        $chathistory->{$nick}->{chatid} = $json_decd->{id};
+        $chathistory->{$nick}->{chatid} = $json_decd->{id};    # ?? what is id even, does it work anymore
         $chathistory->{$nick}->{floodcount} += 1;
-        return $said;
+        push @{ $chathistory->{$nick}->{history}}, { answer => $answered, message => $text };
+        return $answered;
     } elsif ($res->code == 400) {
         print $IRSSI{name}."> got error 400.";
-        #print Dumper $res;
+        print Dumper $res->{error};
     } else {
 		print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
     }
@@ -161,21 +159,23 @@ sub get_channel_title {
 
 sub frank {
     my ($server, $msg, $nick, $address, $channel ) = @_;
-    return if $nick eq $server->{nick};	#self-test
-    #$nick = strip_nick($nick);
-	# if string 'npv?:' found in channel topic. np: or npv:
-	# removed 2023-11-01 return if (get_channel_title($server, $channel) =~ /npv?\:/i);
-
     my $mynick = quotemeta $server->{nick};
-    if ($msg =~ /^$mynick[\:,]? (.*)/ ) {
+    return if $nick eq $mynick; #self-test
+
+    if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
         my $textcall = $1;
+        Irssi::print("textcall: $textcall");
         return if KaaosRadioClass::floodCheck(3);
+        Irssi::print('passed floodcheck');
         return if KaaosRadioClass::Drunk($nick);
+        Irssi::print('passed drunktest like a mf');
         print $IRSSI{name}."> $nick asked: $textcall";
-        my $wrote = 1;
+        #my $wrote = 1;
+
+        # @todo fork or something
         for (0..2) {
-            # @todo fork or something
             if (my $answer = make_call($textcall, $nick)) {
+                $chathistory->{$nick}->{timestamp} = time;
                 my $answer_cut = substr($answer, 0, $hardlimit);
                 $server->command("msg -channel $channel $nick: $answer_cut");
                 last;
@@ -194,19 +194,67 @@ sub make_dalle_json {
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howMany, size => "1024x1024", response_format => "b64_json"}; # dalle3
+    my $data = {prompt => $prompt, n => $howMany, size => "1024x1024", response_format => "b64_json"}; # dall-e-3 minimum size
     return encode_json($data); 
+}
+
+sub make_vision_preview_json {
+    my ($url, $searchprompt, @rest) = @_;
+    # @TODO use $searchprompt as "text"
+    my $data = {model => $visionmodel, max_tokens => 300, messages => [{
+        role => "user",
+        content => [
+            {type => "text", text => "What is in this image?"},
+            {type => "image_url", image_url => {url => $url}}
+        ]}
+    ]
+    };
+    return encode_json($data);
 }
 
 sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
-    return if $nick eq $server->{nick};	#self-test
-    if ($msg =~ /^!dalle (.*)/ ) {
+    my $mynick = quotemeta $server->{nick};
+    return if $nick eq $mynick;	#self-test
+    print("msg::: " . $msg) if $DEBUG;
+    if ($msg =~ /!dalle (https\:\/\/[^ ]+)/ui ) {
+        # image guessing 2024-02-13
+        my $imagesearch = $1;
+        print __LINE__;
+        print __LINE__;
+        my $request = make_vision_preview_json($imagesearch);
+        print('request dalle vision preview json: ' . $request) if $DEBUG;
+
+        # @todo fork or something
+        my $res = $ua->post($uri, Content => $request);
+        if ($res->is_success) {
+            my $json_rep  = $res->content();
+            my $json_decd = decode_json($json_rep);
+            my $answer = '';
+            if (defined $json_decd->{choices}[0]->{message}->{content}) {
+                $answer = $json_decd->{choices}[0]->{message}->{content};
+                print __LINE__;
+                $server->command("msg -channel $channel $answer");
+            }
+            print __LINE__;
+            print Dumper $json_decd if $DEBUG;
+            
+        } elsif ($res->is_error) {
+            print __LINE__ .  "ERROR!";
+            my $errormsg = decode_json($res->decoded_content())->{error}->{message};
+            #print $errormsg if $DEBUG;
+            print Dumper $res if $DEBUG;
+            #test $server->command("msg -channel $channel $nick: $errormsg");
+        } else {
+		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
+            print Dumper $res if $DEBUG;
+        }
+    } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
         #my $request = make_dalle_json($query, $nick);
         my $request = make_vision_json($query, $nick);
-        #print('request dalle json: ' . $request);
-        
+        print('request vision dalle json: ' . $request) if $DEBUG;
+
         # @todo fork or something
         my $res = $ua->post($duri, Content => $request);
 
@@ -234,7 +282,7 @@ sub dalle {
             $server->command("msg -channel $channel $nick: $errormsg");
         } else {
 		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
-            print Dumper $res;
+            print Dumper $res if $DEBUG;
         }
 
     }
@@ -265,7 +313,8 @@ sub get_prompt {
 
 sub event_privmsg {
   	my ($server, $msg, $nick, $address) = @_;
-	return if ($nick eq $server->{nick});	#self-test
+    my $mynick = quotemeta $server->{nick};
+	return if ($nick eq $mynick);	#self-test
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
@@ -293,14 +342,18 @@ sub event_privmsg {
 
 sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
-    return if ($nick eq $server->{nick});	#self-test
+    my $mynick = quotemeta $server->{nick};
+    return if ($nick eq $mynick);	#self-test
 
     if ($msg =~ /^\!prompt (.*)$/) {
-        return if KaaosRadioClass::floodCheck(3);
-        return if KaaosRadioClass::Drunk($nick);
-        change_prompt($1);
-        print($IRSSI{name} . "> $nick commanded: $1");
-        $server->command("msg -channel $target *kling*");
+        my $newprompt = KaaosRadioClass::ktrim($1);
+        if (length $newprompt > 1) {
+            return if KaaosRadioClass::floodCheck(3);
+            return if KaaosRadioClass::Drunk($nick);
+            change_prompt($newprompt);
+            print($IRSSI{name} . "> $nick commanded: $1");
+            $server->command("msg -channel $target *kling*");
+        }
     } elsif ($msg =~ /^\!prompt/) {
         $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt());
     }
