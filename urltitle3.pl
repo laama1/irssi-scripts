@@ -208,7 +208,8 @@ sub fetch_title {
 	} else {
 		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		da($response);
-		return 'Error: '.$response->status_line, 0,0, $md5hex;
+		#return 'Error: '.$response->status_line, 0,0, $md5hex;
+		return '';
 	}
 
 	if ($response->content_type !~ /(text)|(xml)/) {
@@ -234,7 +235,7 @@ sub fetch_title {
 sub getTitle {
 	my ($response, $url, @rest) = @_;
 	my $countWordsUrl = $url;
-	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www.
+	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www. # FIXME 2024-02-13
 	#$countWordsUrl =~ s/\.[\w\d]{1.5}$//g;				# strip .html or .net from the end (dangerous)
 	
 	# get Charset
@@ -619,7 +620,7 @@ sub api_conversion {
 		}
 		da($gdriveapidata_json) if $DEBUG1;
 		$newUrlData->{title} = 'Mimetype: '.$gdriveapidata_json->{mimeType}.', name: '.$gdriveapidata_json->{name};
-		#$newUrlData->{desc} = $description;
+		$newUrlData->{desc} = '';
 		return 1;
 	}
 
