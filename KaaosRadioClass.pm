@@ -223,7 +223,7 @@ sub floodCheck {
 	return 0;
 }
 
-# Return 1 if flooding too many (urls) in a row
+# Return 1 if flooding too many commands in a row
 sub Drunk {
 	my ($nick, @rest) = @_;
 	if ($nick eq $floodernick) {

@@ -3,11 +3,12 @@ use warnings;
 
 use Irssi;
 use vars qw($VERSION %IRSSI);
-use Irssi::Irc;
+use lib $ENV{HOME}.'/.irssi/irssi-scripts/';
+#use Irssi::Irc;
 use Data::Dumper;
 
-#require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
-use KaaosRadioClass;
+require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
+#use KaaosRadioClass;
 
 $VERSION = '0.50';
 %IRSSI = (
@@ -20,11 +21,11 @@ $VERSION = '0.50';
 	changed => '2020-12-21',
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
 #my $db = $ENV{HOME}. '/.irssi/scripts/newauroras.db';
-my @not_channels = ('#kaaosradio.fi');
+#my @not_channels = ('#kaaosradio.fi');
 
 sub getHelp {
 	#return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
@@ -33,7 +34,7 @@ sub getHelp {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return if ($target ~~ @not_channels);
+	#return if ($target ~~ @not_channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(!help aurora)/gi || $msg =~ /(!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
@@ -70,7 +71,8 @@ sub fetchAuroraData {
 	my $kpst = $line[1];
 	my $pvm = $line[2];
 	my $speed = $line[3];
-	Irssi::print("auroras.pl: kpnow: $kpnow, kpst: $kpst, pvm: $pvm");
+	my $date = localtime($pvm);
+	Irssi::print("auroras.pl: kpnow: $kpnow, kpst: $kpst, pvm: $date");
 	my $returnString = 'Ei saatu tietoja!';
 	if (defined $kpnow || defined $kpst) {
 		#$returnString = "Kp arvo nyt: $kpnow, ennustus (1h): $kpst (Näkyvyys: Kp5=Helsinki, Kp4=Iisalmi, Kp3=Kemi)";

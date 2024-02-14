@@ -2,11 +2,12 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
+use lib $ENV{HOME} . '/.irssi/scripts/irssi-scripts';
 use KaaosRadioClass;
 use IO::Socket;
 use Fcntl;
 
-#use Data::Dumper;
+use Data::Dumper;
 use DateTime::Format::Strptime;
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
@@ -23,7 +24,7 @@ $VERSION = '2022-03-11';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
@@ -76,7 +77,7 @@ sub DP {
 sub DA {
 	return unless $DEBUG == 1;
 	print($IRSSI{name}." array>");
-	print Dumper (@_);
+	print Dumper @_;
 	return;
 }
 
@@ -89,6 +90,7 @@ sub print_help {
 sub msg_to_channel {
 	my ($text, @rest) = @_;
 	my $enabled_raw = Irssi::settings_get_str('fmi_enabled_channels');
+	print "enabled raw: $enabled_raw";
 	my @enabled = split / /, $enabled_raw;
 
 	my @windows = Irssi::windows();
@@ -96,7 +98,8 @@ sub msg_to_channel {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
-		if($window->{active}->{name} ~~ @enabled) {
+		#if($window->{active}->{name} ~~ @enabled) {
+		if (index $enabled_raw, $window->{active}->{name} != -1) {
 			DP(__LINE__." Found! $window->{active}->{name}");
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
 		}

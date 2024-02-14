@@ -89,7 +89,7 @@ sub event_pub_msg {
 
 	# if string: 'np:' found in channel topic
 	if (get_channel_title($serverrec, $target) =~ /npv?\:/i) {
-		return;
+		# disabled 2023-11-01 return;
 	}
 
 	print($IRSSI{name}."> $nick sanoi: $msg, kanavalla $target");
