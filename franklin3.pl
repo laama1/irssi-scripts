@@ -25,7 +25,7 @@ my $howMany = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $systemsg_start = 'Answer at most in 20 tokens. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
@@ -164,11 +164,11 @@ sub frank {
 
     if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
         my $textcall = $1;
-        Irssi::print("textcall: $textcall");
+        print("textcall: $textcall") if $DEBUG;;
         return if KaaosRadioClass::floodCheck(3);
-        Irssi::print('passed floodcheck');
+        print('passed floodcheck') if $DEBUG;
         return if KaaosRadioClass::Drunk($nick);
-        Irssi::print('passed drunktest like a mf');
+        print('passed drunktest like a mf') if $DEBUG;
         print $IRSSI{name}."> $nick asked: $textcall";
         #my $wrote = 1;
 
@@ -216,12 +216,12 @@ sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
-    print("msg::: " . $msg) if $DEBUG;
     if ($msg =~ /!dalle (https\:\/\/[^ ]+)/ui ) {
         # image guessing 2024-02-13
         my $imagesearch = $1;
-        print __LINE__;
-        print __LINE__;
+        print __LINE__ if $DEBUG;
+        print("dalle msg::: " . $msg) if $DEBUG;
+        print __LINE__ if $DEBUG;
         my $request = make_vision_preview_json($imagesearch);
         print('request dalle vision preview json: ' . $request) if $DEBUG;
 
@@ -233,14 +233,14 @@ sub dalle {
             my $answer = '';
             if (defined $json_decd->{choices}[0]->{message}->{content}) {
                 $answer = $json_decd->{choices}[0]->{message}->{content};
-                print __LINE__;
+                print __LINE__ if $DEBUG;
                 $server->command("msg -channel $channel $answer");
             }
-            print __LINE__;
+            print __LINE__ if $DEBUG;
             print Dumper $json_decd if $DEBUG;
             
         } elsif ($res->is_error) {
-            print __LINE__ .  "ERROR!";
+            print __LINE__ .  "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
             #print $errormsg if $DEBUG;
             print Dumper $res if $DEBUG;
@@ -277,7 +277,7 @@ sub dalle {
                 my $filename = $nick.'_'.$time.'.png';
             }
         } elsif ($res->is_error) {
-            print "ERROR!";
+            print "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
             $server->command("msg -channel $channel $nick: $errormsg");
         } else {

@@ -1,16 +1,14 @@
 use strict;
 use warnings;
-
 use Irssi;
 use vars qw($VERSION %IRSSI);
 use lib $ENV{HOME}.'/.irssi/irssi-scripts/';
-#use Irssi::Irc;
+#use KaaosRadioClass;
 use Data::Dumper;
 
 require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
-#use KaaosRadioClass;
 
-$VERSION = '0.50';
+$VERSION = '0.51';
 %IRSSI = (
 	authors => 'LAama1',
 	contact => 'LAama1@ircnet',
@@ -21,11 +19,9 @@ $VERSION = '0.50';
 	changed => '2020-12-21',
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
-#my $db = $ENV{HOME}. '/.irssi/scripts/newauroras.db';
-#my @not_channels = ('#kaaosradio.fi');
 
 sub getHelp {
 	#return '!aurora|revontuli tulostaa kanavalle revontuliaktiviteetin ja ennustuksen. Aktiviteetti perustuu Kp-arvoon. Mitä suurempi Kp, sen etelämmässä revontulia voi silloin nähdä. !kuu, tulostaa kuun vaiheen, esim. "täysikuu"';
@@ -34,24 +30,22 @@ sub getHelp {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	#return if ($target ~~ @not_channels);
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help aurora)/gi || $msg =~ /(!help kuu)/) {
+	if ($msg =~ /(^\!help aurora)/gi || $msg =~ /(^\!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
-		my $help = getHelp();
-		$serverrec->command("MSG $target $help");
-	} elsif ($msg =~ /(!aurora)/gi || $msg =~ /(!revontul.*)/gi) {
+		$serverrec->command("MSG $target " . getHelp());
+	} elsif ($msg =~ /(^\!aurora)/gi || $msg =~ /(^\!revontul.*)/gi) {
 		my $keyword = $1;
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $string = fetchAuroraData();
 		$serverrec->command("MSG $target $string");
-		Irssi::print("auroras.pl: $keyword request from $nick on channel $target");
-	} elsif ($msg =~ /(!kuu)\b/i || $msg =~ /(!moon)/i) {
+		Irssi::print("auroras.pl> $keyword request from $nick on channel $target. Answer: $string");
+	} elsif ($msg =~ /(^\!kuu)\b/i || $msg =~ /(^\!moon)/i) {
 		my $keyword = $1;
 		return if KaaosRadioClass::floodCheck() == 1;
-		#my $outputstring = KaaosRadioClass::conway();
-		my $outputstring = omaconway();
-		Irssi::print("auroras.pl: $keyword request from $nick on channel $target");
+		my $outputstring = KaaosRadioClass::conway();
+		# 2024-02-14 my $outputstring = omaconway();
+		Irssi::print("auroras.pl> $keyword request from $nick on channel $target. Answer: $outputstring");
 		$serverrec->command("MSG $target Kuun vaihe: $outputstring") if $outputstring;
 	}
 }

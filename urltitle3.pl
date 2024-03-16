@@ -209,7 +209,7 @@ sub fetch_title {
 		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		da($response);
 		#return 'Error: '.$response->status_line, 0,0, $md5hex;
-		return '';
+		return '',0,0,'';
 	}
 
 	if ($response->content_type !~ /(text)|(xml)/) {
