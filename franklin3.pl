@@ -200,14 +200,17 @@ sub make_vision_json {
 
 sub make_vision_preview_json {
     my ($url, $searchprompt, @rest) = @_;
-    # @TODO use $searchprompt as "text"
+    if ($searchprompt eq '') {
+        $searchprompt = 'Describe this image?';
+    }
+    print $IRSSI{name}."> searchprompt for vision: $searchprompt";
     my $data = {model => $visionmodel, max_tokens => 300, messages => [{
         role => "user",
         content => [
-            {type => "text", text => "What is in this image?"},
+            {type => "text", text => $searchprompt},
             {type => "image_url", image_url => {url => $url}}
-        ]}
-    ]
+        ]
+    }]
     };
     return encode_json($data);
 }
@@ -216,14 +219,13 @@ sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
-    if ($msg =~ /!dalle (https\:\/\/[^ ]+)/ui ) {
+    $nick = strip_nick($nick);
+
+    if ($msg =~ /!dalle (https?\:\/\/[^ ]+)(.*)/ui ) {
         # image guessing 2024-02-13
-        my $imagesearch = $1;
-        print __LINE__ if $DEBUG;
-        print("dalle msg::: " . $msg) if $DEBUG;
-        print __LINE__ if $DEBUG;
-        my $request = make_vision_preview_json($imagesearch);
-        print('request dalle vision preview json: ' . $request) if $DEBUG;
+        my $imagesearchurl = $1;
+        my $question = $2;
+        my $request = make_vision_preview_json($imagesearchurl, $question);
 
         # @todo fork or something
         my $res = $ua->post($uri, Content => $request);
@@ -233,27 +235,21 @@ sub dalle {
             my $answer = '';
             if (defined $json_decd->{choices}[0]->{message}->{content}) {
                 $answer = $json_decd->{choices}[0]->{message}->{content};
-                print __LINE__ if $DEBUG;
                 $server->command("msg -channel $channel $answer");
             }
-            print __LINE__ if $DEBUG;
-            print Dumper $json_decd if $DEBUG;
-            
         } elsif ($res->is_error) {
-            print __LINE__ .  "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
-            #print $errormsg if $DEBUG;
-            print Dumper $res if $DEBUG;
+            print $IRSSI{name}."> Error: $errormsg";
             #test $server->command("msg -channel $channel $nick: $errormsg");
         } else {
 		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
-            print Dumper $res if $DEBUG;
         }
+        print Dumper $res if $DEBUG;
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
         #my $request = make_dalle_json($query, $nick);
         my $request = make_vision_json($query, $nick);
-        print('request vision dalle json: ' . $request) if $DEBUG;
+        #print('request vision dalle json: ' . $request) if $DEBUG;
 
         # @todo fork or something
         my $res = $ua->post($duri, Content => $request);
@@ -274,17 +270,18 @@ sub dalle {
                     $index++;
                 }
                 $server->command("msg -channel $channel $answer");
-                my $filename = $nick.'_'.$time.'.png';
+                #my $filename = $nick.'_'.$time.'.png';
             }
         } elsif ($res->is_error) {
-            print "ERROR!" if $DEBUG;
+            #print "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
             $server->command("msg -channel $channel $nick: $errormsg");
+            print $IRSSI{name}."> Error: $errormsg";
         } else {
 		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
-            print Dumper $res if $DEBUG;
+            
         }
-
+        print Dumper $res if $DEBUG;
     }
 }
 

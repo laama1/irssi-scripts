@@ -46,7 +46,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -131,7 +131,7 @@ unless (-e $db) {
 
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, $tz, @rest) = @_;
-	dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime, timezone: $tz");
+	#dp(__LINE__.": string: $string, sunrise: $sunrise, sunset: $sunset, comparetime: $comparetime, timezone: $tz");
 	$sunrise += $tz;
 	$sunset += $tz;
 	$comparetime += $tz;
@@ -170,7 +170,8 @@ sub replace_with_emoji {
 # params: sunrise, sunset, time to compare. all are unixtime
 sub is_sun_up {
 	my ($sunrise, $sunset, $comparetime, @rest) = @_;
-	# necessary, when sunset is today, and we dont know about the real sunset for given day. Becaues the API does not return sunset for forecast measurements
+	# Necessary, when sunset is today, and we dont know about the real sunset for given day. 
+	# Becaues the API does not return sunset for forecast measurements.
 	$sunrise = $sunrise % 86400;
 	$sunset = $sunset % 86400;
 	$comparetime = $comparetime % 86400;
@@ -203,7 +204,7 @@ sub omaconway {
 	if ($r > 9) { $r-= 19; }
 	$r = (($r * 11) % 30) + $m + $d;
 	if ($m < 3) { $r += 2; }
-	$r -= 8.3;              # year > 2000
+	$r -= 8.3;              # year > 2000, if $r < 8.3, -> new moon
 
 	$r = ($r + 0.5) % 30;	#test321
 	my $age = $r;
@@ -302,10 +303,10 @@ sub forecastloop1 {
 			my $timezone = ($json->{city}->{timezone} / 3600);
 			if ($timezone > 0) {$timezone = '+'.$timezone};
 			$timezone = '(UTC' . $timezone . ')';
-			print ("Timezone: " . $timezone) if $DEBUG;
+			#print ("Timezone: " . $timezone) if $DEBUG;
 			$returnstring = $use_this_city . ','.$json->{city}->{country} . " $timezone \002klo:\002 " . $returnstring;
 		}
-		print __LINE__ if $DEBUG1;
+		#print __LINE__ if $DEBUG1;
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
 												$json->{city}->{sunset}, $item->{dt}, $json->{city}->{timezone});
 		my $temptimedt = DateTime->from_epoch(epoch => ($item->{dt} + $json->{city}->{timezone}));

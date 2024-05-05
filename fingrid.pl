@@ -118,11 +118,11 @@ sub pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help sähkö)/sgi) {
+	if ($msg =~ /^(!help sähkö)/sgi) {
 		return if KaaosRadioClass::floodCheck();
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
-	} elsif ($msg =~ /(!sähkö)/sgi) {
+	} elsif ($msg =~ /^(!sähkö)/sgi) {
 		return if KaaosRadioClass::floodCheck();
 		my $json = fetch_fingrid_data(get_fingrid_url());
         my $av_arvio = get_aurinkovoima_arvio();
