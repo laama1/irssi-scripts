@@ -2,7 +2,7 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
-#use KaaosRadioClass;
+use KaaosRadioClass;
 #use IO::Socket;
 use Socket;
 #use Fcntl;
@@ -28,27 +28,28 @@ my $handle = undef;
 
 start_server();
 sub start_server {
-	Irssi::print("KAaosd - starting...");
+	Irssi::print("KAaosd> starting...");
   	$kaaos_server = IO::Socket::INET->new( Proto => 'tcp', LocalAddr => '127.0.0.1' , LocalPort => 12347, Listen => SOMAXCONN, ReusePort => 1) 
-		or print "Can't bind to port 12347, $@";
+		or Irssi::print "KAaosd> Can't bind to port 12347, $@";
   	if(!$kaaos_server) {
-    	Irssi::print("KAaosd - couldn't start server, $@", MSGLEVEL_CLIENTERROR);
+    	Irssi::print("KAaosd> couldn't start server, $@", MSGLEVEL_CLIENTERROR);
     	return;
   	}
 
-  Irssi::print(sprintf("KAaosd - waiting for socket connections on %s:%s...", $kaaos_server->sockhost, $kaaos_server->sockport));
+  Irssi::print(sprintf("KAaosd> waiting for socket connections on %s:%s...", $kaaos_server->sockhost, $kaaos_server->sockport));
   $handle = Irssi::input_add($kaaos_server->fileno, INPUT_READ, 'handle_connection', $kaaos_server);
 }
 
 sub handle_connection {
 	my $sock = $_[0]->accept;
-  	my $iaddr = inet_aton($sock->peerhost); # or whatever address
+  	my $iaddr = inet_aton($sock->peerhost); 	# or whatever address
   	my $peer  = gethostbyaddr($iaddr, AF_INET); # $sock->peerhost;
 	print("KAaosd> handling connection from $peer");
 
-	$sock->autoflush(1);
 	my $incoming = <$sock>;
-	print("KAaosd> got: $incoming from: $peer");
+	$sock->autoflush(1);
+	$incoming = KaaosRadioClass::ktrim($incoming);
+	print("KAaosd> got: $incoming, parse it next.");
 	parse_msg($incoming);
 }
 
@@ -65,6 +66,9 @@ sub parse_msg {
 	} elsif ($msg =~ /nytsoi (.*)$/ && $msg ne $lastmesg) {
 		DP("Joku päivitti icecastin: $1");
 		Irssi::signal_emit('krnytsoi-remote-msg', $msg, $1);
+	} elsif ($msg =~ /^icecast (.*)$/) {
+		# TODO
+		$msg = $msg;
 	}
 	$lastmesg = $msg;
 }
