@@ -90,7 +90,6 @@ sub print_help {
 sub msg_to_channel {
 	my ($text, @rest) = @_;
 	my $enabled_raw = Irssi::settings_get_str('fmi_enabled_channels');
-	print "enabled raw: $enabled_raw";
 	my @enabled = split / /, $enabled_raw;
 
 	my @windows = Irssi::windows();
@@ -98,7 +97,6 @@ sub msg_to_channel {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
-		#if($window->{active}->{name} ~~ @enabled) {
 		if (index $enabled_raw, $window->{active}->{name} != -1) {
 			DP(__LINE__." Found! $window->{active}->{name}");
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
@@ -113,7 +111,7 @@ sub parse_extrainfo_from_link {
 	my $date = '';
 	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
 		$date = $2;
-		DP(__LINE__.' date found: '.$date);
+		#DP(__LINE__.' date found: '.$date);
 		# argument example: Tue, 04 Sep 2018 22:37:34 +0300 (using "%a, %d %b %Y %H:%M:%S %z")
 		# We need: 15.3.2023 15:56
 		my $formatter = DateTime::Format::Strptime->new(
@@ -124,9 +122,9 @@ sub parse_extrainfo_from_link {
 		my $dt = $formatter->parse_datetime($date);
 		$dt->set_time_zone('Europe/Helsinki');
 		$date = $dt->strftime('%d.%m. %H:%M');
-		DP(__LINE__.' ' .join ' ', $dt->ymd, $dt->hms); # shows 2016-12-22 07:16:29
+		#DP(__LINE__.' ' .join ' ', $dt->ymd, $dt->hms); # shows 2016-12-22 07:16:29
 	}
-	DP(__LINE__.' going stronk!1');
+	#DP(__LINE__.' going stronk!1');
 	if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
 		my $meteotext = $2;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;		# div inside span
@@ -155,6 +153,13 @@ sub event_pubmsg {
 			# removed 2023-11-01 return;
 		}
 		$server->command("msg $target $last_meteo");
+	} elsif ($msg =~ /^!f (.*)$/) {
+		my $searchword = $1;
+		my $result = `/home/laama/code/python/fmi1.py $searchword`;
+		print Dumper chomp($result);
+		print Dumper $result;
+
+		$server->command("msg $target $result");
 	}
 }
 

@@ -23,7 +23,7 @@
 use warnings;
 use strict;
 use Irssi;
-
+use POSIX;
 use LWP::UserAgent;
 #use HTTP::Cookies;
 use HTTP::CookieJar::LWP;
@@ -41,6 +41,7 @@ use Data::Dumper;
 use Digest::MD5 qw(md5_hex);		# LAama1 28.4.2017
 #use Encode qw(encode_utf8);
 use Encode;
+use Time::Piece;
 
 use KaaosRadioClass;				# LAama1 13.11.2016
 
@@ -56,7 +57,7 @@ $VERSION = '2021-09-29';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 
@@ -83,6 +84,8 @@ $newUrlData->{chan} = '';			# on which channel
 $newUrlData->{md5} = '';			# hash of the page that was fetched
 $newUrlData->{fetchurl} = '';		# which url to actually fetch
 $newUrlData->{shorturl} = '';		# shortened url for the link
+$newUrlData->{responsecode} = '';
+$newUrlData->{extra} = '';
 
 my $shortModeEnabled = 0;			# if enabled, reduces garbage sent to channel
 my $shorturlEnabled = 0;			# enable short url
@@ -150,10 +153,39 @@ sub add_header {
 	#$headers{$name} = $value;
 }
 
+# format youtube timestamp
+sub format_time {
+	my ($value, @rest) = @_;
+	dp(__LINE__." JES1: " . $value);
+	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
+	dp(__LINE__ . " JES2");
+	my $local_time = localtime;
+	my $diff = $local_time - $time_object;
+	dp(__LINE__." JES3: " . $diff);
+	my $result = '';
+	if ($diff >= 29030400) {
+    	$result = floor($diff / 29030400) . 'y';
+	} elsif ($diff >= 2419200) {
+		$result = floor($diff / 2419200) . 'mon';
+	} elsif ($diff >= 604800) {
+		$result = floor($diff / 604800) . 'wk';
+	}  elsif ($diff > 86400) {
+		$result = floor($diff / 86400) . 'days';
+	} elsif ($diff > 3600) {
+		$result = floor($diff / 3600) . 'h';
+	} elsif($diff > 60) {
+		$result = floor($diff / 60) . 'min';
+	} else {
+		$result .= 's';
+	}
+	$result .= ' ago';
+	return $result;
+}
+
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
 	my ($url, @rest) = @_;
-
+	dp(__LINE__.' url: ' . $url);
 	my $page = '';						# page source decoded to utf8
 	my $diffpage = '';					# page source decoded
 	my $size = 0;						# content size
@@ -175,16 +207,16 @@ sub fetch_title {
 		$page = $response->decoded_content(charset => 'UTF-8');
 		my $datasize = length $page;
 		if ($page ne $diffpage) {
-			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!');
+			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!') if $DEBUG1;
 		} else {
-			dd(__LINE__.':fetch_title: Same charset / content as reported!');
+			dd(__LINE__.':fetch_title: Same charset / content as reported!') if $DEBUG1;
 		}
 
 		if ($datasize > $max_size) {
-			dd(__LINE__.": fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
+			#dd(__LINE__.": fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
 			$page = substr $page, 0, $max_size;
 			$datasize = length $page;
-			dd(__LINE__.": fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
+			#dd(__LINE__.": fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
 		}
 
 		$size = $response->content_length || 0;
@@ -207,7 +239,8 @@ sub fetch_title {
 
 	} else {
 		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
-		da($response);
+		$newUrlData->{responsecode} = $response->code();
+		#da(__LINE__, $response);
 		#return 'Error: '.$response->status_line, 0,0, $md5hex;
 		return '',0,0,'';
 	}
@@ -215,7 +248,7 @@ sub fetch_title {
 	if ($response->content_type !~ /(text)|(xml)/) {
 		# if not text or xml
 		if ($shortModeEnabled == 1) {
-			dp(__LINE__.':Short mode enabled = 1');
+			dp(__LINE__.': Short mode enabled = 1') if $DEBUG1;
 			return '', 0 , 0, $md5hex;
 		} else {
 			return 'Mimetype: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
@@ -588,14 +621,20 @@ sub api_conversion {
 		if ($ytubeapidata_json eq '-1') {
 			return 0;
 		}
-		da($ytubeapidata_json->{items}) if $DEBUG1;
+		#da($ytubeapidata_json->{items});
+		my $len = scalar $ytubeapidata_json->{items};
+		if (not defined $ytubeapidata_json->{items}[0]) {
+			$newUrlData->{title} = "Video not found ...";
+			return 1;
+		}
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
 		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
 		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
 		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
-		$newUrlData->{title} = $title .' ['.$chantitle.'] '.$likes;
+		$published = format_time($published);
+		$newUrlData->{title} = "\0030,5 ▶ \003 " . $title .' ['.$chantitle.', '.$published.' '.$likes . ']';
 		$newUrlData->{desc} = $description;
 		return 1;
 	}
@@ -672,7 +711,7 @@ sub signal_emitters {
 
 sub url_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":url_conversion, param: $param") if $DEBUG1;
+	dp(__LINE__.": url_conversion, param: $param");
 	
 	# soundcloud conversion, example: https://soundcloud.com/oembed?url=https://soundcloud.com/shatterling/shatterling-different-meanings-preview
 	$param =~ s/\:\/\/soundcloud.com/\:\/\/soundcloud.com\/oembed\?url\=http\:\/\/soundcloud\.com/;
@@ -696,7 +735,7 @@ sub url_conversion {
 		set_useragent(3);
 	}
 
-	if ($param =~ /twitter.com/i) {
+	if ($param =~ /twitter\.com/i) {
 		# TODO: test mobile m.twitter.com
 		$param =~ s/twitter\.com/nitter\.it/i;
 		# nitter.42l.fr nitter.pussthecat.org nitter.eu nitter.net nitter.dark.fail nitter.cattube.org nitter.actionsack.com
@@ -708,7 +747,12 @@ sub url_conversion {
 		# print($IRSSI{'name'}.'> yle.fi detected!');
 		# does not seem to work yet.. add_header('X-Forwarded-For', '54.192.99.2');
 	}
-
+	if ($param =~ /imgur\.com\/(.*)/) {
+		my $newurl = 'https://rimgo.projectsegfau.lt/' .$1;
+		print($IRSSI{name}."> imgur-conversion $newurl");
+		$newUrlData->{extra} = " -- $newurl";
+		$param = $newurl;
+	}
 	return $param;
 }
 
@@ -747,7 +791,7 @@ sub sig_msg_pub {
 		clearUrlData();
 		return;
 	}
-	
+	$newUrlData->{url} = url_conversion($newUrlData->{url});
 	$newUrlData->{fetchurl} = $newUrlData->{url};	# this variable will be the url that will be executed
 	$newUrlData->{nick} = $nick;
 	$newUrlData->{chan} = $target;
@@ -768,7 +812,7 @@ sub sig_msg_pub {
 
 	# if we want to censor
 	if (dontPrintThese($newUrlData->{url}) == 1) {
-		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
+		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = ($newUrlData->{fetchurl});
 		saveToDB();
 		return;
 	}
@@ -780,7 +824,7 @@ sub sig_msg_pub {
 		$shorturlEnabled = 0;
 	}
 
-	$newUrlData->{fetchurl} = url_conversion($newUrlData->{url}, $server, $target);
+	#$newUrlData->{fetchurl} =  ($newUrlData->{url}, $server, $target);
 	
 	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
 
@@ -790,6 +834,10 @@ sub sig_msg_pub {
 		#return;
 	} else {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
+		dp(__LINE__. ' Response code: ' . $newUrlData->{responsecode} . ', fetchURl: ' . $newUrlData->{fetchurl});
+		if ($newUrlData->{responsecode} ne '') {
+			return;
+		}
 	}
 	
 	my $newtitle = '';
@@ -798,7 +846,7 @@ sub sig_msg_pub {
 	# if exact page was sent before on the same chan
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
-	# shorten output message	
+	# shorten output message
 	print $IRSSI{name}."> Shortening url info a bit..." if ($newtitle =~ s/(.{260})(.*)/$1.../);
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
@@ -1076,6 +1124,7 @@ sub noDescForThese {
 }
 
 sub clearUrlData {
+	dp(__LINE__  . ' clear url data ...');
 	$newUrlData->{nick} = '';		# nick
 	$newUrlData->{date} = 0;		# date
 	$newUrlData->{url} = '';		# url
@@ -1085,6 +1134,8 @@ sub clearUrlData {
 	$newUrlData->{md5} = '';		# md5hash
 	$newUrlData->{fetchurl} = '';	# url to fetch
 	$newUrlData->{shorturl} = '';	# short url
+	$newUrlData->{responsecode} = '';	# response code if error
+	$newUrlData->{extra} = '';
 	KaaosRadioClass::floodCheck();	# write current timestamp to flood file
 }
 
@@ -1133,7 +1184,6 @@ Irssi::signal_register($signal_config_hash2);
 
 my $signal_config_hash3 = { 'yle_url' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash3);
-
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');

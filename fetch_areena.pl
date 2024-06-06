@@ -28,7 +28,7 @@ my $ylescript = 'yle-dl -qq --vfat --destdir '.$download_dir.' --maxbitrate best
 #my $execscript = 'exec -msg yle-dl -name ';
 my $execscript = 'exec -window -name yledl';
 
-print($IRSSI{name}.'> download dir: '.$download_dir);
+prind('download dir: '.$download_dir);
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
@@ -37,16 +37,16 @@ sub sig_msg_pub {
 		$msg =~ /(https?:.*\.yle\.fi\S+)/i) {
 		if (my $count = cmd_check_if_exist($1)) {
 			#$server->command("msg -channel $target Found $count items. Downloading..");
-			print($IRSSI{name}."> Found $count items. Downloading...");
+			prind("Found $count items. Downloading...");
 			cmd_start_dl($1);
 		}
 	}
 }
 
-# signal is sent from urltitle.pl
+# signal is sent from urltitle3.pl
 sub sig_yle_url {
 	my ($server, $target, $rimpsu, @rest) = @_;
-	print($IRSSI{name}."> Yle_url signal received");
+	prind('Yle_url signal received');
 	my ($title, $desc) = get_title_desc($rimpsu);
 	if ($title) {
 		my $responsetext = "$title \002Kuvaus:\002 $desc";
@@ -59,7 +59,10 @@ sub sig_yle_url {
 sub get_title_desc {
 	my ($yleurl, @rest) = @_;
 	my $output = `yle-dl --showmetadata ${yleurl} 2>/dev/null`;
-	if ($output eq "") { return; }
+	if ($output eq "") {
+
+		return;
+	}
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
 	$json = decode_json($output);
@@ -74,8 +77,8 @@ sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
 	debu(__LINE__.' checking: '. $url);
 	
-	my $output = `yle-dl -V --showmetadata ${url} 2>/dev/null`;
-	if ($output eq "") { return; }
+	my $output = `yle-dl -V --showmetadata ${url} 2>/home/laama/.irssi/scripts/yle.log`;
+	if ($output eq '') { return; }
 
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
@@ -106,12 +109,17 @@ sub exec_remove {
 sub exec_input {
 	my ($info, $line, @rest) = @_;
 	$line =~ s/\t/  /;
-	debu('exec_input: '. $line);
+	prind('exec_input: '. $line);
 }
 
 sub debu {
 	my ($text, @rest) = @_;
 	print($IRSSI{name}.'> '. $text);
+}
+
+sub prind {
+	my ($text, @test) = @_;
+	print("\00311" . $IRSSI{name} . ">\003 ". $text);
 }
 
 Irssi::signal_add("exec new", 'exec_new');

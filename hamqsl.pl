@@ -58,18 +58,22 @@ sub parse_hams_data {
     my $kindex = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/kindex'));
     my $xray = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/xray'));
     my $sunspots = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/sunspots'));
+	my $heliumline = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/heliumline'));
     my $protonflux = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/protonflux'));
     my $electronflux = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/electonflux'));
     my $solarwind = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/solarwind'));
     my $magfield = KaaosRadioClass::ktrim($xmlobj->findvalue('/solar/solardata/magneticfield'));
-    return "Solar Flux: $solarflux, A_ind: $aindex, K_ind (kp): $kindex, Xray: $xray, Sunspot number: $sunspots, Proton Flux: $protonflux, Electron Flux: $electronflux, Solar Wind: $solarwind km/s";
+	my $returnstring = "Solar Flux: $solarflux, A_ind: $aindex, K_ind (kp): $kindex, Xray: $xray" .
+		", Sunspot number: $sunspots, Proton Flux: ${protonflux}, Electron Flux: ${electronflux}e/cm²/s, Solar Wind: ${solarwind}km/s, Heliumline: ${heliumline}p/cm²/s, " .
+		"Magnetic field: ${magfield}nT";
+    return $returnstring;
     #Irssi::print(Dumper($solarflux));
 }
 
 sub fetch_hams_data {
     my $url = 'http://www.hamqsl.com/solarxml.php';
     my $textdata = KaaosRadioClass::fetchUrl($url, 0);
-    my $dom = $parser->load_xml(location => $url);
+    my $dom = $parser->load_xml(string => $textdata);
     #Irssi::print(Dumper($dom));
     return $dom;
     #return KaaosRadioClass::getXML($url);
