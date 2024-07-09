@@ -51,12 +51,12 @@ my @negativeanswer_words = ('PSSHH!', 'ZaHH!', 'hyi', '~ngh~', 'ite', 'fak', 'fo
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
-		printc("Fatal error, unable to create file: $db");
+		prind("Fatal error, unable to create file: $db");
 		die;
 	}
 	close FILE;
 	createDB();
-	printc('Database file created.');
+	prind('Database file created.');
 }
 readFromDb();
 #read_db();
@@ -107,7 +107,7 @@ sub change_nick {
 	my ($server, $newnick, @rest) = @_;
 	#if_nick_in_use($server, $newnick);
 	$newnick .= $nicktail;
-	printc('change_nick: '. $newnick);
+	prind('change_nick: '. $newnick);
 	$server->command("NICK $newnick");
 	return;
 }
@@ -118,7 +118,7 @@ sub if_lvlup {
 	my $modulo = $counter % $levelpoints;
 	if ($modulo == 0) {
 		# level up
-		printc('level up! ('.count_level($counter).')');
+		prind('level up! ('.count_level($counter).')');
 		return count_level($counter);
 	}
 	return 0;
@@ -168,25 +168,25 @@ sub pubmsg {
 		msg_random($serverrec, $target, @foodanswer_words);
 		evolve($serverrec, $target, count_level($foodcounter, @foodnicks), 'FooD', @foodnicks) if (if_lvlup($foodcounter));
 		increaseValue('food');
-		printc("trigger from $nick on channel $target, foodcounter: $foodcounter");
+		prind("trigger from $nick on channel $target, foodcounter: $foodcounter");
 	} elsif (match_word_lc($msg, @drugs)) {
 		$drugcounter += 1;
 		msg_random($serverrec, $target, @druganswer_words);
 		evolve($serverrec, $target, count_level($drugcounter, @drugnicks), 'dRuGg', @drugnicks) if (if_lvlup($drugcounter));
 		increaseValue('drugs');
-		printc("trigger from $nick on channel $target, drugcounter: $drugcounter");
+		prind("trigger from $nick on channel $target, drugcounter: $drugcounter");
 	} elsif (match_word_lc($msg, @loves)) {
 		$lovecounter += 1;
 		msg_random($serverrec, $target, @positiveanswer_words);
 		evolve($serverrec, $target, count_level($lovecounter, @lovenicks), 'LovE', @lovenicks) if(if_lvlup($lovecounter));
 		increaseValue('love');
-		printc("trigger from $nick on channel $target, lovecounter: $lovecounter");
+		prind("trigger from $nick on channel $target, lovecounter: $lovecounter");
 	} elsif (match_word_lc($msg, @hates)) {
 		$hatecounter += 1;
 		msg_random($serverrec, $target, @negativeanswer_words);
 		evolve($serverrec, $target, count_level($hatecounter, @hatenicks), 'HaT', @hatenicks) if(if_lvlup($hatecounter));
 		increaseValue('hate');
-		printc("trigger from $nick on channel $target, hatecounter: $hatecounter");
+		prind("trigger from $nick on channel $target, hatecounter: $hatecounter");
 	}
 }
 
@@ -199,9 +199,9 @@ sub createDB {
 
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
 	if($rv ne 0) {
-   		printc ("DBI Error: $rv");
+   		prind ("DBI Error: $rv");
 	} else {
-   		printc('Table tama created successfully');
+   		prind('Table tama created successfully');
 		my $time = time;
 		$sql = "INSERT INTO tama (FEATURE, FEATURETIME) values ('love', $time)";
 		$rv = KaaosRadioClass::writeToOpenDB($dbh, $sql);
@@ -253,14 +253,14 @@ sub read_db {
 	return @results;
 }
 
-sub printc {
-	my ($msg, @rest) = @_;
-	print $IRSSI{name}.': '. $msg;
+sub prind {
+	my ($text, @rest) = @_;
+	print "\00313" . $IRSSI{name} . ">\003 " . $text;
 }
 
 Irssi::settings_add_str('tamagotchi', 'tamagotchi_enabled_channels', '');
 Irssi::signal_add_last('message public', 'pubmsg');
 #Irssi::signal_add_last('message irc action', 'pubmsg');
 
-Irssi::print("tamagotchi v. $VERSION loaded");
-Irssi::print('Enabled channels: '. Irssi::settings_get_str('tamagotchi_enabled_channels'));
+prind("tamagotchi v. $VERSION loaded");
+prind('Enabled channels: '. Irssi::settings_get_str('tamagotchi_enabled_channels'));

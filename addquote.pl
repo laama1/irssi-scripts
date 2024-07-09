@@ -33,22 +33,22 @@ $VERSION = '20220716';
 
 unless (-e $quotedb) {
 	unless(open FILE, '>', $quotedb) {
-		print($IRSSI{name}. "> Fatal error: Unable to create file: $quotedb");
+		prindw("Fatal error: Unable to create file: $quotedb");
 		die;
 	}
 	close FILE;
 	createDB();
-	print($IRSSI{name}. '> Quotes Database file created.');
+	prind('Quotes Database file created.');
 }
 
 unless (-e $vitsidb) {
 	unless(open FILE, '>', $vitsidb) {
-		print($IRSSI{name}. "> Fatal error: Unable to create file: $vitsidb");
+		prindw("Fatal error: Unable to create file: $vitsidb");
 		die;
 	}
 	close FILE;
 	createVitsiDB();
-	print($IRSSI{name}. '> Jokes Database file created.');
+	prind('Jokes Database file created.');
 }
 
 sub event_privmsg {
@@ -65,7 +65,7 @@ sub parseQuote {
 		return if KaaosRadioClass::floodCheck();
 		KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
 		saveToDB($quotedb, 'QUOTES', $nick, $uusiquote, $target);
-		print($IRSSI{name}."> $msg -- request from $nick on channel: $target");
+		prind("$msg -- request from $nick on channel: $target");
 		$server->command("msg $nick quote lisätty! $quoteurl");
 		$server->command("msg $target :)");
 	} elsif ($msg =~ /^!rq (.{3,15})/gi) {
@@ -74,21 +74,21 @@ sub parseQuote {
 		my @answers = search_from_file($tiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
-			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
+			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rq/gi) {
 		return if KaaosRadioClass::floodCheck();
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");
-			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
+			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!aj (.*)/gi) {
 		my $uusivitsi = decode('UTF-8', $1);
 		return if KaaosRadioClass::floodCheck();
 		KaaosRadioClass::addLineToFile($vitsitiedosto, $uusivitsi);
 		saveToDB($vitsidb, 'JOKES', $nick, $uusivitsi, $target);
-		print($IRSSI{name}."> $msg request from $nick") if $DEBUG;
+		prind("$msg request from $nick") if $DEBUG;
 		$server->command("msg $nick vitsi lisätty! $vitsiurl");
 		$server->command("msg $target xD");
 	} elsif ($msg =~ /^!rj (.{3,15})/gi) {
@@ -97,14 +97,14 @@ sub parseQuote {
 		my @answers = search_from_file($vitsitiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
-			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
+			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rj/gi) {
 		return if KaaosRadioClass::floodCheck();
 		my $data = KaaosRadioClass::readTextFile($vitsitiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");
-			print($IRSSI{name}."> answered: '$rimpsu' for $nick on channel: $target");
+			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	}
 	return;
@@ -149,17 +149,17 @@ sub event_pubmsg {
 sub createDB {
 	my $error = '';
 	if ($error = KaaosRadioClass::writeToDB($quotedb, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL)')) {
-		print $IRSSI{name}.'> '.$error;
+		prindw($error);
 		die;
 	}
-	print $IRSSI{name}.'> Table created successfully';
+	prind('Table created successfully');
 	return;
 }
 
 sub createVitsiDB {
 	my $error = '';
 	if ($error = KaaosRadioClass::writeToDB($vitsidb, 'CREATE VIRTUAL TABLE JOKES using fts4(NICK, PVM, JOKE, CHANNEL)')) {
-		print $IRSSI{name}.'> '.$error;
+		prindw($error);
 		die;
 	}
 	return;
@@ -179,7 +179,7 @@ sub saveToDB {
 	$sth->execute;
 	$sth->finish();
 	$dbh->disconnect();
-	Irssi::print($IRSSI{name}.": Saved to database. $quote");
+	prind("Saved to database. $quote");
 	return;
 }
 
@@ -194,6 +194,16 @@ sub da {
 	Irssi::print('addquote: ');
 	Irssi::print(Dumper(@_));
 	return;
+}
+
+sub prind {
+	my ($text, @rest) = @_;
+	print "\0038" . $IRSSI{name} . ">\003 " . $text;
+}
+
+sub prindw {
+	my ($text, @rest) = @_;
+	print "\0034" . $IRSSI{name} . ">\003 " . $text;
 }
 
 Irssi::signal_add('message public', 'event_pubmsg');

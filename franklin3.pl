@@ -122,7 +122,7 @@ sub make_call {
         print Dumper $json_decd if $DEBUG;
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
-        print $IRSSI{name}." reply> " . $answered;
+        prind("reply: " . $answered);
         $answered =~ s/\n+/ /ug;
         $answered =~ s/\s{2,}//ug;
         $answered =~ s/```//ug;
@@ -142,10 +142,10 @@ sub make_call {
         push @{ $chathistory->{$nick}->{history}}, { answer => $answered, message => $text };
         return $answered;
     } elsif ($res->code == 400) {
-        print $IRSSI{name}."> got error 400.";
-        print Dumper $res->{error};
+        prindw("got error 400.");
+        print Dumper $res->{error} if $DEBUG;
     } else {
-		print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
+		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
     return undef;
 }
@@ -169,7 +169,7 @@ sub frank {
         print('passed floodcheck') if $DEBUG;
         return if KaaosRadioClass::Drunk($nick);
         print('passed drunktest like a mf') if $DEBUG;
-        print $IRSSI{name}."> $nick asked: $textcall";
+        prind("$nick asked: $textcall");
         #my $wrote = 1;
 
         # @todo fork or something
@@ -203,7 +203,7 @@ sub make_vision_preview_json {
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
-    print $IRSSI{name}."> searchprompt for vision: $searchprompt";
+    prind("searchprompt for vision: $searchprompt");
     my $data = {model => $visionmodel, max_tokens => 300, messages => [{
         role => "user",
         content => [
@@ -239,10 +239,10 @@ sub dalle {
             }
         } elsif ($res->is_error) {
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
-            print $IRSSI{name}."> Error: $errormsg";
+            prindw("Error: $errormsg");
             #test $server->command("msg -channel $channel $nick: $errormsg");
         } else {
-		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
+		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
         }
         print Dumper $res if $DEBUG;
     } elsif ($msg =~ /^!dalle (.*)/u ) {
@@ -276,9 +276,9 @@ sub dalle {
             #print "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
             $server->command("msg -channel $channel $nick: $errormsg");
-            print $IRSSI{name}."> Error: $errormsg";
+            prindw("Error: $errormsg");
         } else {
-		    print $IRSSI{name}."> failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code;
+		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
             
         }
         print Dumper $res if $DEBUG;
@@ -301,7 +301,7 @@ sub change_prompt {
     $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
     $systemsg = $systemsg_start . $newprompt;
-    print($IRSSI{name} . "> new prompt: $systemsg");
+    prind("new prompt: $systemsg");
 }
 
 sub get_prompt {
@@ -348,7 +348,7 @@ sub event_pubmsg {
             return if KaaosRadioClass::floodCheck(3);
             return if KaaosRadioClass::Drunk($nick);
             change_prompt($newprompt);
-            print($IRSSI{name} . "> $nick commanded: $1");
+            prind("$nick commanded: $1");
             $server->command("msg -channel $target *kling*");
         }
     } elsif ($msg =~ /^\!prompt/) {
@@ -361,10 +361,20 @@ sub save_settings {
     return;
 }
 
+sub prind {
+	my ($text, @rest) = @_;
+	print "\00311" . $IRSSI{name} . ">\003 " . $text;
+}
+
+sub prindw {
+	my ($text, @rest) = @_;
+	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+}
+
 Irssi::signal_add_last('message public', 'frank' );
 Irssi::signal_add_last('message public', 'dalle' );
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
 #Irssi::signal_add_last('setup saved', 'save_settings');
 Irssi::settings_add_str($IRSSI{name}, 'franklin_prompt', $systemsg);
-print $IRSSI{name}."> v.$VERSION loaded";
+prind("v.$VERSION loaded");

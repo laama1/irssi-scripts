@@ -41,14 +41,14 @@ my $parser = new XML::RSS();
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
-		print("$myname> Unable to create database file: $db");
+		prindw("Unable to create database file: $db");
 		die;
 	}
 	close FILE;
 	create_db();
-	print("$myname> Database file $db created.");
+	prind("Database file $db created.");
 } else {
-	print("$myname> Database file $db found!");
+	prind("Database file $db found!");
 }
 
 sub DP {
@@ -210,7 +210,7 @@ sub save_to_db {
 	$sth->execute;
 	$sth->finish();
 
-	print("$myname> New data saved to database: $title");
+	prind("New data saved to database: $title");
 	return;
 }
 
@@ -414,6 +414,15 @@ sub timerfunc {
 	return;
 }
 
+sub prind {
+	my ($text, @test) = @_;
+	print("\00312" . $IRSSI{name} . ">\003 ". $text);
+}
+sub prindw {
+	my ($text, @test) = @_;
+	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
+}
+
 Irssi::command_bind('taivaanvahti_update', \&timerfunc, 'taivaanvahti');
 Irssi::command_bind('taivaanvahti_search', \&search_db, 'taivaanvahti');
 
@@ -425,7 +434,7 @@ Irssi::signal_add('taivaanvahti_search_id', 'sig_taivaanvahti_search');
 Irssi::timeout_add(1_800_000, 'timerfunc', undef);		# 30 minutes
 #Irssi::timeout_add(5000, 'timerfunc', undef);			# 5 aseconds
 
-print("$myname> v. $VERSION Loaded!");
-print("$myname> new commands: /taivaanvahti_update, /taivaanvahti_search");
-print("$myname> /set taivaanvahti_enabled_channels #channel1 #channel2");
-print("$myname> Enabled on: ". Irssi::settings_get_str('taivaanvahti_enabled_channels'));
+prind("v. $VERSION Loaded!");
+prind("new commands: /taivaanvahti_update, /taivaanvahti_search");
+prind("/set taivaanvahti_enabled_channels #channel1 #channel2");
+prind("Enabled on: ". Irssi::settings_get_str('taivaanvahti_enabled_channels'));

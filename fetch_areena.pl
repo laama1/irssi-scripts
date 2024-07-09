@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 use Irssi;
-#use KaaosRadioClass;
 use JSON;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
@@ -128,4 +127,4 @@ Irssi::signal_add("exec input", 'exec_input');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('yle_url', 'sig_yle_url');
-Irssi::print($IRSSI{name}.' v. '. $IRSSI{changed});
+prind('v. '. $IRSSI{changed} . ' loaded.');

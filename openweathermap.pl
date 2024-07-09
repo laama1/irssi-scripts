@@ -120,12 +120,12 @@ https://emojipedia.org/moon-viewing-ceremony/
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		print($IRSSI{name}."> Unable to create or write DB file: $db");
+		prindw("Unable to create or write DB file: $db");
 		die;
 	}
 	close FILE;
 	if (CREATEDB() == 0) {
-		print($IRSSI{name}."> Database file created.");
+		prind("Database file created.");
 	}
 }
 
@@ -307,8 +307,12 @@ sub forecastloop1 {
 			$returnstring = $use_this_city . ','.$json->{city}->{country} . " $timezone \002klo:\002 " . $returnstring;
 		}
 		#print __LINE__ if $DEBUG1;
-		my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},
-												$json->{city}->{sunset}, $item->{dt}, $json->{city}->{timezone});
+		my $weathericon = replace_with_emoji($item->{weather}[0]->{main},
+												$json->{city}->{sunrise},
+												$json->{city}->{sunset},
+												$item->{dt},
+												$json->{city}->{timezone}
+											);
 		my $temptimedt = DateTime->from_epoch(epoch => ($item->{dt} + $json->{city}->{timezone}));
 		$returnstring .= "\002".sprintf('%.2d', $temptimedt->hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 		$index++;
@@ -423,7 +427,7 @@ sub getSayLine2 {
 	#	$index++;
 	#}
 	my $newcity = changeCity($json->{name});
-	print __LINE__ . 'weatherdesc: ' . $weatherdesc;
+	print __LINE__ . 'weatherdesc: ' . $weatherdesc if $DEBUG;
 	my $returnvalue = $newcity.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $sunrise, $sunset, time, $json->{timezone});
 	return $returnvalue;
 }
@@ -479,7 +483,7 @@ sub getSayLine {
 	my $sunrisedt = DateTime->from_epoch( epoch => ($json->{sys}->{sunrise} + $json->{timezone}));
 	my $sunsetdt = DateTime->from_epoch( epoch => ($json->{sys}->{sunset} + $json->{timezone}));
 
-	my $sunrise = '🌄 '.$sunrisedt->hour .':'.sprintf('%.2d', $sunrisedt->minute);
+	my $sunrise = '🌇 '.$sunrisedt->hour .':'.sprintf('%.2d', $sunrisedt->minute);
 
 	#my $sunset = '-> ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
 	my $sunset = '-> ' .$sunsetdt->hour . ':'.sprintf('%.2d', $sunsetdt->minute);
@@ -506,7 +510,7 @@ sub getSayLine {
 	if (defined $json->{uvindex} && $json->{uvindex} && $json->{uvindex} > 1) {
 		$uv_index = ', UVI: '.$json->{uvindex};
 	}
-	print __LINE__ . ' city: ' . $city;
+	print __LINE__ . ' city: ' . $city if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt}, $json->{timezone});
 	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index.', '. $pressure . ', ' . $humidity;
 	return $returnvalue;
@@ -620,10 +624,10 @@ sub CREATEDB {
 
 	my $rv = KaaosRadioClass::writeToOpenDB($dbh, $stmt);
 	if($rv != 0) {
-   		Irssi::print ($IRSSI{name}.": DBI Error $rv");
+   		prindw("DBI Error $rv");
 		return -1;
 	} else {
-   		Irssi::print($IRSSI{name}.": Table CITIES created succesfully");
+   		prind("Table CITIES created succesfully");
 	}
 
 	my $stmt2 = 'CREATE TABLE IF NOT EXISTS DATA (
@@ -645,10 +649,10 @@ sub CREATEDB {
 		LON text)';
 	my $rv2 = KaaosRadioClass::writeToOpenDB($dbh, $stmt2);
 	if($rv2 < 0) {
-   		Irssi::print ($IRSSI{name}.": DBI Error: $rv2");
+   		prindw("DBI Error: $rv2");
 		return -2;
 	} else {
-   		Irssi::print($IRSSI{name}.": Table DATA created successfully");
+   		prind("Table DATA created successfully");
 	}
 
 	$dbh = KaaosRadioClass::closeDB($dbh);
@@ -785,12 +789,22 @@ sub print_cities {
 	}
 }
 
+sub prind {
+	my ($text, @rest) = @_;
+	print "\0035" . $IRSSI{name} . ">\003 " . $text;
+}
+
+sub prindw {
+	my ($text, @rest) = @_;
+	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+}
+
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
 Irssi::command_bind('openweathermap_cities', \&print_cities);
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message private', 'sig_msg_priv');
 
-Irssi::print($IRSSI{name}." v. $VERSION loaded.");
-Irssi::print('New commands:');
-Irssi::print('/set openweathermap_enabled_channels #channel1@IRCnet #channel2@nerv, /openweathermap_cities');
-Irssi::print("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));
+prind("v. $VERSION loaded.");
+prind('New commands:');
+prind('/set openweathermap_enabled_channels #channel1@IRCnet #channel2@nerv, /openweathermap_cities');
+prind("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));

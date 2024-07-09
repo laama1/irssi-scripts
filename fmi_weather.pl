@@ -2,7 +2,7 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
-use lib $ENV{HOME} . '/.irssi/scripts/irssi-scripts';
+#use lib $ENV{HOME} . '/.irssi/scripts/irssi-scripts';
 use KaaosRadioClass;
 use IO::Socket;
 use Fcntl;
@@ -24,7 +24,7 @@ $VERSION = '2022-03-11';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
@@ -53,8 +53,7 @@ sub check_sock {
 	my $msg;
 	if (my $client = $my_socket->accept()) {
 		$client->recv($msg, 1024);
-		echota("Got message from socket: $msg");# if $msg;
-		#if ($msg =~ /Aja$/) {
+		prind("Got message from socket: $msg");# if $msg;
 		if ($msg =~ /^Aja/) {
 			DP(__LINE__." AJA!");
 			if (parse_extrainfo_from_link($fmiURL)) {
@@ -64,9 +63,9 @@ sub check_sock {
 	}
 }
 
-sub echota {
-	my ($texti, @rest) = @_;
-	print($IRSSI{name}."> ". $texti);
+sub prind {
+	my ($text, @rest) = @_;
+	print("\00310" . $IRSSI{name} . "\003> ". $text);
 }
 sub DP {
 	return unless $DEBUG == 1;
@@ -81,6 +80,7 @@ sub DA {
 	return;
 }
 
+# @TODO
 sub print_help {
 	my ($server, $targe, @rest) = @_;
 	my $help = 'fmi-weather -skripti hakee päivän Meteorologin sääkatsauksen.';
@@ -90,15 +90,16 @@ sub print_help {
 sub msg_to_channel {
 	my ($text, @rest) = @_;
 	my $enabled_raw = Irssi::settings_get_str('fmi_enabled_channels');
+	DP(__LINE__ . ' enabled_raw: ' . $enabled_raw);
 	my @enabled = split / /, $enabled_raw;
 
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
-
-		if (index $enabled_raw, $window->{active}->{name} != -1) {
-			DP(__LINE__." Found! $window->{active}->{name}");
+		DP(__LINE__ . ' window name: ' . $window->{active}->{name});
+		if (index ($enabled_raw, $window->{active}->{name}) ne "-1") {
+			DP(__LINE__." Found matching channel! $window->{active}->{name} at position: " . index ($enabled_raw, $window->{active}->{name}));
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
 		}
 	}
@@ -132,7 +133,7 @@ sub parse_extrainfo_from_link {
 		$meteotext = "\002Meteorologin sääkatsaus ($date):\002 ".$meteotext;
 		DP(__LINE__.' meteotext: '. $meteotext);
 		if ($meteotext ne $last_meteo) {
-			#msg_to_channel($meteotext);
+			msg_to_channel($meteotext);
 			$last_meteo = $meteotext;
 		}
 	} else {
@@ -177,7 +178,7 @@ sub get_channel_title {
 }
 
 sub fmi_update {
-	echota(" Fetching new weather data...");
+	prind("Fetching new weather data...");
 	parse_extrainfo_from_link($fmiURL);
 }
 
@@ -186,7 +187,8 @@ sub timeout_stop {
 }
 
 sub timeout_1h {
-	echota("Aja1");
+	DP("Aja 1h");
+	prind('New at command at now +1 hours..');
 	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
 	DP($retval);
@@ -196,6 +198,7 @@ sub timeout_545 {
 	my $retval = `$command`;
 }
 sub timeout_start {
+	prind("Starting 10 sec timeout for reading the socket...");
 	timeout_1h();
 	#timeout_545();
 	$timeout_tag = Irssi::timeout_add(10000, 'check_sock', undef);      # 10 seconds
@@ -210,6 +213,6 @@ Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', 'Add channels whe
 	
 timeout_start();
 
-print($IRSSI{name}."> v. $VERSION Loaded!");
-print($IRSSI{name}."> /set fmi_enabled_channels #channel1 #channel2");
-print($IRSSI{name}."> Enabled on: ". Irssi::settings_get_str('fmi_enabled_channels'));
+prind("v. $VERSION Loaded!");
+prind("/set fmi_enabled_channels #channel1 #channel2");
+prind("Enabled on: ". Irssi::settings_get_str('fmi_enabled_channels'));

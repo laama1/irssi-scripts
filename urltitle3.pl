@@ -46,7 +46,7 @@ use Time::Piece;
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2021-09-29';
+$VERSION = '2024-06-12';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -57,7 +57,7 @@ $VERSION = '2021-09-29';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 
@@ -92,12 +92,12 @@ my $shorturlEnabled = 0;			# enable short url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		print($IRSSI{name}."> Stop. Unable to create or write file: $db");
+		prind("Stop. Unable to create or write file: $db");
 		die;
 	}
 	close FILE;
 	createFstDB();
-	print($IRSSI{name}."> Database file created.");
+	prind("Database file created.");
 }
 
 
@@ -134,7 +134,7 @@ eval {
 	1;
 } or do {
 };
-print(%headers);
+print(%headers) if $DEBUG1;
 # new headers for youtube and mixcloud etc.
 sub set_useragent {
 	my ($choice, @rest) = @_;
@@ -194,7 +194,7 @@ sub fetch_title {
 	my $response = $ua->get($url);
 
 	if ($response->is_success) {
-		print($IRSSI{name}."> Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
+		prind("Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
 		if ($finalURI ne '' && $finalURI ne $url) {
 			# save redirect url
@@ -224,7 +224,7 @@ sub fetch_title {
 		if ($datasize > 0) {
 			$md5hex = md5_hex(Encode::encode_utf8($page));
 		} else {
-			print($IRSSI{name}." warning> Couldn't get size of the document!");
+			prindw("Couldn't get size of the document!");
 		}
 		
 		if ($size / (1024*1024) > 1) {
@@ -238,7 +238,7 @@ sub fetch_title {
 		}
 
 	} else {
-		print($IRSSI{name}."> Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
+		prindw("Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		$newUrlData->{responsecode} = $response->code();
 		#da(__LINE__, $response);
 		#return 'Error: '.$response->status_line, 0,0, $md5hex;
@@ -540,9 +540,9 @@ sub createFstDB {
 
 	my $rv = $dbh->do($stmt);
 	if($rv < 0) {
-   		print ($IRSSI{name}." DBI Error> ". DBI::errstr);
+   		prindw("DBI Error> ". DBI::errstr);
 	} else {
-   		print($IRSSI{name}."> Table $db created successfully");
+   		prind("Table $db created successfully");
 	}
 	$dbh->disconnect();
 }
@@ -572,7 +572,7 @@ sub saveToDB {
 	$sth->finish();
 	$dbh->disconnect();
 
-	print($IRSSI{name}."> URL from $newUrlData->{chan} saved to database.");
+	prind("URL from $newUrlData->{chan} saved to database.");
 	clearUrlData();
 	return;
 }
@@ -612,19 +612,19 @@ sub checkForPrevEntry {
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
 
-	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/) {
+	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/ || $param =~ /invidious\.protokolla\.fi\/.*[\?\&]v=([^\&]*)/ || $param =~ /protokolla\.invidious\.fi\/.*[\?\&]v=([^\&]*)/) {
 		# youtube api
 		my $videoid = $1;
 		
 		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
 		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
-		if ($ytubeapidata_json eq '-1') {
+		if ($ytubeapidata_json eq '-1' || $ytubeapidata_json eq '-2') {
 			return 0;
 		}
 		#da($ytubeapidata_json->{items});
 		my $len = scalar $ytubeapidata_json->{items};
 		if (not defined $ytubeapidata_json->{items}[0]) {
-			$newUrlData->{title} = "Video not found ...";
+			$newUrlData->{title} = "Video not found from API...";
 			return 1;
 		}
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
@@ -642,7 +642,7 @@ sub api_conversion {
 	# TODO: imgur conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
 		my $image = $1;
-		print($IRSSI{name}."> imgur-klick! img: $image");
+		prind("imgur-klick! img: $image");
 	}
 
 	# google drive
@@ -650,7 +650,7 @@ sub api_conversion {
 		# gdrive api
 		my $fileid = $1;
 		my $apiurl = "https://www.googleapis.com/drive/v3/files/".$fileid."?key=".$apikey;
-		print($IRSSI{name}."> gdrive api! fileid: $fileid, apiurl: $apiurl");
+		prind("gdrive api! fileid: $fileid, apiurl: $apiurl");
 		my $gdriveapidata_json = KaaosRadioClass::getJSON($apiurl);
 		#dp($gdriveapidata_json);
 		if ($gdriveapidata_json eq '-1') {
@@ -666,7 +666,7 @@ sub api_conversion {
 	# instagram API
 	if ($param =~ /www.eitoimi.instagram.com/) {
 		# instagram conversion, example: https://api.instagram.com/oembed/?url=https://www.instagram.com/p/CFKNRqNhW32/
-		print($IRSSI{name}.'> Instagram url detected!');
+		prind('Instagram url detected!');
 		my $instapiurl = 'https://api.instagram.com/instagram_oembed/?url=' . $param;
 		dp('instapi url:'.$instapiurl);
 		my $instajson = KaaosRadioClass::getJSON($instapiurl);
@@ -689,7 +689,7 @@ sub signal_emitters {
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
-		print($IRSSI{name}."> IMDB signal emited!! $1");
+		prind("IMDB signal emited!! $1");
 		# Irssi::signal_stop();
 		return 1;
 	}
@@ -697,13 +697,13 @@ sub signal_emitters {
 	# taivaanvahti id
 	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
 		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
-		print($IRSSI{name}."> Taivaanvahti signal emited!! $1");
+		prind("Taivaanvahti signal emited!! $1");
 		# Irssi::signal_stop();
 		return 1;
 
 	} elsif ($param =~ /(https?.*areena\.yle\.fi.*)/) {
 		Irssi::signal_emit('yle_url', $server, $target, $1);
-		print($IRSSI{name}."> Yle_url signal emited!! $1");
+		prind("Yle_url signal emited!! $1");
 		return 1;
 	}
 	return 0;	# not emitting signal
@@ -727,6 +727,12 @@ sub url_conversion {
 	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || $param =~ /google\.com\/maps/i) {
 		dp(__LINE__.": google service detected!");
 		set_useragent(3);
+		if ($param =~ /youtube\.com(.*)/i || $param =~ /youtu\.be(.*)/i) {
+			if (length $1 > 0) {
+				my $newurl = 'https://invidious.protokolla.fi' . $1;
+				$newUrlData->{extra} = " -- proxy: $newurl";
+			}
+		}
 	}
 
 	# spotify conversion
@@ -749,8 +755,8 @@ sub url_conversion {
 	}
 	if ($param =~ /imgur\.com\/(.*)/) {
 		my $newurl = 'https://rimgo.projectsegfau.lt/' .$1;
-		print($IRSSI{name}."> imgur-conversion $newurl");
-		$newUrlData->{extra} = " -- $newurl";
+		prind("imgur-conversion $newurl");
+		$newUrlData->{extra} = " -- proxy: $newurl";
 		$param = $newurl;
 	}
 	return $param;
@@ -847,7 +853,7 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
 	# shorten output message
-	print $IRSSI{name}."> Shortening url info a bit..." if ($newtitle =~ s/(.{260})(.*)/$1.../);
+	prind("Shortening url info a bit...") if ($newtitle =~ s/(.{260})(.*)/$1.../);
 	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
@@ -862,6 +868,9 @@ sub sig_msg_pub {
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
+
+	# imgur stuff
+	$title .= $newUrlData->{extra};
 	# increase $howDrunk if necessary
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
 		if ($isDrunk && $howDrunk < 1) {
@@ -921,7 +930,7 @@ sub checkIfOld {
 # find with keywords comma-separated list
 sub find_keywords {
 	my ($keywords, @rest) = @_;
-	print($IRSSI{name}."> find_keywords request: $keywords");
+	prind("find_keywords request: $keywords");
 	my $returnString;
 	my @words = split /, ?/, $keywords;
 	my $search_sql = 'SELECT rowid,* from links where ';
@@ -937,7 +946,7 @@ sub find_keywords {
 # find URL from database
 sub findUrl {
 	my ($searchword, @rest) = @_;
-	print($IRSSI{name}."> etsi request: $searchword");
+	prind("etsi request: $searchword");
 	dp(__LINE__.":findUrl") if $DEBUG1;
 	my $returnstring;
 	if ($searchword =~ s/^id:? ?//i) {
@@ -1047,7 +1056,7 @@ sub createShortAnswerFromResults {
 	my $channel = $resultarray[6];				# channel
 
 	if ($rowid) {
-		print($IRSSI{name}."> Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
+		prind("Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url");
 	}
 
 	return $returnstring;
@@ -1079,8 +1088,8 @@ sub createAnswerFromResults {
 	my $md5hash = $resultarray[7];
 
 	if ($rowid) {
-		print($IRSSI{name}."> Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
-		print($IRSSI{name}."> return string: $returnstring");
+		prind("Found: id: $rowid, nick: $nick, when: $when, title: $title, description: $desc, channel: $channel, url: $url, md5: $md5hash");
+		prind("return string: $returnstring");
 	}
 
 	return $returnstring;
@@ -1109,6 +1118,7 @@ sub falseUtf8Pages {
 sub noDescForThese {
 	my ($url, @rest) = @_;
 	return 1 if $url =~ /youtube\.com/i;
+	return 1 if $url =~ /invidious/i;
 	return 1 if $url =~ /youtu\.be/i;
 	return 1 if $url =~ /imdb\.com/i;
 	return 1 if $url =~ /dropbox\.com/i;
@@ -1168,6 +1178,15 @@ sub sig_msg_pub_own {
 	sig_msg_pub($server, $msg, $server->{nick}, '', $target);
 }
 
+sub prind {
+	my ($text, @test) = @_;
+	print("\0038" . $IRSSI{name} . ">\003 ". $text);
+}
+sub prindw {
+	my ($text, @test) = @_;
+	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
+}
+
 Irssi::settings_add_str('urltitle', 'urltitle_enabled_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_disabled', '0');
@@ -1187,12 +1206,12 @@ Irssi::signal_register($signal_config_hash3);
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');
-print($IRSSI{name}." v. $VERSION loaded.");
-print($IRSSI{name}."> New commands:");
-print('/set urltitle_enabled_channels #channel1 #channel2');
-print('/set urltitle_wanha_channels #channel1 #channel2');
-print('/set urltitle_wanha_disabled 0/1');
-print('/set urltitle_dont_save_urls_channels #channel1 #channel2');
-print('/set urltitle_shorten_url_channels #channel1 #channel2');
-print('/set urltitle_enable_descriptions 0/1.');
-print($IRSSI{name}.'> Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));
+prind("v. $VERSION loaded.");
+prind("New commands:");
+prind('/set urltitle_enabled_channels #channel1 #channel2');
+prind('/set urltitle_wanha_channels #channel1 #channel2');
+prind('/set urltitle_wanha_disabled 0/1');
+prind('/set urltitle_dont_save_urls_channels #channel1 #channel2');
+prind('/set urltitle_shorten_url_channels #channel1 #channel2');
+prind('/set urltitle_enable_descriptions 0/1.');
+prind('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));

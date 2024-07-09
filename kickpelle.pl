@@ -133,7 +133,7 @@ sub GETBADWORDLIST {
 		push @badwords, $test;
 	}
 	#da(@badwords);
-	derpint('Badwordfile '.$badwordfile.' loaded.');
+	prind('Badwordfile '.$badwordfile.' loaded.');
 	return;
 }
 
@@ -308,9 +308,9 @@ sub event_pubmsg {
 	}
 }
 
-sub derpint {
-	my ($line, @rest) = @_;
-	print($IRSSI{name}.'> '. $line);
+sub prind {
+	my ($text, @rest) = @_;
+	print("\00313" . $IRSSI{name} . ">\003 ". $text);
 }
 
 sub da {
@@ -331,4 +331,4 @@ Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 #print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-derpint("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
+prind("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
