@@ -7,13 +7,14 @@ use LWP::UserAgent;
 use LWP::Simple;
 use utf8;
 use Data::Dumper;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 16.2.2017
 use POSIX qw(strftime);
 use POSIX qw(locale_h);	# necessary?
 use locale;	# necessary??
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '0.35';
+$VERSION = '0.36';
 %IRSSI = (
     authors	=> 'LAama1',
     contact	=> '#kaaosradio@ircnet',

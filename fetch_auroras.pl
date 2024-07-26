@@ -8,7 +8,8 @@
 use strict;
 use Data::Dumper;
 
-use lib $ENV{HOME}.'/.irssi/scripts';
+#use lib $ENV{HOME}.'/.irssi/scripts';
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use JSON;
 

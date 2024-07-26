@@ -2,6 +2,7 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 31.7.2017
 use XML::RSS;
 use LWP::Simple;

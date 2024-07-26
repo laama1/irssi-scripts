@@ -2,13 +2,14 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 #use IO::Socket;
 use Socket;
 #use Fcntl;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "0.2";
+$VERSION = "0.21";
 %IRSSI = (
 	authors	=> 'laama',
 	contact	=> 'kaaosradio ircnet',

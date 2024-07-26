@@ -5,6 +5,7 @@ use Irssi;
 # install next one: 
 use Time::Format qw(%strftime);
 use Data::Dumper;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 
 use vars qw($VERSION %IRSSI);
@@ -31,8 +32,7 @@ my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
 								   Type   => SOCK_STREAM,
 								   Listen => 5) or die $@;
 chmod 0755, $socket_file;
-# set this socket as nonblocking so we can check stuff without interrupting
-# irssi.
+# set this socket as nonblocking so we can check stuff without interrupting irssi.
 nonblock($my_socket);
 
 # method to set a socket handle as nonblocking

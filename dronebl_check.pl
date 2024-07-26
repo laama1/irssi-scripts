@@ -2,8 +2,8 @@ use strict;
 use warnings;
 use Irssi;
 use Data::Dumper;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
-
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '0.1';

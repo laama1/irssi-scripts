@@ -6,6 +6,7 @@ use Data::Dumper;
 use JSON;
 use POSIX;
 use DateTime;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use Time::HiRes;
 use HTTP::Headers;

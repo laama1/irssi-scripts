@@ -15,6 +15,7 @@ use Data::Dumper;
 #use XML::Simple;
 use utf8;
 #use DateTime::Format::ISO8601;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 26.10.2016
 
 #use DBI;

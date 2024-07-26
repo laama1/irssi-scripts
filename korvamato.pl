@@ -9,6 +9,7 @@ binmode(STDIN, ':utf8');
 use DBI;
 use DBI qw(:sql_types);
 use Encode;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 
@@ -38,14 +39,14 @@ my $helptext = 'Korvamato help: https://bot.8-b.fi/#korvamato';
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8'.$db) {
-		print("$myname-> Unable to create database file: $db");
+		prindw("Unable to create database file: $db");
 		die;
 	}
 	close FILE;
 	CREATEDB();
-	print("$myname> Database file created.");
+	prind("Database file created.");
 } else {
-	print("$myname> Database file found!");
+	prind("Database file found!");
 }
 
 sub print_help {
@@ -82,7 +83,7 @@ sub sayit {
 
 sub find_mato {
 	my ($searchword, @rest) = @_;
-	print($IRSSI{name}."> etsi request: {$searchword}.");
+	prind("etsi request: {$searchword}.");
 	my $returnstring = '';
 	if ($searchword =~ s/kaikki: //gi || $searchword =~ s/all: //gi) {
 		dp(__LINE__.': find_mato 1');
@@ -192,35 +193,37 @@ sub parse_keyword_run_sql {
 			# Don't delete deleted.
 	if ($command =~ /.*link1:? ?(.*)/gi || $command =~ /.*url:? ?(.*)/gi) {
 		my $link1 = $1;
-		print("$myname> Add link1: $link1");
+		prind("Add link1: $link1");
 		$updatestring = "UPDATE korvamadot set link1 = \"$link1\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /link2:? ?(.*)/gi) {
 		my $link2 = $1;
-		print("$myname> Add link2: $link2");
+		prind("Add link2: $link2");
 		$updatestring = "UPDATE korvamadot set link2 = \"$link2\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info1?:? ?(.*)/gi) {
 		my $info1 = $1;
-		print("$myname> Add info1: $info1");
+		prind("Add info1: $info1");
 		$updatestring = "UPDATE korvamadot set info1 = \"$info1\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT info1 from korvamadot where rowid = $id";
 	} elsif ($command =~ /info2:? ?(.*)/gi) {
 		my $info2 = $1;
-		print("$myname> Add info2: $info2");
+		prind("Add info2: $info2");
 		$updatestring = "UPDATE korvamadot set info2 = \"$info2\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT link2 from korvamadot where rowid = $id";
 	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
 		my $artist = $1;
-		print("$myname> Add Artist: $artist");
+		prind("Add Artist: $artist");
 		$updatestring = "UPDATE korvamadot set artist = \"$artist\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT artist from korvamadot where rowid = $id";
 	} elsif ($command =~ /title:? ?(.*)/gi) {
 		my $title = $1;
+		prind("Add title: $title");
 		$updatestring = "UPDATE korvamadot set title = \"$title\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT title from korvamadot where rowid = $id";
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
 		my $lyrics = $1;
+		prind("Add lyrics: $lyrics");
 		$updatestring = "Update korvamadot set quote = \"$lyrics\" where rowid = $id and DELETED = 0;";
 		$selectoldstring = "SELECT quote from korvamadot where rowid = $id";
 	}
@@ -275,29 +278,29 @@ sub IFUPDATE {
 	my $suffix = 'UPDATE korvamadot set';
 	if ($command =~ /link1:? ?(.*)/gi || $command =~ /url:? ?(.*)/gi) {
 		my $link1 = $1;
-		print("$myname Add link1: $link1");
+		prind("Add link1: $link1");
 		return UPDATECOLUMN($id, 'link1', $1);
 	} elsif ($command =~ /link2:? ?(.*)/gi) {
 		my $link2 = $1;
-		Irssi::print("$myname Add link2: $link2");
+		prind("Add link2: $link2");
 		return UPDATECOLUMN($id, 'link2', $1);
 	} elsif ($command =~ /info1?:? ?(.*)/gi) {
 		my $info1 = $1;
-		Irssi::print("$myname Add info1: $info1");
+		prind("Add info1: $info1");
 		return UPDATECOLUMN($id, 'info1', $1);
 	} elsif ($command =~ /info2:? ?(.*)/gi) {
 		my $info2 = $1;
-		Irssi::print("$myname Add info2: $info2");
+		prind("Add info2: $info2");
 		return UPDATECOLUMN($id, 'info2', $1);
 	} elsif ($command =~ /artisti?:? ?(.*)/gi) {
 		my $artist = $1;
-		Irssi::print("$myname Add Artist: $artist");
+		prind("Add Artist: $artist");
 		return UPDATECOLUMN($id, 'artist', $1);
 	} elsif ($command =~ /title:? ?(.*)/gi) {
-		print($IRSSI{name}."> Add title: $1");
+		prind("Add title: $1");
 		return UPDATECOLUMN($id, 'title', $1);
 	} elsif ($command =~ /lyrics:? ?(.*)/gi) {
-		print($IRSSI{name}."> Add lyrics: $1");
+		prind("Add lyrics: $1");
 		return UPDATECOLUMN($id, 'quote', $1);
 	}
 
@@ -320,7 +323,7 @@ sub IFUPDATE {
 
 sub check_if_exists {
 	my ($searchword, @rest) = @_;
-	dp(__LINE__.': check_if_exists');
+	#dp(__LINE__.': check_if_exists');
 	my @results = search_from_db($searchword);
 	my $amount = @results;		# count
 	my $returnstring = '';
@@ -335,18 +338,18 @@ sub check_if_exists {
 		if ($amount == 1) {
 			#my @results = search_id_from_db($idarray[0]);
 			my $string;
-			dp(__LINE__.": string:: $string");
+			#dp(__LINE__.": string:: $string");
 			$string = createAnswerFromResultsor(@{$results[0]});
 			
 			$returnstring = 'Löytyi '.$string;
-			dp(__LINE__.": return .. string: $returnstring");
+			#dp(__LINE__.": return .. string: $returnstring");
 		} else {
 			$idstring .= 'Valitse jokin näistä kirjoittamalla !korvamato id: <id>';
 			$returnstring = "Löydettiin $amount tulosta. ID: ".$idstring;
 		}
 	} elsif ($amount == 0) {
 		# TODO: add korvamato
-		print("$myname> Korvamato not found yet, adding new.");
+		prind("Korvamato not found yet, adding new.");
 		$returnstring = 'Uusi korvamato.';
 	}
 	
@@ -357,11 +360,11 @@ sub insert_into_db {
 	my ($command, $nick, $info1, $info2, $target, $artist, $title, $link1, $link2, @rest) = @_;
 
 	my $pituus = length $command;
-	dp(__LINE__.": insert_into_db Pituus: $pituus");
+	#dp(__LINE__.": insert_into_db Pituus: $pituus");
 	if ($pituus < 470 && $pituus > 5)
 	{
 		saveToDB($nick, $command, $info1, $info2, $target, $artist, $title, $link1, $link2);
-		print("$myname> \"$command\" request from $nick\n");
+		prind("\"$command\" request from $nick\n");
 		my @resultarray = search_from_db($command);
 		my $newid;		# HACK:
 		foreach my $line (@resultarray) {
@@ -463,7 +466,7 @@ sub if_korvamato {
 				($returnstring, $amount) = check_if_exists($searchword);
 			}
 
-			print("$myname> \"$searchword\" request from $nick.");
+			prind("\"$searchword\" request from $nick.");
 
 		} elsif ($id != -1) {
 			# TODO: search korvamato '!korvamato id 55'
@@ -473,7 +476,7 @@ sub if_korvamato {
 		}
 
 		if ($amount == 0) {
-			dp(__LINE__.': insert into db next');
+			#dp(__LINE__.': insert into db next');
 			$returnstring = insert_into_db($command, $nick, $info1, $info2, $target, $artist, $title, $link1, $link2);
 		}
 		return $returnstring;
@@ -506,7 +509,7 @@ sub event_privmsg {
 		msgit($server, $nick, get_statistics());
 		return;
 	} elsif ($msg =~ /^!korvamato random/i || $msg =~ /^!km random/i) {
-		dp(__LINE__.': random!');
+		#dp(__LINE__.': random!');
 		my $sayline = search_random_from_db();
 		msgit($server, $nick, $sayline);
 		return;
@@ -515,11 +518,11 @@ sub event_privmsg {
 	if ($msg =~ /^!korvamato/ || $msg =~ /^!km/) {
 		my $newReturnString = if_korvamato($msg, $nick, "PRIV");
 		if ($newReturnString ne '') {
-			dp(__LINE__.": YES priv");
+			#dp(__LINE__.": YES priv");
 			msgit($server, $nick, $newReturnString);
 			return;
 		} else {
-			dp(__LINE__.": NO priv");
+			#dp(__LINE__.": NO priv");
 			return;
 		}
 	}
@@ -589,7 +592,7 @@ sub saveToDB {
 	$sth->execute;
 	$sth->finish();
 	$newdbh->disconnect();
-	print("$myname> Lyrics saved to database: $quote");
+	prind("Lyrics saved to database: $quote");
 }
 
 # Update value of existing item in DB
@@ -688,7 +691,7 @@ sub search_from_db {
 
 sub search_url_from_db {
 	my ($searchword, @rest) = @_;
-	print("$myname> Search Url From Database: $searchword");
+	prind("Search Url From Database: $searchword");
 
 	my $newdbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $newdbh->prepare('SELECT rowid,* FROM korvamadot where link1 LIKE ? or link2 LIKE ? order by rowID ASC') or die DBI::errstr;
@@ -716,6 +719,17 @@ sub search_random_from_db {
 	return createAnswerFromResultsor(KaaosRadioClass::readLineFromDataBase($db, $sql));
 }
 
+
+sub prind {
+	my ($text, @rest) = @_;
+	print "\0039" . $IRSSI{name} . ">\003 " . $text;
+}
+
+sub prindw {
+	my ($text, @rest) = @_;
+	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+}
+
 sub da {
 	return unless $DEBUG;
 	print("$myname-debug array>");
@@ -732,4 +746,4 @@ sub dp {
 Irssi::settings_add_str('korvamato', 'korvamato_enabled_channels', '');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-Irssi::print("korvamato.pl v. $VERSION -- New commands: /set korvamato_enabled_channels #1 #2\n");
+prind("korvamato.pl v. $VERSION -- New commands: /set korvamato_enabled_channels #1 #2\n");

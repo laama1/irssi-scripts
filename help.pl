@@ -4,7 +4,7 @@ use warnings;
 use Irssi;
 use vars qw($VERSION %IRSSI);
 use Irssi::Irc;
-
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 
 $VERSION = '0.50';

@@ -7,6 +7,7 @@ use strict;
 use utf8;
 binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);

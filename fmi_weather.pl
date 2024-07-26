@@ -2,7 +2,7 @@ use warnings;
 use strict;
 use Irssi;
 use utf8;
-#use lib $ENV{HOME} . '/.irssi/scripts/irssi-scripts';
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use IO::Socket;
 use Fcntl;

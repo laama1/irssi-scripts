@@ -2,11 +2,11 @@ use strict;
 use warnings;
 use Irssi;
 use vars qw($VERSION %IRSSI);
-use lib $ENV{HOME}.'/.irssi/irssi-scripts/';
-#use KaaosRadioClass;
+#use lib $ENV{HOME}.'/.irssi/irssi-scripts/';
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use Data::Dumper;
-
-require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
+use KaaosRadioClass;
+#require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
 
 $VERSION = '0.51';
 %IRSSI = (

@@ -14,7 +14,7 @@ my $fi = new Number::Format(-decimal_point => ',');
 
 use Math::Trig;						# for apparent temp
 use Data::Dumper;
-
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);

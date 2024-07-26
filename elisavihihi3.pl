@@ -9,7 +9,7 @@ use JSON;
 use Data::Dumper;
 use utf8;
 use Time::Piece;
-
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 20.10.2016
 
 use vars qw($VERSION %IRSSI);

@@ -41,7 +41,7 @@ my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 my $tsfile = "$currentDir/ts";
 my $djlist = "$currentDir/dj_list.txt";
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG_decode = 0;
 
 my $floodernick = '';
@@ -439,6 +439,7 @@ sub fetchUrl {
 	my ($url, $getsize, $headers);
 	($url, $getsize, $headers) = @_;
 	dp(__LINE__.': fetchUrl url: '. $url);
+	da(__LINE__, $headers);
 	#$url = decode_entities($url);
 	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
@@ -554,4 +555,6 @@ sub conway {
 	my @moonarray = ('🌑 uusikuu', '🌒 kuun kasvava sirppi', '🌓 kuun ensimmäinen neljännes', '🌔 kasvava kuperakuu', '🌕 täysikuu', '🌖 laskeva kuperakuu', '🌗 kuun viimeinen neljännes', '🌘 kuun vähenevä sirppi');
 	return $moonarray[$r] .", ikä: $age vrk.";
 }
+
+print ">>>> using .irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
 1;		# loaded OK

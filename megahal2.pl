@@ -25,6 +25,7 @@ use vars qw($VERSION %IRSSI);
 use File::Copy;
 use POSIX;
 use Data::Dumper;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;      # LAama1 8.11.2017
 use utf8;
 use Encode;
@@ -256,6 +257,9 @@ sub public_responder {
 	return unless $target ~~ @valid_targets;
 	return if $nick eq $my_nick;		# Don't talk to yourself
 	return if $data =~ /kaaos/i && $target =~ /\#kaaosradio/i;
+
+	# TEMP HACK:
+	return unless $nick eq "laama";
 	
 	# Ignore lines containing URLs
 	return if $data =~ /tps?:\/\//i || $data =~ /www\./i;

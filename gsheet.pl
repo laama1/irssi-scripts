@@ -10,7 +10,7 @@ use utf8;
 use Data::Dumper;
 
 use Encode;
-
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);

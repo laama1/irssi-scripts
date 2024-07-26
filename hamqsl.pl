@@ -6,8 +6,7 @@ use vars qw($VERSION %IRSSI);
 #use Irssi::Irc;
 use Data::Dumper;
 use XML::LibXML;
-
-#require "$ENV{HOME}/.irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 
 $VERSION = '0.1';

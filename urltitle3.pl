@@ -42,7 +42,7 @@ use Digest::MD5 qw(md5_hex);		# LAama1 28.4.2017
 #use Encode qw(encode_utf8);
 use Encode;
 use Time::Piece;
-
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
@@ -69,6 +69,8 @@ my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
 my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
+#my $invidiousUrl ='https://invidious.private.coffee';
+my $invidiousUrl ='https://invidious.protokolla.fi';
 
 my $myname = 'urltitle3.pl';
 
@@ -135,6 +137,7 @@ eval {
 } or do {
 };
 print(%headers) if $DEBUG1;
+
 # new headers for youtube and mixcloud etc.
 sub set_useragent {
 	my ($choice, @rest) = @_;
@@ -727,9 +730,18 @@ sub url_conversion {
 	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || $param =~ /google\.com\/maps/i) {
 		dp(__LINE__.": google service detected!");
 		set_useragent(3);
-		if ($param =~ /youtube\.com(.*)/i || $param =~ /youtu\.be(.*)/i) {
+		if ($param =~ /youtube\.com(.*)/i) {
 			if (length $1 > 0) {
-				my $newurl = 'https://invidious.protokolla.fi' . $1;
+				my $newurl = $invidiousUrl . $1;
+				#my $newurl = 'https://invidious.protokolla.fi' . $1;
+				#my $newurl = 'https://invidious.private.coffee' . $1;
+				$newUrlData->{extra} = " -- proxy: $newurl";
+			}
+		} elsif ($param =~ /youtu\.be\/(.*)/i) {
+			if (length $1 > 0) {
+				my $newurl = $invidiousUrl . '/watch?v=' . $1;
+				#my $newurl = 'https://invidious.protokolla.fi/watch?v=' . $1;
+				#my $newurl = 'https://invidious.private.coffee/watch?v=' . $1;
 				$newUrlData->{extra} = " -- proxy: $newurl";
 			}
 		}
