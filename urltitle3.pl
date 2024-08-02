@@ -25,14 +25,11 @@ use strict;
 use Irssi;
 use POSIX;
 use LWP::UserAgent;
-#use HTTP::Cookies;
 use HTTP::CookieJar::LWP;
 use HTTP::Response;
 use HTML::Entities qw(decode_entities);
 use utf8;
-
 use Date::Parse;
-
 use DBI;
 use DBI qw(:sql_types);
 
@@ -69,8 +66,14 @@ my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
 my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
-#my $invidiousUrl ='https://invidious.private.coffee';
-my $invidiousUrl ='https://invidious.protokolla.fi';
+my $rimgourl = 'https://rimgo.projectsegfau.lt';
+#my $invidiousUrl = 'https://invidious.private.coffee';
+my $invidiousUrl = 'https://farside.link/invidious';
+#my $invidiousUrl ='https://invidious.protokolla.fi';
+#my $twitterurl = 'https://xcancel.com';
+my $twitterurl = 'https://farside.link/nitter';
+my $instaurl = 'https://farside.link/proxigram';
+my $redditurl = 'https://farside.link/libreddit';
 
 my $myname = 'urltitle3.pl';
 
@@ -94,7 +97,7 @@ my $shorturlEnabled = 0;			# enable short url
 
 unless (-e $db) {
 	unless(open FILE, '>:utf8',$db) {
-		prind("Stop. Unable to create or write file: $db");
+		prindw("Stop. Unable to create or write file: $db");
 		die;
 	}
 	close FILE;
@@ -615,7 +618,12 @@ sub checkForPrevEntry {
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
 
-	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || $param =~ /youtu\.be\/([^\?\&]*)\b/ || $param =~ /invidious\.protokolla\.fi\/.*[\?\&]v=([^\&]*)/ || $param =~ /protokolla\.invidious\.fi\/.*[\?\&]v=([^\&]*)/) {
+	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
+		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
+		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
+		$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/
+	) {
+		dp(__LINE__ . ' invidious or youtube url found!');
 		# youtube api
 		my $videoid = $1;
 		
@@ -755,9 +763,11 @@ sub url_conversion {
 
 	if ($param =~ /twitter\.com/i) {
 		# TODO: test mobile m.twitter.com
-		$param =~ s/twitter\.com/nitter\.it/i;
+		# nitter instances: https://github.com/zedeus/nitter/wiki/Instances
+		$param =~ s/https\:\/\/twitter\.com/$twitterurl/i;
 		# nitter.42l.fr nitter.pussthecat.org nitter.eu nitter.net nitter.dark.fail nitter.cattube.org nitter.actionsack.com
 		# nitter.mailstation.de nitter.namazso.eu nitter.himiko.cloud nitter.domain.glass nitter.unixfox.eu
+		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
 	if ($param =~ /yle.fi/i) {
@@ -765,11 +775,20 @@ sub url_conversion {
 		# print($IRSSI{'name'}.'> yle.fi detected!');
 		# does not seem to work yet.. add_header('X-Forwarded-For', '54.192.99.2');
 	}
+
+	if ($param =~ /eitoimi.instagram\.com/i) {
+		$param =~ s/https\:\/\/(www\.)?instagram.com/$instaurl/i;
+		$newUrlData->{extra} = " -- proxy: $param";
+	}
+
 	if ($param =~ /imgur\.com\/(.*)/) {
-		my $newurl = 'https://rimgo.projectsegfau.lt/' .$1;
-		prind("imgur-conversion $newurl");
-		$newUrlData->{extra} = " -- proxy: $newurl";
-		$param = $newurl;
+		$param =~ s/https\:\/\/imgur\.com/$rimgourl/i;
+		$newUrlData->{extra} = " -- proxy: $param";
+	}
+
+	if ($param =~ /reddit\.com/i) {
+		$param =~ s/https\:\/\/reddit\.com/$redditurl/i;
+		$newUrlData->{extra} = " -- proxy: $param";
 	}
 	return $param;
 }
