@@ -452,7 +452,7 @@ sub fetchUrl {
 		$ua->default_headers($headers);
 	}
 	$ua->cookie_jar($cookie_jar);
-	$ua->timeout(3);				# 3 seconds
+	$ua->timeout(10);				# seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
 	$ua->protocols_forbidden( [ 'file', 'mailto'] );
 	#$ua->proxy(['http', 'ftp'], 'http://proxy.jyu.fi:8080/');
@@ -475,7 +475,7 @@ sub fetchUrl {
 		$finalURI = $response->request()->uri() || '';
 		#print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
-		#print("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		print("fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
 		#return;
 	}
@@ -556,5 +556,5 @@ sub conway {
 	return $moonarray[$r] .", ikä: $age vrk.";
 }
 
-print ">>>> using .irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
+#print ">>>> using .irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
 1;		# loaded OK

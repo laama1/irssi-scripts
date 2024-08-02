@@ -2,7 +2,6 @@ use warnings;
 use strict;
 use Irssi;
 use Data::Dumper;
-#use KaaosRadioClass;
 
 # HELP
 # irssi gateway for fifi-remote.pl script. (originally derived from fifo-remote.pl)

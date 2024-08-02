@@ -53,6 +53,7 @@ sub check_sock {
 	my $msg;
 	if (my $client = $my_socket->accept()) {
 		$client->recv($msg, 1024);
+		chomp($msg);
 		prind("Got message from socket: $msg");# if $msg;
 		if ($msg =~ /^Aja/) {
 			DP(__LINE__." AJA!");
@@ -188,7 +189,7 @@ sub timeout_stop {
 
 sub timeout_1h {
 	DP("Aja 1h");
-	prind('New at command at now +1 hours..');
+	prind('New "at" command at now +1 hours..');
 	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
 	DP($retval);
@@ -198,7 +199,7 @@ sub timeout_545 {
 	my $retval = `$command`;
 }
 sub timeout_start {
-	prind("Starting 10 sec timeout for reading the socket...");
+	prind("Starting 10 sec timeout for reading the socket for new data...");
 	timeout_1h();
 	#timeout_545();
 	$timeout_tag = Irssi::timeout_add(10000, 'check_sock', undef);      # 10 seconds
