@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use POSIX;
 use Irssi;
 use vars qw($VERSION %IRSSI);
 use Data::Dumper;
@@ -10,6 +11,7 @@ use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use Time::HiRes;
 use HTTP::Headers;
+use LWP::UserAgent;
 
 $VERSION = '0.2';
 %IRSSI = (
@@ -59,10 +61,20 @@ icons:
 =cut
 
 my $counter = 0;
-my $DEBUG = 0;
-#my $variable_id = 0;
-#my $apiurl = 'https://api.fingrid.fi/v1/variable/'.$variable_id.'/event/json';
-my $sahkohintaurl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
+my $timeout_tag;
+my $DEBUG = 1;
+#my $pid;
+my $server_t;   # for fork processes
+my $target_t;   # for fork processes
+
+#my $sahkohintaurl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
+
+# sahkohinta-api.fi
+my $sahkohintaurl = 'https://sahkohinta-api.fi/api/v1/halpa?tunnit=12&tulos=sarja&aikaraja=';
+#my $sahkohintaurl = 'https://kd.8-b.fi/test.json?';
+my $pricedata = {};
+my $forked = 0;
+my $borked = 0;
 
 my $apikey;
 our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
@@ -78,8 +90,8 @@ my $av_arvio = 0;
 my $av_last_updated = 0;
 my $ak_last_updated = 0;
 
-sub get_fingrid_url {
-    my $dt = DateTime->now;
+sub create_fingrid_url {
+    my $dt = DateTime->now; # UTC
     my $dura_begin = DateTime::Duration->new(minutes => -5);
     my $start_time = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
     #my $temp = "https://data.fingrid.fi/api/data?datasets=177,181,188,191,192,193,209,336&pageSize=1&sortBy=startTime&sortOrder=desc&startTime=$start_time";
@@ -87,7 +99,8 @@ sub get_fingrid_url {
     return $temp;
 }
 
-sub get_porssisahko_url {
+# obsolete
+sub create_porssisahko_url {
     my ($offset, @rest) = @_;
     my $datetime = DateTime->now(time_zone => 'Europe/Helsinki');
     my $datestring = $datetime->ymd;
@@ -105,39 +118,58 @@ sub get_porssisahko_url {
     return $newurl;
 }
 
+sub get_sahkohinta_api_url {
+    my $datetime = DateTime->now(time_zone => 'Europe/Helsinki');
+    #my $datestring = $datetime->ymd;
+    #my $timestring = $datetime->hour;
+    my $duration = DateTime::Duration->new(hours => 12);
+    my $enddatetime = $datetime + $duration;
+
+    #my $enddatestring = $enddatetime->ymd;
+    #my $endtimestring = $enddatetime->hour;
+    print __LINE__;
+    my $datetimestring = $datetime->strftime('%Y-%m-%dT%H:00');
+    $datetimestring .= '_';
+    print __LINE__;
+    $datetimestring .= $enddatetime->strftime('%Y-%m-%dT%H:00');
+    #my $datetimestring = $datestring . 'T' . $timestring . ':00_';
+    
+    #$datetimestring .= $enddatestring . 'T' . $endtimestring . ':00';
+    my $newurl = $sahkohintaurl . $datetimestring;
+    return $newurl;
+}
+
 # 15 minute interval in data availability
 sub get_aurinkovoima_arvio {
-    if (time - $av_last_updated < (60*15) && $av_arvio != 0) {
+    if ((time - $av_last_updated) < (60*15) && $av_arvio != 0) {
         return $av_arvio;
     }
-    my $dt = DateTime->now;
-    my $dura_begin = DateTime::Duration->new(hours => -1);
+    my $dt = DateTime->now; # UTC
+    my $dura_begin = DateTime::Duration->new(minutes => -16);
     my $timestring_begin = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
     my $timestring_end = $dt->strftime('%Y-%m-%dT%H:%MZ');
     my $aurinkourl = 'https://data.fingrid.fi/api/datasets/248/data?sortOrder=desc&sortBy=startTime&startTime=' . $timestring_begin . '&endTime=' .$timestring_end;
-    my $jsondata = fetch_fingrid_data($aurinkourl, 1);
-    #return $jsondata->{data}[0][0]->{value};
-    print __LINE__ if $DEBUG;
-    print Dumper $jsondata if $DEBUG;
-    return -1 if $jsondata == -1;
+    my $jsondata = fetch_fingrid_api_data($aurinkourl, 1);
+    return -1 if $jsondata eq '-1';
     my $json_ref = $jsondata->{data};
     foreach my $data (@$json_ref) {
-        # latest data is first on list
+        # latest data is first on list, because sortOrder=desc
         $av_arvio = $data->{value};
         $av_last_updated = time;
         return $av_arvio;
     }
 }
 
+# safe 24h interval, because total capacity does not change often
 sub get_aurinkokapasiteetti {
-    if (time - $ak_last_updated < (60*60*24) && $aurinkokapa != 0) {
+    if ((time - $ak_last_updated) < (60*60*24) && $aurinkokapa != 0) {
         return $aurinkokapa;
     }
     my $url = "https://data.fingrid.fi/api/datasets/267/data/latest";
-    my $jsondata = fetch_fingrid_data($url, 0);
+    my $jsondata = fetch_fingrid_api_data($url, 0);
     return -1 if $jsondata == -1;
-    print __LINE__ .': aurinkokapa value dump next' if $DEBUG;
-    print Dumper $jsondata->{value} if $DEBUG;
+    #print __LINE__ .': aurinkokapa value dump next' if $DEBUG;
+    #print Dumper $jsondata->{value} if $DEBUG;
     $aurinkokapa = $jsondata->{value};
     $ak_last_updated = time;
     return $aurinkokapa;
@@ -157,21 +189,92 @@ sub pub_msg {
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /^(!sähkö)/sgi) {
 		return if KaaosRadioClass::floodCheck();
-        my $av_arvio2 = get_aurinkovoima_arvio();
-        my $aurinkokapa2 = get_aurinkokapasiteetti();
-        my $price = fetch_price_data();
-        
-        my $jsondata = fetch_fingrid_data(get_fingrid_url(), 0);
-        return -1 if $jsondata eq '-1';
-		my $newdata = parse_sahko_data($jsondata, $av_arvio2);
-        #my $newdata = parse_fingrid_data($av_arvio);
-		
-		$serverrec->command("MSG $target $price $newdata");
+        $target_t = $target;
+        $server_t = $serverrec;
+
+        do_fingrid();
+        do_sahkonhinta();
 		prind("request from $nick on channel $target");
 	}
 }
 
-sub parse_sahko_data {
+sub do_fingrid {
+    return if $borked;
+    my ($rh, $wh);
+    pipe($rh, $wh);  # read handle, write handle
+    my $pid = fork();
+
+    $borked = 1;
+    if (!defined $pid) {
+        prindw("Cannot fork: $!");
+    } elsif ($pid == 0) {
+        # child
+
+        my $av_arvio2 = get_aurinkovoima_arvio();
+        print ("av_arvio2: $av_arvio2");
+        #my $aurinkokapa2 = get_aurinkokapasiteetti();
+        #my $newdata = parse_fingrid_data($av_arvio);
+        my $jsondata = fetch_fingrid_api_data(create_fingrid_url(), 0);
+        my $printstring = parse_sahko_data($jsondata, $av_arvio2);
+
+
+        print $wh $printstring;
+        close $wh;
+        POSIX::_exit(1); # Exit child process
+    } else {
+        # parent
+        close $wh;
+        #prind("Parent process, forked a child with PID: $pid");
+        Irssi::pidwait_add($pid);
+        my $pipetag;
+        my @args = ($rh, \$pipetag);
+        $pipetag = Irssi::input_add(fileno($rh), INPUT_READ, \&pipe_input_fingrid, \@args);
+    }
+}
+
+sub do_sahkonhinta {
+    return if $forked;
+    my ($rh, $wh);
+    pipe($rh, $wh);  # read handle, write handle
+    my $now = time;
+    my $returnvalue = 'Pörssisähkön hintatietoa ei saatu.';
+    my $timestamp = DateTime->now(time_zone => 'Europe/Helsinki');
+    $timestamp = $timestamp->strftime('%Y-%m-%dT%H:00');
+
+    my $timestamp2 = DateTime->now(time_zone => 'Europe/Helsinki');
+    my $duration = DateTime::Duration->new(hours => 1);
+    $timestamp2 += $duration;
+    $timestamp2 = $timestamp2->strftime('%Y-%m-%dT%H:00');
+
+    if (defined($pricedata->{$timestamp}) && defined($pricedata->{$timestamp2})) {
+        prind("Using existing price data.");
+        process_price_data($pricedata, $timestamp, $timestamp2);
+        return;
+    }
+
+    my $pid = fork();
+    $forked = 1;
+
+    if (!defined $pid) {
+        prindw("Cannot fork: $!");
+    } elsif ($pid == 0) {
+        # child
+        $pricedata = fetch_price_data2();
+        print $wh encode_json($pricedata);
+        close $wh;
+        POSIX::_exit(1); # Exit child process
+    } else {
+        # parent
+        close $wh;
+        prind("Parent process, forked a child with PID: $pid");
+        Irssi::pidwait_add($pid);
+        my $pipetag;
+        my @args = ($rh, \$pipetag, $timestamp, $timestamp2);
+        $pipetag = Irssi::input_add(fileno($rh), INPUT_READ, \&pipe_input, \@args);
+    }
+}
+
+sub parse_sahko_data($$) {
     my ($jsondata, $av_arvio, @rest) = @_;
     #print Dumper $jsondata;
     my $tuotanto = '';          # 192
@@ -215,129 +318,106 @@ sub parse_sahko_data {
         }
     }
     $aurinkoennuste = '😎 ' . $av_arvio . '/' . $aurinkokapa;
-    return "\002Kulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}, ~${taajuus}";
+    return "\002Kokonaisulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}, ~${taajuus}";
 }
 
-sub parse_fingrid_data {
-    my ($av_arvio, @rest) = @_;
-    #tuotanto 192
-    #kulutus 193
-    #tuulivoima 181
-    #taajuus 177
-    #ydinvoima 188
-    #vesivoima 191
-    #liikennevalo 209
-    #aurinkoennuste 248 and 267
-    #aurinkokapa 267
-    #sahkopula 336
-
-    my $returnvalue = '';
-    my $tot = 'tot: ';
-    my $kulutus = 'Kulutus: ';
-    my $tuuli = '💨 ';
-    my $taajuus = '';
-    my $ydinvoima = '☢️ ';
-    my $vesi = '🌊 ';
-    my $liikennevalo = '';
-    #my $aurinkokapa = '';
-    my $sahkopula = '';
-
-    foreach my $dataset_id (@datasets) {
-        next if $dataset_id == 267 && $aurinkokapa != 0;
-        my $element = fetch_fingrid_data("https://data.fingrid.fi/api/datasets/$dataset_id/data/latest", 0);
-        next if $element == -1;
-        #print __LINE__ . ', dataset id: ' . $element->{datasetId};
-        #print Dumper $element;
-        if ($element->{datasetId} == 192) {
-            $tot .= $element->{value} . 'MW';
-        } elsif ($element->{datasetId} == 193) {
-            $kulutus .= $element->{value} . 'MW';
-        } elsif ($element->{datasetId} == 181) {
-            $tuuli .= $element->{value} . 'MW';
-        } elsif ($element->{datasetId} == 177) {
-            $taajuus = '~' . $element->{value} . 'Hz';
-        } elsif ($element->{datasetId} == 188) {
-            $ydinvoima .= $element->{value} . 'MW';
-        } elsif ($element->{datasetId} == 191) {
-            $vesi .= $element->{value} . 'MW';
-        } elsif ($element->{datasetId} == 209) {
-            print __LINE__ . ' liikennevalo: ' . $element->{value} if $DEBUG;
-            my $lv_temp = $element->{value};
-            if ($lv_temp > 1) {
-                $returnvalue .= ' Liikennevalo: ' . $lv_temp . '! ';
-            }
-            prind('liikennevalo: ' . $lv_temp);
-
-        } elsif ($element->{datasetId} == 267) {
-            print __LINE__ . ' aurinkokapa: ' . $element->{value} if $DEBUG;
-            # solar production capacity
-            $aurinkokapa =  $element->{value} . 'MW';
-            #$returnvalue .= '😎 ' . $av_arvio . '/' . $aurinkokapa;
-        #} elsif ($element->{datasetId} == 248) {
-            #$aurinkoennuste = '😎 ' . $element->{value} . '/';
-        } elsif ($element->{datasetId} == 336) {
-            print __LINE__ . ' sähköpula: ' . $element->{value} if $DEBUG;
-            $sahkopula = $element->{value};
-            if ($sahkopula > 0) {
-                $returnvalue .= ' Sähköpula: ' . $sahkopula;
-            }
+sub fetch_price_data2 {
+    my $url = get_sahkohinta_api_url();
+    my $json_data = '-1';
+    $json_data = KaaosRadioClass::getJSON($url);
+    if ($json_data ne '-1') {
+        foreach my $data (@$json_data) {
+            my $timestamp = $data->{aikaleima_suomi};
+            my $price = $data->{hinta};
+            $pricedata->{$timestamp} = $price;
         }
+        return $pricedata;
+    } else {
+        prindw("JSON data not found.");
     }
-    $returnvalue = "Tuotanto: $tot, $ydinvoima, $vesi, $tuuli, $taajuus, ";
-    $returnvalue .= '😎 ' . $av_arvio . '/' . $aurinkokapa . '. ';
-    $returnvalue .= $kulutus;
-    Irssi::print(__LINE__. ' returnvalue: ' . $returnvalue) if $DEBUG;
-    return $returnvalue;
 }
 
-sub fetch_price_data {
-    my $returnvalue = '';
-    my $uri = get_porssisahko_url();
-    my $json_string = KaaosRadioClass::getJSON($uri);
-    return 'Pörssisähkön hintatietoa ei saatu.' if $json_string eq '-1';
-    $returnvalue = "\002Hinta:\002 " . $json_string->{price};
+sub pipe_input($$) {
+    my ($rh, $pipetage, $time1, $time2) = @{$_[0]};
+    my $data;
+    {
+        select($rh);
+        local $/;
+        select(CLIENTCRAP);
+        $data = <$rh>;
+        close($rh);
+    }
 
-    my $json_string2 = KaaosRadioClass::getJSON(get_porssisahko_url(1));
-    return $returnvalue if $json_string2 eq '-1';
-    $returnvalue .= 'c, +1h: ' . $json_string2->{price} . 'c.';
-    return $returnvalue;
+    Irssi::input_remove($$pipetage);
+    return unless $data;
+
+    $pricedata = decode_json($data);
+    process_price_data($pricedata, $time1, $time2);
+    $forked = 0;
 }
 
-sub fetch_fingrid_data {
+sub pipe_input_fingrid($$) {
+    my ($rh, $pipetage, $time1, $time2) = @{$_[0]};
+    my $data;
+    {
+        select($rh);
+        local $/;
+        select(CLIENTCRAP);
+        $data = <$rh>;
+        close($rh);
+    }
+
+    Irssi::input_remove($$pipetage);
+    return unless $data;
+
+    msg_channel($data);
+    $borked = 0;
+}
+
+sub process_price_data($$$) {
+    my ($pricedata, $time1, $time2) = @_;
+    my $msg = 'Pörssisähkön hintatietoa ei saatu.';
+    my $timenow = DateTime->now(time_zone => 'Europe/Helsinki');
+    $timenow = $timenow->strftime('%H:00');
+
+    if (defined $pricedata->{$time1}) {
+        my $price1 = sprintf("%.2f", $pricedata->{$time1});
+        $msg = "\002Pörssisähkön hinta (Alv 0%) (klo. $timenow):\002 " . $price1 . 'c/kwh';
+    }
+    if (defined $pricedata->{$time2}) {
+        my $price2 = sprintf("%.2f", $pricedata->{$time2});
+        $msg .= ", \002+1h:\002 " . $price2 . 'c/kwh';
+    }
+    msg_channel($msg);
+}
+
+sub fetch_fingrid_api_data {
     my ($url, $firstTime, @rest) = @_;
-    #Time::HiRes::sleep 1.3 unless $firstTime == 1;
     sleep(2) unless $firstTime;
-    prind("url $url");
+    prind("fingrid url: $url");
     my $h = HTTP::Headers->new;
     $h->header('x-api-key' => $apikey);
-
     return KaaosRadioClass::getJSON($url, $h);
+}
 
-    my $uri = URI->new($url);
-    my $ua = LWP::UserAgent->new;
-    $ua->default_header('x-api-key' => $apikey);
-    my $res = $ua->get($uri);
-    if ($res->is_success) {
-        my $json_decd = JSON->new->utf8;
-        $json_decd->convert_blessed(1);
-        $json_decd = decode_json($res->decoded_content);
-        #print __LINE__ . ' fetched fingrid data succesfully';
-        #print Dumper $json_decd;
-        return $json_decd;
-    }
-    prindw('not success: ('.$url.') ' . $res->status_line);
-    #print Dumper $res;
-    return;
+sub timeout_start {
+    #fetch_price_data2();
+	#$timeout_tag = Irssi::timeout_add(1*1000 *60*60, 'fetch_price_data2', undef);      # 1 hours
+}
+
+sub msg_channel {
+    my ($text, @rest) = @_;
+    $text && $server_t->command("MSG $target_t $text");
 }
 
 sub prind {
 	my ($text, @test) = @_;
-	print("\0033" . $IRSSI{name} . ">\003 ". $text);
+	print CLIENTCRAP "\0033" . $IRSSI{name} . ">\003 ". $text;
 }
 sub prindw {
 	my ($text, @test) = @_;
-	print("\0034" . $IRSSI{name} . ">\003 ". $text);
+	print CLIENTCRAP "\0034" . $IRSSI{name} . ">\003 ". $text;
 }
-
+timeout_start();
 prind("$IRSSI{name} v$VERSION loaded.");
 Irssi::signal_add_last('message public', 'pub_msg');
