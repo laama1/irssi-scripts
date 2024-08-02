@@ -7,9 +7,9 @@
 # LAama1 1.10.2016, 7.9.2017 (minor), 14.3.2018 (copy to kiva.vhosti.fi)
 use strict;
 use Data::Dumper;
-
-#use lib $ENV{HOME}.'/.irssi/scripts';
-use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
+#use Irssi;
+use lib $ENV{HOME}.'/.irssi/scripts';
+#use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use JSON;
 
