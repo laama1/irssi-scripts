@@ -74,22 +74,15 @@ sub print_help {
 # search DB for ID, when signal received from urltitle3.pl
 sub sig_taivaanvahti_search {
 	my ($server, $column, $target, $value) = @_;
-	DP(__LINE__.' sig_taivaanvahti_search!!'. " params: server: $server, column: $column, target: $target, value: $value");
-	#DA($server);
 	open_database_handle();
-	my $sth = $dbh->prepare('SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti5 where HAVAINTOID = ? AND DELETED = 0');
-	#my $sth = $dbh->prepare("SELECT DISTINCT TITLE,DESCRIPTION,HAVAINTODATE,CITY from taivaanvahti5 where $column = ? AND DELETED = 0");
+	my $sth = $dbh->prepare('SELECT DISTINCT TITLE, DESCRIPTION, HAVAINTODATE, CITY from taivaanvahti5 where HAVAINTOID = ? AND DELETED = 0');
 
 	$sth->bind_param(1, $value);
 	$sth->execute();
 	if (my @line = $sth->fetchrow_array) {
-		DP(__LINE__.' Found result:');
-		DA(@line);
 		my $title =  decode('UTF-8', $line[0]);
 		my $desc = decode('UTF-8', $line[1]);
 		my $location = decode('UTF-8', $line[3]);
-		#my $date = localtime($line[3]);
-		DP(__LINE__.' Time: '. $line[2]);
 		my $timepiece = localtime($line[2])->strftime('%e.%m. %H:%M');
 		#my $sayline = "$title: ($timepiece, $location) $desc";
 		my $sayline = $line[0].': ('.$timepiece.', '.$line[3].') '.$line[1];
@@ -105,16 +98,27 @@ sub sig_msg_pub {
 	return if ($nick eq $server->{nick});   # self-test
 	return if ($nick eq 'kaaosradio');		# bad nicks
 
-    my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
-    my @enabled = split / /, $enabled_raw;
-    return unless grep /$target/, @enabled;
+    #my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
+    #my @enabled = split / /, $enabled_raw;
+    #return unless grep /$target/, @enabled;
 
 	if ($msg =~ /^[\.\!]help taivaanvahti\b/i) {
 		print_help($server, $target);
 		return;
-	}
-
-	if($msg =~ /^!taivaanvahti/gi) {
+	} elsif ($msg =~ /^[\.\!]taivaanvahti (.*)/i) {
+		my $searcword = $1;
+		search_db($searcword);
+		foreach my $item (keys %$resultarray) {
+			my $title = $resultarray->{$item}->{'title'};
+			my $desc = $resultarray->{$item}->{'desc'};
+			my $city = $resultarray->{$item}->{'city'};
+			my $havaintodate = localtime($resultarray->{$item}->{'havaintodate'})->strftime('%d.%m. %H:%M');
+			my $link = $resultarray->{$item}->{'link'};
+			my $sayline = "$title: ($havaintodate, $city) $desc $link";
+			sayit($server, $target, $sayline);
+		}
+		return;
+	} elsif($msg =~ /^!taivaanvahti/gi) {
 		get_xml();
 		parse_xml();
 	}
@@ -229,7 +233,7 @@ sub search_db {
 	my $searchword = shift;
 	open_database_handle();
 	DP(__LINE__.' searchword: '.$searchword);
-	my $stmt = 'SELECT rowid,title,description FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? ORDER BY rowid DESC';
+	my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintoid DESC LIMIT 2';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -241,9 +245,9 @@ sub search_db {
 	$resultarray = {};
 	
 	while(@line = $sth->fetchrow_array) {
-		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[3]};
+		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[2], 'city' => $line[3], 'havaintodate' => $line[4], 'link' => $line[5]};
+		print Dumper $resultarray->{$index};
 		$index++;
-		DA(@line);
 	}
 	close_database_handle();
 	DA($resultarray);
