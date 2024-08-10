@@ -66,7 +66,7 @@ my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
 my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
-my $rimgourl = 'https://rimgo.projectsegfau.lt';
+my $imgurUrl = 'farside.link/rimgo';
 #my $invidiousUrl = 'https://invidious.private.coffee';
 my $invidiousUrl = 'https://farside.link/invidious';
 #my $invidiousUrl ='https://invidious.protokolla.fi';
@@ -782,7 +782,7 @@ sub url_conversion {
 	}
 
 	if ($param =~ /imgur\.com\/(.*)/) {
-		$param =~ s/https\:\/\/imgur\.com/$rimgourl/i;
+		$param =~ s/(i\.)?imgur\.com/$imgurUrl/i;
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
