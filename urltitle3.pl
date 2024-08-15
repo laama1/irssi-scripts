@@ -54,7 +54,7 @@ $VERSION = '2024-06-12';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 
@@ -442,7 +442,7 @@ sub count_same_words {
 		if ($item ~~ @rows1) {
 		    #if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dp(__LINE__.":count_same_words item found: $item, total count: $count1");
+			dp(__LINE__.": count_same_words item found: $item, total count: $count1");
 			#if ($count1 == $titlewordCount) {
 			#	dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
 			#	return $count1, $titlewordCount;
@@ -722,7 +722,7 @@ sub signal_emitters {
 
 sub url_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.": url_conversion, param: $param");
+	dp(__LINE__.": url_conversion, param: $param") if $DEBUG1;
 	
 	# soundcloud conversion, example: https://soundcloud.com/oembed?url=https://soundcloud.com/shatterling/shatterling-different-meanings-preview
 	$param =~ s/\:\/\/soundcloud.com/\:\/\/soundcloud.com\/oembed\?url\=http\:\/\/soundcloud\.com/;
@@ -822,7 +822,6 @@ sub sig_msg_pub {
 		return;
 	}
 	set_useragent(1);			# set default user agent
-	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
 		clearUrlData();
@@ -841,7 +840,6 @@ sub sig_msg_pub {
 			$dontprint = 0;
 		}
 	}
-
 	my $title = '';			# url title to print to channel
 	my $description = '';	# url description to print to channel
 	my $isTitleInUrl = 0;	# title or file
@@ -885,7 +883,7 @@ sub sig_msg_pub {
 
 	# shorten output message
 	prind("Shortening url info a bit...") if ($newtitle =~ s/(.{260})(.*)/$1.../);
-	dp(__LINE__.":$myname: NOT JEE") if ($newtitle eq "0");
+	dp(__LINE__.": NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
 	# if description would suit better than title, use description instead
@@ -898,7 +896,6 @@ sub sig_msg_pub {
 		$newUrlData->{shorturl} = shortenURL($newUrlData->{url});
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
-
 
 	# imgur stuff
 	$title .= $newUrlData->{extra};
@@ -927,7 +924,7 @@ sub msg_to_channel {
 	if ($title =~ /(.{260}).*$/s) {
 		$title = $1 . '...';
 	}
-	$server->command("msg -channel $target $title") if grep /$target/, @enabled;	# poor mans check
+	$server->command("msg -channel $target $title") if grep /$target/i, @enabled;	# poor mans check
 	return;
 }
 
@@ -1223,7 +1220,7 @@ Irssi::settings_add_str('urltitle', 'urltitle_wanha_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_disabled', '0');
 Irssi::settings_add_str('urltitle', 'urltitle_shorten_url_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_dont_save_urls_channels', '');
-Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
+#Irssi::settings_add_str('urltitle', 'urltitle_enable_descriptions', '0');
 
 # to change signal params, restart irssi
 my $signal_config_hash = { 'taivaanvahti_search_id' => [ qw/iobject string string string/ ] };
@@ -1244,5 +1241,5 @@ prind('/set urltitle_wanha_channels #channel1 #channel2');
 prind('/set urltitle_wanha_disabled 0/1');
 prind('/set urltitle_dont_save_urls_channels #channel1 #channel2');
 prind('/set urltitle_shorten_url_channels #channel1 #channel2');
-prind('/set urltitle_enable_descriptions 0/1.');
+#prind('/set urltitle_enable_descriptions 0/1.');
 prind('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));

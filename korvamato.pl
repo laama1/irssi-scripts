@@ -534,7 +534,7 @@ sub event_pubmsg {
     my $enabled_raw = Irssi::settings_get_str('korvamato_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 	if($msg =~ /^!korvamato enable/) {
-		if (grep /^$target$/, @enabled) {
+		if (grep /^$target$/i, @enabled) {
 			sayit($server, $target, 'Korvamato on jo enabloitu kanavalla: '.$target);
 			return;
 		} else {
@@ -543,7 +543,7 @@ sub event_pubmsg {
 			return;
 		}
 	}
-    return unless grep /^$target$/, @enabled;
+    return unless grep /^$target$/i, @enabled;
 
 	if ($msg =~ /^[\.\!]help korvamato\b/i || $msg =~ /^!korvamato$/i || $msg =~ /^!km$/i) {
 		print_help($server, $target);

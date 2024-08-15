@@ -78,7 +78,7 @@ sub do_imdb {
 
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
     my @enabled = split / /, $enabled_raw;
-	my $is_enabled = grep /^$target$/, @enabled;
+	my $is_enabled = grep /^$target$/i, @enabled;
 	#dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
@@ -162,7 +162,7 @@ sub sig_imdb_search {
 	#return unless $target ~~ Irssi::settings_get_str('imdb_enabled_channels');
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
     my @enabled = split / /, $enabled_raw;
-	return unless grep /^$target$/, @enabled;
+	return unless grep /^$target$/i, @enabled;
 
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';

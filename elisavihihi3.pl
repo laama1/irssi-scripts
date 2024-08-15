@@ -389,7 +389,7 @@ sub sig_msg_pub {
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
-	return unless grep(/$target/, @enabled);
+	return unless grep(/$target/i, @enabled);
 	
 	# Check for keywords
 	if ($msg =~ /^[\.\!]help\b/i) {
@@ -457,7 +457,7 @@ sub sig_msg_pub_own {
  	# Check we have an enabled channel
  	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
  	my @enabled = split(/ /, $enabled_raw);
- 	return unless grep(/$target/, @enabled);
+ 	return unless grep(/$target/i, @enabled);
 	if ($DEBUG1) {
 		Irssi::print("Server data:");
 		Irssi::print Dumper $server;

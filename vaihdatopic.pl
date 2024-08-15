@@ -62,7 +62,7 @@ sub event_pubmsg {
 
     my $enabled_raw = Irssi::settings_get_str('vaihdatopic_enabled_channels');
     my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/$target/, @enabled);
+    return unless grep(/$target/i, @enabled);
 
 	if ($msg =~ /^\!help vaihda/i) {
 		sayit($server, $target, $helptext_short);

@@ -141,7 +141,7 @@ sub sig_msg_pub {
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('tv-skripta_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);
-	return unless grep(/$target/, @enabled);
+	return unless grep(/$target/i, @enabled);
 	return unless ($msg =~ /^[\.\!]ep\b/i);
 	my $episode = '';
 	my $previousepisode = 0;

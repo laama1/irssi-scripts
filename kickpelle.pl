@@ -249,7 +249,7 @@ sub event_pubmsg {
 
 	my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
 	my @enabled = split / /, $enabled_raw;
-	return unless grep /$target/, @enabled;
+	return unless grep /$target/i, @enabled;
 
 	if ($msg =~ /^!help kick/i) {
 		print_help($server, $target);

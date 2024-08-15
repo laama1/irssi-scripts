@@ -191,7 +191,7 @@ sub load_settings() {
 ##
 sub get_megahal {
 	my $target = shift;
-	return $megahal if grep {/^$target$/} @valid_targets;
+	return $megahal if grep {/^$target$/i} @valid_targets;
 	#dp("MegaHAL Brains not found for $target.");
 	return undef;
 }

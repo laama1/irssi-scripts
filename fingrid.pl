@@ -318,7 +318,7 @@ sub parse_sahko_data($$) {
         }
     }
     $aurinkoennuste = '😎 ' . $av_arvio . '/' . $aurinkokapa;
-    return "\002Kokonaisulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}, ~${taajuus}";
+    return "\002Kokonaiskulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}, ~${taajuus}";
 }
 
 sub fetch_price_data2 {
@@ -368,10 +368,10 @@ sub pipe_input_fingrid($$) {
     }
 
     Irssi::input_remove($$pipetage);
-    return unless $data;
-
-    msg_channel($data);
     $borked = 0;
+    return unless $data;
+    msg_channel($data);
+    
 }
 
 sub process_price_data($$$) {
