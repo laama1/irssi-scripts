@@ -228,12 +228,11 @@ sub Drunk {
 	my ($nick, @rest) = @_;
 	if ($nick eq $floodernick) {
 		$floodertimes++;
-		if ($floodertimes > 5 && (time - $flooderdate <= 600)) {
+		if ($floodertimes > 5 && (time - $flooderdate) <= 600) {	# < 10min
 			return 1;
-		} elsif ($floodertimes > 5 && (time - $flooderdate > 600)) {	#10min
+		} elsif ($floodertimes > 5 && (time - $flooderdate) > 600) {	# > 10min
 			$flooderdate = time;
 			$floodertimes = 0;
-		} else {
 		}
 	} else {
 		$floodernick = $nick;

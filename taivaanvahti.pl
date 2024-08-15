@@ -71,7 +71,7 @@ sub print_help {
 	return;
 }
 
-# search DB for ID, when signal received from urltitle3.pl
+# search DB for ID, when signal was received from urltitle3.pl
 sub sig_taivaanvahti_search {
 	my ($server, $column, $target, $value) = @_;
 	open_database_handle();
@@ -114,7 +114,7 @@ sub sig_msg_pub {
 			my $city = $resultarray->{$item}->{'city'};
 			my $havaintodate = localtime($resultarray->{$item}->{'havaintodate'})->strftime('%d.%m. %H:%M');
 			my $link = $resultarray->{$item}->{'link'};
-			my $sayline = "$title: ($havaintodate, $city) $desc $link";
+			my $sayline = "\002$title: ($havaintodate, $city)\002 $link $desc";
 			sayit($server, $target, $sayline);
 		}
 		return;
@@ -141,8 +141,8 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 
-	if (defined $desc && length $desc > 240) {
-		$desc = substr $desc, 0, 240;
+	if (defined $desc && length $desc > 300) {
+		$desc = substr $desc, 0, 300;
 		$desc .= ' ...';
 	} else {
 		#$desc = "";
@@ -246,7 +246,7 @@ sub search_db {
 	
 	while(@line = $sth->fetchrow_array) {
 		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[2], 'city' => $line[3], 'havaintodate' => $line[4], 'link' => $line[5]};
-		print Dumper $resultarray->{$index};
+		#print Dumper $resultarray->{$index};
 		$index++;
 	}
 	close_database_handle();
@@ -406,6 +406,7 @@ sub parse_xml {
 	return;
 }
 
+# does not do anything
 sub get_xml {
 	my $xmlfile = get($taivaanvahtiURL);
 	$parser->parse($xmlfile);
