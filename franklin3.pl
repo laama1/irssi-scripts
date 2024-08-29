@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use Irssi;
 use vars qw($VERSION %IRSSI);
-#use strict;
+use strict;
 use warnings;
 use LWP::UserAgent;
 use LWP::Simple;
@@ -27,25 +27,25 @@ my $duri = URI->new($dalleurl);
 
 my $DEBUG = 1;
 
-my $systemsg_start = 'Answer at most in 30 words. ';
+my $systemsg_start = 'Answer at most in 40 words. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 my $systemsg = $systemsg_start;
 my $role = 'system';
 #my $model = "gpt-3.5-turbo";
-my $model = 'gpt-4-turbo-preview';
+#my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
 my $model = 'gpt-4o-mini';
 my $visionmodel = 'gpt-4-vision-preview';
 my $heat  = 0.4;
 my $hardlimit = 500;
-my $timediff = 3600;    # 1h in seconds
+my $timediff = 3600;    # 1h in seconds. length of lastlog history
 #my $json = JSON->new->utf8;
 my $json = JSON->new;
 $json->convert_blessed(1);
 
-$VERSION = "2.5";
+$VERSION = "2.6";
 %IRSSI = (
-    authors     => 'oxagast, laama',
+    authors     => 'laama',
     contact     => 'laama@8-b.fi',
     name        => 'Franklin',
     description => 'OpenAI chatgpt api script',
@@ -80,15 +80,15 @@ sub make_json_obj_f {
         $timediff = (time - $chathistory->{$nick}->{timestamp});
     }
     my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            { role => "system", content => $prompt }
+            { role => 'system', content => $prompt, name => 'KD_Bat' }
         ]
     };
 
     if ($timediff < 3600 && defined $chathistory->{$nick}->{history}) {
         foreach my $history ($chathistory->{$nick}->{history}) {
             foreach my $unit (@$history) {
-                push @{ $data->{messages}}, { role => "user", content => $unit->{message}, name => $nick };
-                push @{ $data->{messages}}, { role => "assistant", content => $unit->{answer} };
+                push @{ $data->{messages}}, { role => 'user', content => $unit->{message}, name => $nick };
+                push @{ $data->{messages}}, { role => 'assistant', content => $unit->{answer} };
             }
         }
     } else {
@@ -96,51 +96,42 @@ sub make_json_obj_f {
         $chathistory->{$nick}->{floodcount} = 0;
     }
 
-    push @{ $data->{messages}}, { role => "user", content => $text, name => $nick};
+    push @{ $data->{messages}}, { role => 'user', content => $text, name => $nick};
     return encode_json($data);
 }
 
 sub make_json_obj_f2 {
-    my ($text, $nick, @rest) = @_;
+    my ($text, $nick, $channel, @rest) = @_;
 
     my $prompt = get_prompt();
     $timediff = 3600;    # 1h in seconds
 
     my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            { role => "system", content => $prompt }
+            { role => 'system', content => $prompt, name => 'KD_Bat' }
         ]
     };
     my $maxcount = 0;
-    if (defined $chathistory) {
-        print __LINE__ . ', chathistory:' if $DEBUG;
-        print Dumper $chathistory if $DEBUG;
-        print __LINE__ . ' keys:' if $DEBUG;
-        print Dumper keys %$chathistory if $DEBUG;
+    if (defined $chathistory->{$channel}) {
 
-        my @timestamps = sort { $a <=> $b } keys %$chathistory;
-
+        #my @timestamps = sort { $a <=> $b } keys %$chathistory;
+        my @timestamps = sort { $a <=> $b } keys %{ $chathistory->{$channel} };
 
         #foreach my $history (%$chathistory) {
         foreach my $history (@timestamps) {
-            print __LINE__ . ', history (Timestamp): 'if $DEBUG;
-            print Dumper $chathistory->{$history} if $DEBUG;
-            #assume timestamps are in order and we can just iterate through the array
-            #foreach my $unit (@$history) {
-            #    print __LINE__ . ' unit:' if $DEBUG;
-            #    print Dumper $unit if $DEBUG;
-            #}
+            prindd(__LINE__ . ', history (Timestamp):');
+            print Dumper $chathistory->{$channel}->{$history} if $DEBUG;
 
-            #if ($maxcount > 5) {
-            #    last;
-            #if (defined $history->{message}) {
-            #    push @{ $data->{messages}}, { role => "user", content => $history->{message}, name => $history->{nick} } ;
-            #    push @{ $data->{messages}}, { role => "assistant", content => $history->{answer} };
-            #}
+            if (defined $chathistory->{$channel}->{$history}) {
+                push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} } ;
+                push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
+            }
             $maxcount++;
         }
     }
 
     push @{ $data->{messages}}, { role => "user", content => $text, name => $nick};
+    prindd(__LINE__ . ' data->messages: ');
+    print Dumper $data->{messages} if $DEBUG;
     return encode_json($data);
 }
 
@@ -177,8 +168,9 @@ sub make_call {
             print $IRSSI{name}."> zig zag" if $DEBUG;
             # HACK BUGFIX
             #$chathistory->{$nick}->{history} = {};
-            print __LINE__ if $DEBUG;
+            prindd(__LINE__);
         }
+        prindd(__LINE__);
         print Dumper $chathistory->{$nick} if $DEBUG;
 
         #push @{ $chathistory->{$nick}}, {message => $text};
@@ -197,12 +189,12 @@ sub make_call {
 }
 
 sub make_call2 {
-    my ($text, $nick, @rest1) = @_;
+    my ($text, $nick, $channel, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
     #print $IRSSI{name}." nick: $nick";
-    my $request = make_json_obj_f2($text, $nick);
-    print $IRSSI{name}.' JSON request>' if $DEBUG;
+    my $request = make_json_obj_f2($text, $nick, $channel);
+    print __LINE__ . ' JSON request>' if $DEBUG;
     print $request if $DEBUG;
 
     my $res = $ua->post($uri, Content => $request);
@@ -210,7 +202,7 @@ sub make_call2 {
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        print __LINE__ . 'response json decoded' if $DEBUG;
+        print __LINE__ . 'response json decoded: ' if $DEBUG;
         print Dumper $json_decd if $DEBUG;
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
@@ -219,26 +211,16 @@ sub make_call2 {
         $answered =~ s/\s{2,}//ug;
         $answered =~ s/```//ug;
 
-        $chathistory->{$timestamp}->{nick} = $nick;
-        $chathistory->{$timestamp}->{answer} = $answered;
-        $chathistory->{$timestamp}->{message} = $text;
-
-        print __LINE__ . ' chathistory:' if $DEBUG;
-        print Dumper($chathistory) if $DEBUG;
+        $chathistory->{$channel}->{$timestamp}->{nick} = $nick;
+        $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
+        $chathistory->{$channel}->{$timestamp}->{message} = $text;
 
         # Ensure we only keep the latest 5 entries
-        my @timestamps = sort { $a <=> $b } keys %$chathistory;
+        my @timestamps = sort { $a <=> $b } keys %{$chathistory->{$channel}};
         if (@timestamps > 5) {
             my $oldest_timestamp = shift @timestamps;
-            delete $chathistory->{$oldest_timestamp};
+            delete $chathistory->{$channel}->{$oldest_timestamp};
         }
-
-        # Print the updated $chathistory for debugging
-        print __LINE__ . ' chathistory again:' if $DEBUG;
-        print Dumper($chathistory) if $DEBUG;
-
-
-
         return $answered;
     } elsif ($res->code == 400) {
         prindw("got error 400.");
@@ -275,7 +257,7 @@ sub frank {
         for (0..2) {
         #for (0..1) {
             #if (my $answer = make_call($textcall, $nick)) {
-            if (my $answer = make_call2($textcall, $nick)) {
+            if (my $answer = make_call2($textcall, $nick, $channel)) {
                 #$chathistory->{$nick}->{timestamp} = time;
                 my $answer_cut = substr($answer, 0, $hardlimit);
                 $server->command("msg -channel $channel $nick: $answer_cut");
@@ -304,7 +286,8 @@ sub make_vision_preview_json {
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
-    prind("searchprompt for vision: $searchprompt");
+    prind("search url: $url");
+    prind("search prompt for vision: $searchprompt");
     #my $data = { model => $visionmodel, max_tokens => 300, messages => [{
     my $data = { model => $model, max_tokens => 150, messages => [{
         role => "user",
@@ -345,7 +328,7 @@ sub tts {
             #print Dumper ($data) if $DEBUG;
             $server->command("msg -channel $channel $answer");
         } else {
-            print __LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code;
+            prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
             print Dumper $res if $DEBUG;
         }
     }
@@ -377,10 +360,11 @@ sub dalle {
         } elsif ($res->is_error) {
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
             prindw("Error: $errormsg");
-            #test $server->command("msg -channel $channel $nick: $errormsg");
+            $server->command("msg -channel $channel $nick: \0035Error:\003 $errormsg");
         } else {
 		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
         }
+        prindd(__LINE__ . ' response:');
         print Dumper $res if $DEBUG;
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
@@ -412,13 +396,13 @@ sub dalle {
         } elsif ($res->is_error) {
             #print "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
-            $server->command("msg -channel $channel $nick: $errormsg");
+            $server->command("msg -channel $channel $nick: \0035Error:\003 $errormsg");
             prindw("Error: $errormsg");
         } else {
 		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
-            
         }
-        print Dumper $res if $DEBUG;
+        #prindd(__LINE__ . ' :');
+        #print Dumper $res if $DEBUG;
     }
 }
 
@@ -497,6 +481,11 @@ sub event_pubmsg {
 sub save_settings {
     #Irssi::
     return;
+}
+
+sub prindd() {
+    my ($text, @rest) = @_;
+    print $IRSSI{name} . " debug> " . $text;
 }
 
 sub prind {
