@@ -344,7 +344,7 @@ sub parse_extrainfo_from_link {
 			# Parse havaintodate
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match1!');
-				my $type = $1;
+				my $type = KaaosRadioClass::ktrim($1);
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
@@ -358,7 +358,7 @@ sub parse_extrainfo_from_link {
 			}
 			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match2!');
-				my $type = $1;
+				my $type = kaaosradioclass::ktrim($1);
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;

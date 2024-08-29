@@ -162,12 +162,13 @@ sub add_header {
 # format youtube timestamp
 sub format_time {
 	my ($value, @rest) = @_;
-	dp(__LINE__." JES1: " . $value);
+	dp(__LINE__." JES1 format time value: " . $value);
 	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
-	dp(__LINE__ . " JES2");
+	#dp(__LINE__ . " JES2");
 	my $local_time = localtime;
 	my $diff = $local_time - $time_object;
-	dp(__LINE__." JES3: " . $diff);
+	dp(__LINE__." JES3, diff in seconds: " . $diff);
+	dp(__LINE__. 'years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
 	my $result = '';
 	if ($diff >= 29030400) {
     	$result = floor($diff / 29030400) . 'y';
@@ -175,7 +176,7 @@ sub format_time {
 		$result = floor($diff / 2419200) . 'mon';
 	} elsif ($diff >= 604800) {
 		$result = floor($diff / 604800) . 'wk';
-	}  elsif ($diff > 86400) {
+	} elsif ($diff > 86400) {
 		$result = floor($diff / 86400) . 'days';
 	} elsif ($diff > 3600) {
 		$result = floor($diff / 3600) . 'h';
@@ -645,7 +646,7 @@ sub api_conversion {
 		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
 		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
 		$published = format_time($published);
-		$newUrlData->{title} = "\0030,5 ▶ \003 " . $title .' ['.$chantitle.', '.$published.' '.$likes . ']';
+		$newUrlData->{title} = "\0030,5 ▶ \003 " . $title .' ['.$chantitle.', '.$published.', '.$likes . ']';
 		$newUrlData->{desc} = $description;
 		return 1;
 	}
@@ -782,6 +783,11 @@ sub url_conversion {
 	}
 
 	if ($param =~ /imgur\.com\/(.*)/) {
+		#my $proxyurl = $param;
+		#$proxyurl =~ s/(i\.)?imgur\.com/$imgurUrl/i;
+		#$newUrlData->{extra} = " -- proxy: $proxyurl";
+
+		# use this when the bot cannot access imgur because of the imgur's own bot blocking
 		$param =~ s/(i\.)?imgur\.com/$imgurUrl/i;
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
@@ -1162,7 +1168,6 @@ sub noDescForThese {
 }
 
 sub clearUrlData {
-	dp(__LINE__  . ' clear url data ...');
 	$newUrlData->{nick} = '';		# nick
 	$newUrlData->{date} = 0;		# date
 	$newUrlData->{url} = '';		# url
