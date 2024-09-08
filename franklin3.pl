@@ -142,6 +142,18 @@ sub strip_nick {
     return $nick1;
 }
 
+# replace markdown with irc color codes
+sub format_markdown {
+    my ($text, @rest) = @_;
+    my $bold = "\002";
+    my $color_s = "\00311";
+    my $color_e = "\003";
+    $text =~ s/\*\*(.*?)\*\*/${bold}${1}${bold}/g;
+    #$text =~ s/\s{2,}//ug;
+    $text =~ s/```(.*?)```/${color_s}${1}${color_e}/g;
+    return $text;
+}
+
 sub make_call {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
@@ -160,9 +172,9 @@ sub make_call {
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
         prind("reply: " . $answered);
-        $answered =~ s/\n+/ /ug;
-        $answered =~ s/\s{2,}//ug;
-        $answered =~ s/```//ug;
+        #$answered =~ s/\n+/ /ug;
+        #$answered =~ s/\s{2,}//ug;
+        #$answered =~ s/```//ug;
 
         if (!defined $chathistory->{$nick}->{history}) {
             print $IRSSI{name}."> zig zag" if $DEBUG;
@@ -207,9 +219,9 @@ sub make_call2 {
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
         prind("reply: " . $answered);
-        $answered =~ s/\n+/ /ug;
-        $answered =~ s/\s{2,}//ug;
-        $answered =~ s/```//ug;
+        #$answered =~ s/\n+/ /ug;
+        #$answered =~ s/\s{2,}//ug;
+        #$answered =~ s/```//ug;
 
         $chathistory->{$channel}->{$timestamp}->{nick} = $nick;
         $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
@@ -245,11 +257,11 @@ sub frank {
 
     if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
         my $textcall = $1;
-        prind("textcall: $textcall") if $DEBUG;
+        prind(__LINE__ . " textcall: $textcall") if $DEBUG;
         return if KaaosRadioClass::floodCheck(3);
-        prind('passed floodcheck') if $DEBUG;
+        prind(__LINE__ . ' passed floodcheck') if $DEBUG;
         return if KaaosRadioClass::Drunk($nick);
-        prind('passed drunktest like a mf') if $DEBUG;
+        prind(__LINE__ . ' passed drunktest like a mf') if $DEBUG;
         prind("$nick asked: $textcall");
         #my $wrote = 1;
 
@@ -259,8 +271,10 @@ sub frank {
             #if (my $answer = make_call($textcall, $nick)) {
             if (my $answer = make_call2($textcall, $nick, $channel)) {
                 #$chathistory->{$nick}->{timestamp} = time;
-                my $answer_cut = substr($answer, 0, $hardlimit);
-                $server->command("msg -channel $channel $nick: $answer_cut");
+                $answer = format_markdown($answer);
+                $server->command("msg -channel $channel $nick: $answer");
+                #my $answer_cut = substr($answer, 0, $hardlimit);
+                #$server->command("msg -channel $channel $nick: $answer_cut");
                 last;
             }
             # retry
