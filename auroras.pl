@@ -19,7 +19,7 @@ $VERSION = '0.51';
 	changed => '2020-12-21',
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $db = $ENV{HOME}.'/public_html/auroras.db';
 
@@ -28,12 +28,17 @@ sub getHelp {
 	return '!kuu ja !aurora ohje: https://bot.8-b.fi/#rev';
 }
 
+sub prind {
+	my ($text, @rest) = @_;
+	print("\00311" . $IRSSI{name} . "\003> ". $text);
+}
+
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $serverrec->{nick});   #self-test
 	if ($msg =~ /(^\!help aurora)/gi || $msg =~ /(^\!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
-		$serverrec->command("MSG $target " . getHelp());
+		$serverrec->command("MSG $target " . getHelp);
 	} elsif ($msg =~ /(^\!aurora)/gi || $msg =~ /(^\!revontul.*)/gi) {
 		my $keyword = $1;
 		return if KaaosRadioClass::floodCheck() == 1;

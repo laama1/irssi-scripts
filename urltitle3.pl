@@ -162,26 +162,26 @@ sub add_header {
 # format youtube timestamp
 sub format_time {
 	my ($value, @rest) = @_;
-	dp(__LINE__." JES1 format time value: " . $value);
+	dp(__LINE__." JES1 format time value: " . $value) if $DEBUG1;
 	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
 	#dp(__LINE__ . " JES2");
 	my $local_time = localtime;
 	my $diff = $local_time - $time_object;
-	dp(__LINE__." JES3, diff in seconds: " . $diff);
-	dp(__LINE__. 'years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
+	dp(__LINE__ . " diff in seconds: " . $diff);
+	dp(__LINE__ . ' years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
 	my $result = '';
 	if ($diff >= 29030400) {
-    	$result = floor($diff / 29030400) . 'y';
+    	$result = sprintf("%.1f", ($diff / 29030400)-1) . 'y';
 	} elsif ($diff >= 2419200) {
-		$result = floor($diff / 2419200) . 'mon';
+		$result = sprintf("%.1f", ($diff / 2419200)-1) . 'mon';
 	} elsif ($diff >= 604800) {
-		$result = floor($diff / 604800) . 'wk';
+		$result = sprintf("%.1f", ($diff / 604800)-1) . 'wk';
 	} elsif ($diff > 86400) {
-		$result = floor($diff / 86400) . 'days';
+		$result = sprintf("%.1f", ($diff / 86400)-1) . 'days';
 	} elsif ($diff > 3600) {
-		$result = floor($diff / 3600) . 'h';
+		$result = sprintf("%.1f", ($diff / 3600)-1) . 'h';
 	} elsif($diff > 60) {
-		$result = floor($diff / 60) . 'min';
+		$result = sprintf("%.f", $diff / 60) . 'mins';
 	} else {
 		$result .= 's';
 	}
@@ -618,27 +618,33 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-
+#https://www.youtube.com/shorts/apSq3ZC3Sc8
 	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
 		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
 		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
-		$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/
+		#$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/ ||
+		$param =~ /watch\?v=([^\&]*)/ ||
+		$param =~ /youtube\.com\/shorts\/([^\?\&]*)/
 	) {
-		dp(__LINE__ . ' invidious or youtube url found!');
+		dp(__LINE__ . ' youtube url found! id: ' . $1);
 		# youtube api
 		my $videoid = $1;
 		
 		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
 		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
 		if ($ytubeapidata_json eq '-1' || $ytubeapidata_json eq '-2') {
+			dp(__LINE__ . ' youtube api failed!');
 			return 0;
 		}
+		#dp(__LINE__ . ' going strong');
 		#da($ytubeapidata_json->{items});
 		my $len = scalar $ytubeapidata_json->{items};
 		if (not defined $ytubeapidata_json->{items}[0]) {
+			dp(__LINE__ . ' video not found from API...');
 			$newUrlData->{title} = "Video not found from API...";
 			return 1;
 		}
+		
 		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
 		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
 		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
@@ -648,10 +654,11 @@ sub api_conversion {
 		$published = format_time($published);
 		$newUrlData->{title} = "\0030,5 ▶ \003 " . $title .' ['.$chantitle.', '.$published.', '.$likes . ']';
 		$newUrlData->{desc} = $description;
+		dp(__LINE__ . ' video found from API... title: ' . $newUrlData->{title});
 		return 1;
 	}
 
-	# TODO: imgur conversion
+	# TODO: imgur API-conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
 		my $image = $1;
 		prind("imgur-klick! img: $image");
@@ -736,10 +743,12 @@ sub url_conversion {
 		set_useragent(2);
 	}
 
-	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || $param =~ /google\.com\/maps/i) {
+	if ($param =~ /youtube\.com/i || $param =~ /youtu\.be/i || $param =~ /maps\.google\.com/i || 
+		$param =~ /google\.com\/maps/i || $param =~ /watch\?v=/) {
 		dp(__LINE__.": google service detected!");
 		set_useragent(3);
-		if ($param =~ /youtube\.com(.*)/i) {
+		if ($param =~ /youtube\.com(.*)/i || $param =~ /(\/watch\?v=.*)/i) {
+			dp(__LINE__ . ": youtube.com detected!");
 			if (length $1 > 0) {
 				my $newurl = $invidiousUrl . $1;
 				#my $newurl = 'https://invidious.protokolla.fi' . $1;
@@ -782,14 +791,21 @@ sub url_conversion {
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
-	if ($param =~ /imgur\.com\/(.*)/) {
-		#my $proxyurl = $param;
-		#$proxyurl =~ s/(i\.)?imgur\.com/$imgurUrl/i;
-		#$newUrlData->{extra} = " -- proxy: $proxyurl";
+	if ($param =~ /imgur\.com\/(.*)/i) {
+		dp(__LINE__.": imgur.com detected!");
+		my $proxyurl = $param;
+		$proxyurl =~ s/(i\.)?imgur\.com/$imgurUrl/i;
+		$newUrlData->{extra} = " -- proxy: $proxyurl";
 
-		# use this when the bot cannot access imgur because of the imgur's own bot blocking
+		# needed for now:
+		#$param =~ s/imgur\.com/$imgurUrl/i;
 		$param =~ s/(i\.)?imgur\.com/$imgurUrl/i;
-		$newUrlData->{extra} = " -- proxy: $param";
+
+		#if ($param =~ /i\.imgur\.com/i) {
+			# if direct link to a image/video, must use proxy
+		#	$param =~ s/i\.imgur\.com/$imgurUrl/i;
+		#}
+		
 	}
 
 	if ($param =~ /reddit\.com/i) {
@@ -812,7 +828,7 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
-		dp(__LINE__.":sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{260})(.*)/$1 .../);
+		dp(__LINE__.": sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{260})(.*)/$1 .../);
 	
 		msg_to_channel($server, $target, $sayline);
 		clearUrlData();
@@ -825,14 +841,16 @@ sub sig_msg_pub {
 	} elsif ($msg =~ /(www\.\S+)/i) {
 		$newUrlData->{url} = "http://$1";
 	} else {
+		#clearUrlData();
 		return;
 	}
-	set_useragent(1);			# set default user agent
+	
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
 		clearUrlData();
 		return;
 	}
+	set_useragent(1);			# set default user agent
 	$newUrlData->{url} = url_conversion($newUrlData->{url});
 	$newUrlData->{fetchurl} = $newUrlData->{url};	# this variable will be the url that will be executed
 	$newUrlData->{nick} = $nick;
@@ -877,13 +895,15 @@ sub sig_msg_pub {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
 		dp(__LINE__. ' Response code: ' . $newUrlData->{responsecode} . ', fetchURl: ' . $newUrlData->{fetchurl});
 		if ($newUrlData->{responsecode} ne '') {
+			msg_to_channel($server, $target, 'Error: ' . $newUrlData->{responsecode});
+			clearUrlData();
 			return;
 		}
 	}
 	
 	my $newtitle = '';
 	$newtitle = $newUrlData->{title} if $newUrlData->{title};
-
+	dp(__LINE__ . ' newtitle: ' . $newtitle);
 	# if exact page was sent before on the same chan
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
@@ -911,6 +931,7 @@ sub sig_msg_pub {
 			msg_to_channel($server, $target, 'tl;dr');
 			$howDrunk++;
 		} elsif ($isDrunk == 0 && $title ne '') {
+			dp(__LINE__ . ' congrts, title found!, title: ' . $title);
 			msg_to_channel($server, $target, $title);
 			$howDrunk = 0;
 		}
@@ -1162,6 +1183,7 @@ sub noDescForThese {
 	return 1 if $url =~ /gurushots\.com/i;
 	return 1 if $url =~ /streamable\.com/i;
 	return 1 if $url =~ /imgur\.com\/gallery/i;
+	return 1 if $url =~ /watch\?v=/i;
 	#return 1 if $url =~ /bandcamp\.com/i;
 
 	return 0;

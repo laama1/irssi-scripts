@@ -21,7 +21,7 @@ our $localdir = $ENV{HOME}."/.irssi/scripts/";
 my $apiurl = 'https://api.openai.com/v1/chat/completions';
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
-my $howMany = 2;        # how many images we want to generate
+my $howManyImages = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
@@ -147,10 +147,12 @@ sub format_markdown {
     my ($text, @rest) = @_;
     my $bold = "\002";
     my $color_s = "\00311";
+    my $color_s2 = "\0038";
     my $color_e = "\003";
     $text =~ s/\*\*(.*?)\*\*/${bold}${1}${bold}/g;
     #$text =~ s/\s{2,}//ug;
-    $text =~ s/```(.*?)```/${color_s}${1}${color_e}/g;
+    $text =~ s/\`\`\`(.*?)\`\`\`/${color_s}${1}${color_e}/g;
+    $text =~ s/`(.*?)`/${color_s2}${1}${color_e}/g;
     return $text;
 }
 
@@ -258,11 +260,11 @@ sub frank {
     if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
         my $textcall = $1;
         prind(__LINE__ . " textcall: $textcall") if $DEBUG;
-        return if KaaosRadioClass::floodCheck(3);
+        return undef if KaaosRadioClass::floodCheck(3);
         prind(__LINE__ . ' passed floodcheck') if $DEBUG;
-        return if KaaosRadioClass::Drunk($nick);
+        return undef if KaaosRadioClass::Drunk($nick);
         prind(__LINE__ . ' passed drunktest like a mf') if $DEBUG;
-        prind("$nick asked: $textcall");
+        #prind("$nick asked: $textcall");
         #my $wrote = 1;
 
         # @todo fork or something
@@ -285,13 +287,13 @@ sub frank {
 
 sub make_dalle_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howMany, size => "640x640", response_format => "b64_json"};
+    my $data = {prompt => $prompt, n => $howManyImages, size => "640x640", response_format => "b64_json"};
     return encode_json($data);
 }
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howMany, size => "1024x1024", response_format => "b64_json"}; # dall-e-3 minimum size
+    my $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"}; # dall-e-3 minimum size
     return encode_json($data); 
 }
 
@@ -300,15 +302,14 @@ sub make_vision_preview_json {
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
-    prind("search url: $url");
-    prind("search prompt for vision: $searchprompt");
+    #prind("search url: $url");
+    #prind("search prompt for vision: $searchprompt");
     #my $data = { model => $visionmodel, max_tokens => 300, messages => [{
     my $data = { model => $model, max_tokens => 150, messages => [{
         role => "user",
         content => [
             {type => "text", text => $searchprompt},
             {type => "image_url", image_url => {url => $url}}
-            #{image_url => {url => $url}}
         ]
     }], max_tokens => 300,
     };
@@ -321,6 +322,31 @@ sub tts {
     return if $nick eq $mynick;	#self-test
     if ($msg =~ /^!tts (.*)/u ) {
         my $query = $1;
+        #my $voicemodels = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+        my $voicemodels = ['alloy'];
+        foreach my $voicemodel (@$voicemodels) {
+            prindd(__LINE__ . ' voicemodel: ' . $voicemodel);
+            my $data = { model => "tts-1", voice => $voicemodel, input => $query, response_format => "mp3"};
+            my $request = encode_json($data);
+            my $res = $ua->post($speechurl, Content => $request);
+            if ($res->is_success) {
+                my $data = $res->content;
+                my $time = time;
+                my $index = 0;
+                my $answer = 'TTS results: ' .length($data). ' bytes, ';
+                my $filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
+                if (save_file_blob($data, $filename) >= 0) {
+                    $answer .= "https://bot.8-b.fi/dale/$filename ";
+                }
+
+                $server->command("msg -channel $channel $answer");
+                #last;
+            } else {
+                prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
+                print Dumper $res if $DEBUG;
+            }
+        }
+        return;
         my $data = { model => "tts-1", voice => "alloy", input => $query, response_format => "mp3"};
         my $request = encode_json($data);
         #print __LINE__ . ' request:' if $DEBUG;
@@ -397,7 +423,7 @@ sub dalle {
                 my $time = time;
                 my $answer = 'DALL-e results: ';
                 my $index = 0;
-                while ($index < $howMany) {
+                while ($index < $howManyImages) {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
                     if (save_file_blob(decode_base64($json_decd->{data}[$index]->{b64_json}), $filename) >= 0) {
                         $answer .= "https://bot.8-b.fi/dale/$filename ";

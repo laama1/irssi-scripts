@@ -6,7 +6,7 @@ use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use IO::Socket;
 use Fcntl;
-
+use JSON;
 use Data::Dumper;
 use DateTime::Format::Strptime;
 
@@ -24,12 +24,14 @@ $VERSION = '2022-03-11';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
 my $last_meteo = '';
 my $last_time;
+
+my $users = {};
 
 # create the socket
 unlink $socket_file;
@@ -91,14 +93,12 @@ sub print_help {
 sub msg_to_channel {
 	my ($text, @rest) = @_;
 	my $enabled_raw = Irssi::settings_get_str('fmi_enabled_channels');
-	DP(__LINE__ . ' enabled_raw: ' . $enabled_raw);
 	my @enabled = split / /, $enabled_raw;
 
 	my @windows = Irssi::windows();
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
-		DP(__LINE__ . ' window name: ' . $window->{active}->{name});
 		if (index ($enabled_raw, $window->{active}->{name}) ne "-1") {
 			DP(__LINE__." Found matching channel! $window->{active}->{name} at position: " . index ($enabled_raw, $window->{active}->{name}));
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
@@ -113,7 +113,6 @@ sub parse_extrainfo_from_link {
 	my $date = '';
 	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
 		$date = $2;
-		#DP(__LINE__.' date found: '.$date);
 		# argument example: Tue, 04 Sep 2018 22:37:34 +0300 (using "%a, %d %b %Y %H:%M:%S %z")
 		# We need: 15.3.2023 15:56
 		my $formatter = DateTime::Format::Strptime->new(
@@ -124,9 +123,8 @@ sub parse_extrainfo_from_link {
 		my $dt = $formatter->parse_datetime($date);
 		$dt->set_time_zone('Europe/Helsinki');
 		$date = $dt->strftime('%d.%m. %H:%M');
-		#DP(__LINE__.' ' .join ' ', $dt->ymd, $dt->hms); # shows 2016-12-22 07:16:29
 	}
-	#DP(__LINE__.' going stronk!1');
+
 	if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
 		my $meteotext = $2;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;		# div inside span
@@ -155,13 +153,62 @@ sub event_pubmsg {
 			# removed 2023-11-01 return;
 		}
 		$server->command("msg $target $last_meteo");
-	} elsif ($msg =~ /^!f (.*)$/) {
+	} elsif ($msg =~ /^!f (.*)$/ || $msg =~ /^!fmi (.*)$/) {
 		my $searchword = $1;
+		check_user_city($searchword, $nick);
 		my $result = `/home/laama/code/python/fmi1.py $searchword`;
-		print Dumper chomp($result);
-		print Dumper $result;
+		my $json = decode_json($result);
 
-		$server->command("msg $target $result");
+		my $sayline = getSayLine($json);
+		$server->command("msg $target $sayline");
+	} elsif ($msg =~ /^!fe (.*)$/ || $msg =~ /^!fmie (.*)$/) {
+		my $searchword = $1;
+		my $result = `/home/laama/code/python/fmi1.py $searchword ennustus`;
+		my $json = decode_json($result);
+
+		my $sayline = getSayLine($json);
+	} elsif ($msg eq '!f' || $msg eq '!fmie' && $users->{$nick}) {
+		my $result = `/home/laama/code/python/fmi1.py $users->{$nick}`;
+		my $json = decode_json($result);
+		my $sayline = getSayLine($json);
+		$server->command("msg $target $sayline");
+	} elsif ($msg eq '!fe' || $msg eq '!fmie' && $users->{$nick}) {
+		my $result = `/home/laama/code/python/fmi1.py $users->{$nick} ennustus`;
+		my $json = decode_json($result);
+		my $sayline = getSayLine($json);
+		$server->command("msg $target $sayline");
+	}
+}
+
+sub getSayLine {
+	my ($json, @rest) = @_;
+	my $sayline = '';
+	$sayline .= "\002" .$json->{'place'} . ": ";
+	$sayline .= '(' . $json->{'time'} . ")\002 ";
+	$sayline .= $json->{'temperature'} . ', ';
+	$sayline .= '(~ ' . $json->{'feels_like'} . '), ';
+	$sayline .= 'Kosteus: ' . $json->{'humidity'} . ', ';
+	$sayline .= '💧: ' . $json->{'precipitation_amount'} . ', ';
+	$sayline .= '💨: ' . $json->{'wind_speed'} . ' ';
+	$sayline .= '(' . $json->{'wind_gust'} . ') m/s, ';
+	$sayline .= $json->{'pressure'} . ', ';
+	$sayline .= '☁️ : ' . $json->{'cloud_cover'};
+	return $sayline;
+}
+
+sub check_user_city {
+	my ($checkcity, $nick, @rest) = @_;
+	$checkcity = KaaosRadioClass::ktrim($checkcity);
+	if (!$checkcity) {
+		if (defined $users->{$nick}) {
+			dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
+			return $users->{$nick};
+		} else {
+			return undef;
+		}
+	} else {
+		$users->{$nick} = $checkcity;
+		return $checkcity;
 	}
 }
 
@@ -184,6 +231,7 @@ sub fmi_update {
 }
 
 sub timeout_stop {
+	prind("Stopping timeout: " . $timeout_tag);
 	Irssi::timeout_remove($timeout_tag);
 }
 
@@ -192,7 +240,7 @@ sub timeout_1h {
 	prind('New "at" command at now +1 hours..');
 	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
-	DP($retval);
+	DP $retval;
 }
 sub timeout_545 {
 	my $command = 'echo "echo \"Aja2\" | nc -U '.$socket_file.'" | at 5:45 2>&1';

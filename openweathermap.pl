@@ -46,7 +46,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
@@ -228,6 +228,9 @@ sub omaconway {
 # param: searchword, returns json answer for current weather or undef if not found
 sub FINDWEATHER {
 	my ($searchword, @rest) = @_;
+	if ($searchword eq '') {
+		return undef;
+	}
 	my $newurl;
 	my $urltail = $searchword;
 	if ($searchword =~ /(\d{5})/) {
@@ -237,7 +240,7 @@ sub FINDWEATHER {
 		$newurl = $url.'q=';
 	}
 	my $json = request_api($newurl.$urltail);
-	da(__LINE__.' json', $json);
+	#da(__LINE__.' json', $json);
 	my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 
 	if ($json eq '-1') {
@@ -304,7 +307,7 @@ sub forecastloop1 {
 			if ($timezone > 0) {$timezone = '+'.$timezone};
 			$timezone = '(UTC' . $timezone . ')';
 			#print ("Timezone: " . $timezone) if $DEBUG;
-			$returnstring = $use_this_city . ','.$json->{city}->{country} . " $timezone \002klo:\002 " . $returnstring;
+			$returnstring = "\002" . $use_this_city . ','.$json->{city}->{country} . " $timezone klo:\002 ";
 		}
 		#print __LINE__ if $DEBUG1;
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main},
@@ -327,19 +330,23 @@ sub forecastloop5 {
 	my $returnstring = '';
 	my $daytemp = '';
 	my @weekdayarray = ('su','ma', 'ti','ke','to','pe','la','su');
+	#print __LINE__ . ': dump json next';
+	#print Dumper $json;
 	foreach my $item (@{$json->{list}}) {
 		my $tiem = $item->{dt_txt};
+
 		#my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $item->{dt};
+		#print __LINE__ . ': dt_txt: '. $tiem . ', dt: ' . $item->{dt} . ', timezone: ' . $item->{timezone} if $DEBUG;
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime ($item->{dt} + $item->{timezone});
 		my $weekdaystring = $weekdayarray[$wday];
 		if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {	# TODO: per timezone not UTC
 			if ($index == 0) {
-				$returnstring = $json->{city}->{name} . ','.$json->{city}->{country} . ' ';
+				$returnstring = "\002" . $json->{city}->{name} . ','.$json->{city}->{country} . "\002 ";
 			}
-			print __LINE__ if $DEBUG;
+			#print __LINE__ .': returnstring: ' . $returnstring if $DEBUG;
 			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},	$json->{city}->{sunset}, $item->{dt}, $json->{timezone});
 			if ($wday eq $daytemp) {
-				$returnstring .= "\002".sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
+				$returnstring .= sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
 			} else {
 				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 				$returnstring .= "\002".$weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
@@ -352,6 +359,7 @@ sub forecastloop5 {
 			}
 			$daytemp = $wday;
 			$index++;
+			#print __LINE__ .': returnstring: ' . $returnstring if $DEBUG;
 		}
 	}
 
@@ -427,7 +435,7 @@ sub getSayLine2 {
 	#	$index++;
 	#}
 	my $newcity = changeCity($json->{name});
-	print __LINE__ . 'weatherdesc: ' . $weatherdesc if $DEBUG;
+	#print __LINE__ . 'weatherdesc: ' . $weatherdesc if $DEBUG;
 	my $returnvalue = $newcity.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $sunrise, $sunset, time, $json->{timezone});
 	return $returnvalue;
 }
@@ -562,7 +570,10 @@ sub get_minute_of_day {
 
 sub GETCITYCOORDS {
 	my ($city, @rest) = @_;
-	dp(__LINE__.' search city from DB: '.$city) if $DEBUG1;
+	if ($city eq '') {
+		return undef;
+	}
+	dp(__LINE__ . ' search city from DB: '.$city) if $DEBUG1;
 	$city = "%${city}%";
 	my $sql = 'SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ? or (POSTNUMBER like ? AND POSTNUMBER is not null) LIMIT 1;';
 	my @results = KaaosRadioClass::bindSQL($db, $sql, ($city, $city));
