@@ -167,19 +167,18 @@ sub format_time {
 	#dp(__LINE__ . " JES2");
 	my $local_time = localtime;
 	my $diff = $local_time - $time_object;
-	dp(__LINE__ . " diff in seconds: " . $diff);
-	dp(__LINE__ . ' years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
+	dp(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
 	my $result = '';
 	if ($diff >= 29030400) {
-    	$result = sprintf("%.1f", ($diff / 29030400)-1) . 'y';
+    	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
 	} elsif ($diff >= 2419200) {
-		$result = sprintf("%.1f", ($diff / 2419200)-1) . 'mon';
+		$result = sprintf("%.1f", ($diff / 2419200)) . 'mon';
 	} elsif ($diff >= 604800) {
-		$result = sprintf("%.1f", ($diff / 604800)-1) . 'wk';
+		$result = sprintf("%.1f", ($diff / 604800)) . 'wk';
 	} elsif ($diff > 86400) {
-		$result = sprintf("%.1f", ($diff / 86400)-1) . 'days';
+		$result = sprintf("%.1f", ($diff / 86400)) . 'days';
 	} elsif ($diff > 3600) {
-		$result = sprintf("%.1f", ($diff / 3600)-1) . 'h';
+		$result = sprintf("%.1f", ($diff / 3600)) . 'h';
 	} elsif($diff > 60) {
 		$result = sprintf("%.f", $diff / 60) . 'mins';
 	} else {
@@ -618,7 +617,7 @@ sub checkForPrevEntry {
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-#https://www.youtube.com/shorts/apSq3ZC3Sc8
+	#https://www.youtube.com/shorts/apSq3ZC3Sc8
 	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
 		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
 		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
