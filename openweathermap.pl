@@ -421,6 +421,28 @@ sub make_weather_desc {
 	return $weatherdesc;
 }
 
+sub make_winddir_arrow {
+	my ($degrees, @rest) = @_;
+
+    if ($degrees >= 337.5 || $degrees < 22.5) {
+		return '↓';
+    } elsif ($degrees >= 22.5 && $degrees < 67.5) {
+		return '↙';
+    } elsif ($degrees >= 67.5 && $degrees < 112.5) {
+		return '←';
+    } elsif ($degrees >= 112.5 && $degrees < 157.5) {
+		return '↖';
+    } elsif ($degrees >= 157.5 && $degrees < 202.5) {
+		return '↑';
+    } elsif ($degrees >= 202.5 && $degrees < 247.5) {
+		return '↗';
+    } elsif ($degrees >= 247.5 && $degrees < 292.5) {
+		return '→';
+    } elsif ($degrees >= 292.5 && $degrees < 337.5) {
+		return '↘';
+    }
+}
+
 # for the command !sa, area weather
 sub getSayLine2 {
 	my ($json, $sunrise, $sunset, @rest) = @_;
@@ -498,12 +520,14 @@ sub getSayLine {
 	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
 	my $wind_gust = '';
 	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 1) if (defined $json->{wind}->{gust});
+	my $winddir = make_winddir_arrow($json->{wind}->{deg});
 
 	my $wind = '💨 '.$wind_speed;
 	if (defined $wind_gust && $wind_gust ne '') {
 		$wind .= " ($wind_gust)";
 	}
 	$wind .= ' m/s';
+	$wind .= " $winddir";
 	my $city = changeCity($json->{name});
 	my $timezone = ($json->{timezone} / 3600);
 	if ($timezone > 0) {
@@ -520,7 +544,7 @@ sub getSayLine {
 	}
 	print __LINE__ . ' city: ' . $city if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt}, $json->{timezone});
-	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index.', '. $pressure . ', ' . $humidity;
+	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky . $uv_index.', air pressure: '. $pressure . ', humidity: ' . $humidity;
 	return $returnvalue;
 }
 
