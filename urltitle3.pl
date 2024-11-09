@@ -54,7 +54,7 @@ $VERSION = '2024-06-12';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 
@@ -704,6 +704,16 @@ sub signal_emitters {
 	my ($param, $server, $target, @rest) = @_;
 	dp(__LINE__.":signal_emitters") if $DEBUG1;
 	return 0 if $dontprint == 1;
+
+	if ($param =~ /twitter.com(.*)\/status\/(.*)/i ||
+		$param =~ /x.com(.*)\/status\/(.*)/i || 
+		$param =~ /fixupx.com(.*)\/status\/(.*)/i) {
+		# twitter status
+		Irssi::signal_emit('twitter_search_id', $server, $target, $2);
+		prind("Twitter signal emited!! $2");
+		# Irssi::signal_stop();
+		return 1;
+	}
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
@@ -1257,6 +1267,9 @@ Irssi::signal_register($signal_config_hash2);
 
 my $signal_config_hash3 = { 'yle_url' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash3);
+
+my $signal_config_hash4 = { 'twitter_search_id' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash4);
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 #Irssi::signal_add('message own_public', 'sig_msg_pub_own');

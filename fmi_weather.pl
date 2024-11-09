@@ -156,24 +156,24 @@ sub event_pubmsg {
 	} elsif ($msg =~ /^!f (.*)$/ || $msg =~ /^!fmi (.*)$/) {
 		my $searchword = $1;
 		check_user_city($searchword, $nick);
-		my $result = `/home/laama/code/python/fmi1.py $searchword`;
+		my $result = `/home/laama/code/python/fmi1.py "$searchword"`;
 		my $json = decode_json($result);
 
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
 	} elsif ($msg =~ /^!fe (.*)$/ || $msg =~ /^!fmie (.*)$/) {
 		my $searchword = $1;
-		my $result = `/home/laama/code/python/fmi1.py $searchword ennustus`;
+		my $result = `/home/laama/code/python/fmi1.py "$searchword" ennustus`;
 		my $json = decode_json($result);
 
 		my $sayline = getSayLine($json);
-	} elsif ($msg eq '!f' || $msg eq '!fmie' && $users->{$nick}) {
-		my $result = `/home/laama/code/python/fmi1.py $users->{$nick}`;
+	} elsif ($msg eq '!f' || $msg eq '!fmi' && $users->{$nick}) {
+		my $result = `/home/laama/code/python/fmi1.py "$users->{$nick}"`;
 		my $json = decode_json($result);
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
 	} elsif ($msg eq '!fe' || $msg eq '!fmie' && $users->{$nick}) {
-		my $result = `/home/laama/code/python/fmi1.py $users->{$nick} ennustus`;
+		my $result = `/home/laama/code/python/fmi1.py "$users->{$nick}" ennustus`;
 		my $json = decode_json($result);
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
@@ -182,6 +182,10 @@ sub event_pubmsg {
 
 sub getSayLine {
 	my ($json, @rest) = @_;
+	if (defined $json->{'status'} && $json->{'status'} eq 'error') {
+		return $json->{'message'};
+	}
+	DA($json);
 	my $sayline = '';
 	$sayline .= "\002" .$json->{'place'} . ": ";
 	$sayline .= '(' . $json->{'time'} . ")\002 ";
@@ -201,7 +205,7 @@ sub check_user_city {
 	$checkcity = KaaosRadioClass::ktrim($checkcity);
 	if (!$checkcity) {
 		if (defined $users->{$nick}) {
-			dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
+			dp(__LINE__.': ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
 			return $users->{$nick};
 		} else {
 			return undef;

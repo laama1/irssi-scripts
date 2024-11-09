@@ -146,13 +146,15 @@ sub strip_nick {
 sub format_markdown {
     my ($text, @rest) = @_;
     my $bold = "\002";
-    my $color_s = "\00311";
-    my $color_s2 = "\0038";
-    my $color_e = "\003";
-    $text =~ s/\*\*(.*?)\*\*/${bold}${1}${bold}/g;
-    #$text =~ s/\s{2,}//ug;
-    $text =~ s/\`\`\`(.*?)\`\`\`/${color_s}${1}${color_e}/g;
-    $text =~ s/`(.*?)`/${color_s2}${1}${color_e}/g;
+    my $color_s = "\00311"; # 11 = mint
+    my $color_s2 = "\0038"; # 8 = yellow
+    my $color_e = "\003";   # color end tag
+    $text =~ s/\n/ /ug;
+    $text =~ s/\*\*(.*?)\*\*/${bold}${1}${bold}/ug;     # bold
+    $text =~ s/\s{2,}/ /ug;
+    $text =~ s/\`\`\`(.*?)\`\`\`/${color_s}${1}${color_e}/ug;    # code quote
+    $text =~ s/\`(.*?)\`/${color_s2}${1}${color_e}/ug;
+    $text =~ s/`(.*?)`/${color_s2}${1}${color_e}/ug;
     return $text;
 }
 
@@ -229,9 +231,9 @@ sub make_call2 {
         $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
         $chathistory->{$channel}->{$timestamp}->{message} = $text;
 
-        # Ensure we only keep the latest 5 entries
+        # Ensure we only keep the latest 15 entries
         my @timestamps = sort { $a <=> $b } keys %{$chathistory->{$channel}};
-        if (@timestamps > 5) {
+        if (@timestamps > 15) {
             my $oldest_timestamp = shift @timestamps;
             delete $chathistory->{$channel}->{$oldest_timestamp};
         }
