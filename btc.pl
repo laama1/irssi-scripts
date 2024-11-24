@@ -1,10 +1,6 @@
 use warnings;
 use strict;
-use Encode qw/encode decode/;
 use Irssi;
-use Data::Dumper;
-use DBI qw(:sql_types);
-
 use utf8;
 binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
@@ -17,8 +13,8 @@ my $apiurl = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_curre
 use vars qw($VERSION %IRSSI);
 $VERSION = '20241125';
 %IRSSI = (
-	authors     => 'LAama1',
-	contact     => 'ircnet: LAama1',
+	authors     => 'laama',
+	contact     => 'ircnet: laama',
 	name        => 'btc.pl',
 	description => 'Get BTC value from random api.',
 	license     => 'Public Domain',
@@ -29,7 +25,8 @@ $VERSION = '20241125';
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 	return if ($nick eq $server->{nick});	#self-test
-	
+	my $btc = getBtcValue();
+    $server->command("MSG $nick BTC value: $btc €");
 	return;
 }
 
@@ -45,23 +42,11 @@ sub event_pubmsg {
 sub getBtcValue {
     my $data = KaaosRadioClass::getJSON($apiurl);
     if ($data) {
+        prind("Fetched data: $data->{bitcoin}->{eur}");
         return $data->{bitcoin}->{eur};
     } else {
         return "Error.";
     }
-}
-
-sub dp {
-	return unless $DEBUG == 1;
-	Irssi::print($IRSSI{name}." debug: @_");
-	return;
-}
-
-sub da {
-	return unless $DEBUG == 1;
-	Irssi::print('addquote: ');
-	Irssi::print(Dumper(@_));
-	return;
 }
 
 sub prind {
