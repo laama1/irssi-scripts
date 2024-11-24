@@ -472,11 +472,10 @@ sub fetchUrl {
 			$size = $size.'B';
 		}
 		$finalURI = $response->request()->uri() || '';
-		#print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
+		print("KaaosRadioClass Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
-		print("fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		print("KaaosRadioClass fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
-		#return;
 	}
 	if (defined $getsize && $getsize == 1) {
 		return $page, $size, $finalURI;

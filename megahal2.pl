@@ -379,11 +379,6 @@ sub public_responder {
 		return if $alldone == 1;
 
 		my $output = return_reply($data);
-		#my $output = $megahal->do_reply($data, 0);
-		#$output =~ s/  */ /g;		# replace multiple spaces
-		#$output =~ s/^ *//g;		# replace spaces from beginning
-		#$output = KaaosRadioClass::replaceWeird($output);
-		#$output = "$nick: $output" if $referencesme;
 		$output = replace_weird($output);
 		$server->command("msg $target $nick, $output") if $output;
 

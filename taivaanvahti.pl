@@ -30,10 +30,10 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
-
+my $timeout_tag;
 my $dbh;		# database handle
 my $taivaanvahtiURL = 'https://www.taivaanvahti.fi/observations/rss';
 my $count = 0;
@@ -96,11 +96,7 @@ sub sig_taivaanvahti_search {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	return if ($nick eq $server->{nick});   # self-test
-	return if ($nick eq 'kaaosradio');		# bad nicks
-
-    #my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
-    #my @enabled = split / /, $enabled_raw;
-    #return unless grep /$target/, @enabled;
+	#return if ($nick eq 'kaaosradio');		# bad nicks
 
 	if ($msg =~ /^[\.\!]help taivaanvahti\b/i) {
 		print_help($server, $target);
@@ -112,7 +108,7 @@ sub sig_msg_pub {
 			my $title = $resultarray->{$item}->{'title'};
 			my $desc = $resultarray->{$item}->{'desc'};
 			my $city = $resultarray->{$item}->{'city'};
-			my $havaintodate = localtime($resultarray->{$item}->{'havaintodate'})->strftime('%d.%m. %H:%M');
+			my $havaintodate = localtime($resultarray->{$item}->{'havaintodate'})->strftime('%d.%m.%y %H:%M');
 			my $link = $resultarray->{$item}->{'link'};
 			my $sayline = "\002$title: ($havaintodate, $city)\002 $link $desc";
 			sayit($server, $target, $sayline);
@@ -233,7 +229,8 @@ sub search_db {
 	my $searchword = shift;
 	open_database_handle();
 	DP(__LINE__.' searchword: '.$searchword);
-	my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintoid DESC LIMIT 2';
+	#my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintoid DESC LIMIT 2';
+	my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintodate DESC LIMIT 2';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");
@@ -246,7 +243,6 @@ sub search_db {
 	
 	while(@line = $sth->fetchrow_array) {
 		$resultarray->{$index} = {'rowid' => $line[0], 'title' => $line[1], 'desc' => $line[2], 'city' => $line[3], 'havaintodate' => $line[4], 'link' => $line[5]};
-		#print Dumper $resultarray->{$index};
 		$index++;
 	}
 	close_database_handle();
@@ -280,7 +276,8 @@ sub parseRFC822Time {
 sub parse_time {
 	my ($string, @rest) = @_;
 	# Tue, 04 Sep 2018 22:37:34 +0300
-	my $tzone = '+0300';		# Default value for timezone (Finnish summer time)
+	#my $tzone = '+0300';		# Default value for timezone (Finnish summer time)
+	my $tzone = '+0200';		# Default value for timezone (Finnish winter time)
 	if ($string =~ /\w{3}, (\d{2}) (\w{3}) \d{4} (\d{2}:\d{2}):\d{2} ([+-]\d{4})/i) {
 		return parseRFC822Time($string, $tzone);
 	} else {
@@ -321,8 +318,6 @@ sub parse_extrainfo_from_link_new {
 		'city' => '',
 		'havaintodate' => ''
 	);
-
-
 }
 
 sub parse_extrainfo_from_link {
@@ -358,7 +353,7 @@ sub parse_extrainfo_from_link {
 			}
 			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match2!');
-				my $type = kaaosradioclass::ktrim($1);
+				my $type = KaaosRadioClass::ktrim($1);
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
@@ -420,6 +415,12 @@ sub timerfunc {
 	return;
 }
 
+sub timerstop {
+	Irssi::timeout_remove($timeout_tag);
+	prind("Timer stopped!");
+	return;
+}
+
 sub prind {
 	my ($text, @test) = @_;
 	print("\00312" . $IRSSI{name} . ">\003 ". $text);
@@ -431,16 +432,17 @@ sub prindw {
 
 Irssi::command_bind('taivaanvahti_update', \&timerfunc, 'taivaanvahti');
 Irssi::command_bind('taivaanvahti_search', \&search_db, 'taivaanvahti');
+Irssi::command_bind('taivaanvahti_stop', \&timerstop, 'taivaanvahti');
 
 Irssi::settings_add_str('taivaanvahti', 'taivaanvahti_enabled_channels', '');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('taivaanvahti_search_id', 'sig_taivaanvahti_search');
 
-Irssi::timeout_add(1_800_000, 'timerfunc', undef);		# 30 minutes
+$timeout_tag = Irssi::timeout_add(1_800_000, 'timerfunc', undef);		# 30 minutes
 #Irssi::timeout_add(5000, 'timerfunc', undef);			# 5 aseconds
 
 prind("v. $VERSION Loaded!");
-prind("new commands: /taivaanvahti_update, /taivaanvahti_search");
+prind("new commands: /taivaanvahti_update, /taivaanvahti_search, /taivaanvahti_stop");
 prind("/set taivaanvahti_enabled_channels #channel1 #channel2");
 prind("Enabled on: ". Irssi::settings_get_str('taivaanvahti_enabled_channels'));

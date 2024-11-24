@@ -25,8 +25,10 @@ $VERSION = '20241125';
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 	return if ($nick eq $server->{nick});	#self-test
-	my $btc = getBtcValue();
-    $server->command("MSG $nick BTC value: $btc €");
+	if ($msg =~ /^!btc/gi) {
+        my $btc = getBtcValue();
+        $server->command("MSG $nick BTC value: $btc €");
+    }
 	return;
 }
 

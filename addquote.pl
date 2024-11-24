@@ -119,7 +119,7 @@ sub search_from_file {
 		if ($_ =~ /$searchword/gi) {
 			chomp (my $found = $_);
 			push @searchresults, $found;
-			dp("Löytyi: $found");
+			dp("Löytyi quote: $found");
 		}
 	}
 	return @searchresults;

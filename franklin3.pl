@@ -259,7 +259,9 @@ sub frank {
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick; #self-test
 
-    if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
+    $msg = Encode::decode('UTF-8', $msg);
+
+    if ($msg =~ /^$mynick[\:,]* (.*)/ug ) {
         my $textcall = $1;
         prind(__LINE__ . " textcall: $textcall") if $DEBUG;
         return undef if KaaosRadioClass::floodCheck(3);
@@ -274,7 +276,6 @@ sub frank {
         #for (0..1) {
             #if (my $answer = make_call($textcall, $nick)) {
             if (my $answer = make_call2($textcall, $nick, $channel)) {
-                #$chathistory->{$nick}->{timestamp} = time;
                 $answer = format_markdown($answer);
                 $server->command("msg -channel $channel $nick: $answer");
                 #my $answer_cut = substr($answer, 0, $hardlimit);
@@ -304,8 +305,6 @@ sub make_vision_preview_json {
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
-    #prind("search url: $url");
-    #prind("search prompt for vision: $searchprompt");
     #my $data = { model => $visionmodel, max_tokens => 300, messages => [{
     my $data = { model => $model, max_tokens => 150, messages => [{
         role => "user",
@@ -325,29 +324,30 @@ sub tts {
     if ($msg =~ /^!tts (.*)/u ) {
         my $query = $1;
         #my $voicemodels = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
-        my $voicemodels = ['alloy'];
+        my $voicemodels = ['onyx'];
+        my $answer = "\002OpenAI TTS results:\002 ";
         foreach my $voicemodel (@$voicemodels) {
             prindd(__LINE__ . ' voicemodel: ' . $voicemodel);
-            my $data = { model => "tts-1", voice => $voicemodel, input => $query, response_format => "mp3"};
+            my $data = { model => "tts-1-hd", voice => $voicemodel, input => $query, response_format => "mp3"};
             my $request = encode_json($data);
             my $res = $ua->post($speechurl, Content => $request);
             if ($res->is_success) {
                 my $data = $res->content;
                 my $time = time;
                 my $index = 0;
-                my $answer = 'TTS results: ' .length($data). ' bytes, ';
+                
                 my $filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
-                if (save_file_blob($data, $filename) >= 0) {
-                    $answer .= "https://bot.8-b.fi/dale/$filename ";
+                if (save_file_blob($data, $filename)) {
+                    $answer .= "\002" . $voicemodel . ":\002 ";
+                    $answer .= "https://bot.8-b.fi/dale/$filename (" .length($data). 'b), ';
                 }
 
-                $server->command("msg -channel $channel $answer");
-                #last;
             } else {
                 prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
                 print Dumper $res if $DEBUG;
             }
         }
+        $server->command("msg -channel $channel $answer") if $answer;
         return;
         my $data = { model => "tts-1", voice => "alloy", input => $query, response_format => "mp3"};
         my $request = encode_json($data);
@@ -355,9 +355,6 @@ sub tts {
         #xprint Dumper $request if $DEBUG;
         my $res = $ua->post($speechurl, Content => $request);
         if ($res->is_success) {
-            #print __LINE__ . ' response success' if $DEBUG;
-            #print Dumper $res if $DEBUG;
-            #my $data = $res->decoded_content();
             my $data = $res->content;
             my $time = time;
             my $index = 0;
@@ -366,8 +363,7 @@ sub tts {
             if (save_file_blob($data, $filename) >= 0) {
                 $answer .= "https://bot.8-b.fi/dale/$filename ";
             }
-            #print __LINE__ . ' answer: '.$answer.', data:' if $DEBUG;
-            #print Dumper ($data) if $DEBUG;
+
             $server->command("msg -channel $channel $answer");
         } else {
             prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);

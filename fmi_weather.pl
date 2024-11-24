@@ -9,6 +9,8 @@ use Fcntl;
 use JSON;
 use Data::Dumper;
 use DateTime::Format::Strptime;
+use Number::Format qw(:subs :vars);
+my $fi = new Number::Format(-decimal_point => ',', -thousands_sep => ' ');
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
@@ -24,7 +26,7 @@ $VERSION = '2022-03-11';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
@@ -100,7 +102,7 @@ sub msg_to_channel {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 		if (index ($enabled_raw, $window->{active}->{name}) ne "-1") {
-			DP(__LINE__." Found matching channel! $window->{active}->{name} at position: " . index ($enabled_raw, $window->{active}->{name}));
+			DP(__LINE__ . " Found matching channel! $window->{active}->{name} at position: " . index ($enabled_raw, $window->{active}->{name}));
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
 		}
 	}
@@ -150,7 +152,7 @@ sub event_pubmsg {
 		# if string: 'np:' found in channel topic
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			# FIXME: if $nick == $target eg. kaaosradio
-			# removed 2023-11-01 return;
+			return;
 		}
 		$server->command("msg $target $last_meteo");
 	} elsif ($msg =~ /^!f (.*)$/ || $msg =~ /^!fmi (.*)$/) {
@@ -158,7 +160,6 @@ sub event_pubmsg {
 		check_user_city($searchword, $nick);
 		my $result = `/home/laama/code/python/fmi1.py "$searchword"`;
 		my $json = decode_json($result);
-
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
 	} elsif ($msg =~ /^!fe (.*)$/ || $msg =~ /^!fmie (.*)$/) {
