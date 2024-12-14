@@ -26,7 +26,7 @@ sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 
 	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /(!help)/gi || $msg =~ /(.help)/gi {
+	if ($msg =~ /(!help)/gi || $msg =~ /(\.help)/gi) {
         my $keyword = $1;
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $help = $serverrec->{nick} . " ohje: ". getHelp();

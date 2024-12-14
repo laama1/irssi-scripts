@@ -31,6 +31,7 @@ my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
 my $last_meteo = '';
+fmi_update();
 my $last_time;
 
 my $users = {};
@@ -60,7 +61,7 @@ sub check_sock {
 		chomp($msg);
 		prind("Got message from socket: $msg");# if $msg;
 		if ($msg =~ /^Aja/) {
-			DP(__LINE__." AJA!");
+			#DP(__LINE__." AJA!");
 			if (parse_extrainfo_from_link($fmiURL)) {
 				timeout_1h();
 			}
@@ -101,6 +102,7 @@ sub msg_to_channel {
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
+		next unless ($window->{active_server}->{tag} eq "IRCNet");	# HACK, print on ircnet only
 		if (index ($enabled_raw, $window->{active}->{name}) ne "-1") {
 			DP(__LINE__ . " Found matching channel! $window->{active}->{name} at position: " . index ($enabled_raw, $window->{active}->{name}));
 			$window->{active_server}->command("msg $window->{active}->{name} $text");
@@ -146,12 +148,7 @@ sub parse_extrainfo_from_link {
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	if ($msg =~ /^!meteo/) {
-		if ($last_meteo eq '') {
-			fmi_update();
-		}
-		# if string: 'np:' found in channel topic
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
-			# FIXME: if $nick == $target eg. kaaosradio
 			return;
 		}
 		$server->command("msg $target $last_meteo");
@@ -166,7 +163,6 @@ sub event_pubmsg {
 		my $searchword = $1;
 		my $result = `/home/laama/code/python/fmi1.py "$searchword" ennustus`;
 		my $json = decode_json($result);
-
 		my $sayline = getSayLine($json);
 	} elsif ($msg eq '!f' || $msg eq '!fmi' && $users->{$nick}) {
 		my $result = `/home/laama/code/python/fmi1.py "$users->{$nick}"`;
@@ -242,7 +238,7 @@ sub timeout_stop {
 
 sub timeout_1h {
 	DP("Aja 1h");
-	prind('New "at" command at now +1 hours..');
+	prind('Creating new "at" run at "now +1 hours"..');
 	my $command = 'echo "echo \"Aja1\" | nc -U '.$socket_file.'" | at now +1 hours 2>&1';
 	my $retval = `$command`;
 	DP $retval;

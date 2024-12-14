@@ -1,17 +1,19 @@
-use strict;
-use warnings;
-use POSIX;
 use Irssi;
 use vars qw($VERSION %IRSSI);
+use strict;
+use warnings;
+use utf8;
+use open ':std', ':encoding(UTF-8)';  # Terminal expects UTF-8
+use POSIX;
 use Data::Dumper;
 use JSON;
 use POSIX;
 use DateTime;
-use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
-use KaaosRadioClass;
 use Time::HiRes;
 use HTTP::Headers;
 use LWP::UserAgent;
+use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
+use KaaosRadioClass;
 
 $VERSION = '0.2';
 %IRSSI = (
@@ -72,9 +74,12 @@ my $target_t;   # for fork processes
 # sahkohinta-api.fi
 my $sahkohintaurl = 'https://sahkohinta-api.fi/api/v1/halpa?tunnit=12&tulos=sarja&aikaraja=';
 #my $sahkohintaurl = 'https://kd.8-b.fi/test.json?';
+my $katkourl = 'https://sqtb-api.azureedge.net/outagemap/tailored/summary/';
 my $pricedata = {};
+my $katkodata = {};
 my $forked = 0;
 my $borked = 0;
+#my $forked_sk = 0;
 
 my $apikey;
 our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
@@ -120,21 +125,13 @@ sub create_porssisahko_url {
 
 sub get_sahkohinta_api_url {
     my $datetime = DateTime->now(time_zone => 'Europe/Helsinki');
-    #my $datestring = $datetime->ymd;
-    #my $timestring = $datetime->hour;
     my $duration = DateTime::Duration->new(hours => 12);
     my $enddatetime = $datetime + $duration;
 
-    #my $enddatestring = $enddatetime->ymd;
-    #my $endtimestring = $enddatetime->hour;
-    print __LINE__;
     my $datetimestring = $datetime->strftime('%Y-%m-%dT%H:00');
     $datetimestring .= '_';
-    print __LINE__;
     $datetimestring .= $enddatetime->strftime('%Y-%m-%dT%H:00');
-    #my $datetimestring = $datestring . 'T' . $timestring . ':00_';
-    
-    #$datetimestring .= $enddatestring . 'T' . $endtimestring . ':00';
+
     my $newurl = $sahkohintaurl . $datetimestring;
     return $newurl;
 }
@@ -181,21 +178,33 @@ sub get_help {
 
 sub pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 
-	return if ($nick eq $serverrec->{nick});   #self-test
-	if ($msg =~ /^(!help sähkö)/sgi) {
+    $msg = Encode::decode('UTF-8', $msg);
+	if ($msg =~ /^\!help sähkö/sgi) {
 		return if KaaosRadioClass::floodCheck();
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
-	} elsif ($msg =~ /^(!sähkö)/sgi) {
+	} elsif ($msg =~ /^\!sähkö$/sgi || $msg =~ /^\!sahko$/sgi) {
+        #prind("sähkö request from $nick on channel $target") if $DEBUG;
 		return if KaaosRadioClass::floodCheck();
         $target_t = $target;
         $server_t = $serverrec;
 
         do_fingrid();
         do_sahkonhinta();
-		prind("request from $nick on channel $target");
-	}
+		prind("!sähkö request from $nick on channel $target");
+	} elsif ($msg =~ /^\!sahkokatko[t]? (.*)/sgi || $msg =~ /^\!sähkökatko[t]? (.*)/sgi) {
+        my $searchword = $1;
+        #prind('got: '. $searchword) if $DEBUG;
+        return if KaaosRadioClass::floodCheck();
+        #prind("sähkökatkot request from $nick on channel $target, search for: $searchword");
+        $target_t = $target;
+        $server_t = $serverrec;
+        do_sahkokatkot($searchword);
+        prind("!sähkökatko request from $nick on channel $target, done");
+    }
 }
 
 sub do_fingrid {
@@ -234,6 +243,7 @@ sub do_fingrid {
 
 sub do_sahkonhinta {
     return if $forked;
+    prind("Fetching price data...");
     my ($rh, $wh);
     pipe($rh, $wh);  # read handle, write handle
     my $now = time;
@@ -247,7 +257,7 @@ sub do_sahkonhinta {
     $timestamp2 = $timestamp2->strftime('%Y-%m-%dT%H:00');
 
     if (defined($pricedata->{$timestamp}) && defined($pricedata->{$timestamp2})) {
-        prind("Using existing price data.");
+        prind("Using saved price data..");
         process_price_data($pricedata, $timestamp, $timestamp2);
         return;
     }
@@ -258,7 +268,7 @@ sub do_sahkonhinta {
     if (!defined $pid) {
         prindw("Cannot fork: $!");
     } elsif ($pid == 0) {
-        # child
+        # child process
         $pricedata = fetch_price_data2();
         print $wh encode_json($pricedata);
         close $wh;
@@ -266,12 +276,68 @@ sub do_sahkonhinta {
     } else {
         # parent
         close $wh;
-        prind("Parent process, forked a child with PID: $pid");
+        prind(__LINE__ . ": Parent process, forked a child with PID: $pid") if $DEBUG;
         Irssi::pidwait_add($pid);
         my $pipetag;
         my @args = ($rh, \$pipetag, $timestamp, $timestamp2);
         $pipetag = Irssi::input_add(fileno($rh), INPUT_READ, \&pipe_input, \@args);
     }
+}
+
+sub do_sahkokatkot($) {
+    my ($searchword, @rest) = @_;
+    #return if $forked_sk;
+    prind(__LINE__ . ": Fetching power outage data...") if $DEBUG;
+    my $h = HTTP::Headers->new;
+    $h->header('Accept-Encoding' => 'gzip,deflate,br', 'Host' => 'sqtb-api.azureedge.net');
+    my $jsondata = KaaosRadioClass::getJSON($katkourl, $h);
+    #print Dumper $jsondata if $DEBUG;
+    if ($jsondata ne '-1') {
+        my $printstring = parse_sahkokatkot_data($searchword, $jsondata);
+        msg_channel($printstring);
+    } else {
+        msg_channel("Sähkökatkotietoja ei saatu.");
+    }
+}
+
+sub parse_sahkokatkot_data {
+    my ($searchword, $jsondata, @rest) = @_;
+    my $json_areas = $jsondata->{areas};
+    my $json_companies = $jsondata->{companies};
+    my $printstring = '';
+    #prind(__LINE__ . ": did we get anything? searchword, searchword: " . $searchword) if $DEBUG;
+    foreach my $element (@$json_areas) {
+        #print Dumper ($element) if $DEBUG;
+        my $area = $element->{name};
+        my $alias = $element->{alias};
+        
+        my $faults = $element->{fault} || 0;
+        my $maxday = $element->{maxday};
+        my $url = $element->{outagemap} || '';
+        #prind(__LINE__ . " area: " . $area . ', searchword: ' . $searchword . ", faults: $faults, maxday: $maxday") if $DEBUG;
+        if ($area =~ /$searchword/i || $alias =~ /$searchword/i) {
+            prind(__LINE__ . " area: " . $area . ', alias: ' . $alias . ', faults: ' . $faults . ', maxday: ' . $maxday . ', url: '. $url) if $DEBUG;
+            $printstring .= "\002$area:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
+            #last;
+        }
+    }
+    #prind(__LINE__ . ': done part 1.. printstring: '. $printstring) if $DEBUG;
+
+    foreach my $element (@$json_companies) {
+        my $company = $element->{name};
+        my $alias = $element->{alias};
+        my $faults = $element->{fault} || 0;
+        my $maxday = $element->{maxday};
+        my $url = $element->{outagemap} || '';
+        if ($company =~ /$searchword/i || $alias =~ /$searchword/i) {
+            prind(__LINE__ . " company: " . $company) if $DEBUG;
+            $printstring .= "\002$company:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
+            #last;
+        }
+    }
+
+    prind("printstring: $printstring") if $DEBUG;
+    return $printstring;
 }
 
 sub parse_sahko_data($$) {
@@ -356,7 +422,7 @@ sub pipe_input($$) {
     $forked = 0;
 }
 
-sub pipe_input_fingrid($$) {
+sub pipe_input_fingrid($$$$) {
     my ($rh, $pipetage, $time1, $time2) = @{$_[0]};
     my $data;
     {
@@ -371,8 +437,25 @@ sub pipe_input_fingrid($$) {
     $borked = 0;
     return unless $data;
     msg_channel($data);
-    
 }
+
+sub pipe_input_katkot($$) {
+    my ($rh, $pipetage) = @{$_[0]};
+    my $data;
+    {
+        select($rh);
+        local $/;
+        select(CLIENTCRAP);
+        $data = <$rh>;
+        close($rh);
+    }
+
+    Irssi::input_remove($$pipetage);
+    #$forked_sk = 0;
+    return unless $data;
+    msg_channel($data);
+}
+
 
 sub process_price_data($$$) {
     my ($pricedata, $time1, $time2) = @_;

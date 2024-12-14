@@ -35,7 +35,7 @@ $headers->header('Authorization' => 'Bearer ' . $bearer_token);
 
 sub sig_twitter {
     my ($server, $target, $id) = @_;
-    #print "Target: $target, id: $id";
+    prind("got signal: Target: $target, id: $id");
     my $twitter_url = $url . $id;
     my $jsondata = KaaosRadioClass::getJSON($twitter_url, $headers);
     if ($jsondata eq '-1') {
@@ -44,6 +44,11 @@ sub sig_twitter {
         print Dumper($jsondata);
         $server->command("MSG $target 🐦 " . $jsondata->{data}->{text});
     }
+}
+
+sub prind {
+	my ($text, @test) = @_;
+	print("\0038" . $IRSSI{name} . ">\003 ". $text);
 }
 
 Irssi::signal_add('twitter_search_id', 'sig_twitter');
