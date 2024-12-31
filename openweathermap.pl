@@ -22,7 +22,7 @@ $VERSION = '20240216';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
-	name        => 'openweathermap',
+	name        => 'openweathermap.pl',
 	description => 'Fetches weather data from openweathermap.org',
 	license     => 'Fublic Domain',
 	url         => 'https://kaaosradio.fi',
@@ -716,7 +716,6 @@ sub filter_keyword {
 
 	my ($returnstring, $city);
 	if ($msg =~ /\!(sää |saa |s )(.*)/ui) {
-		dp(__LINE__.', normaali säätilan haku: '.$nick.', city: '.$2) if $DEBUG1;
 		$city = check_user_city($2, $nick);
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		my $tempstring = FINDWEATHER($city);

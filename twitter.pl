@@ -35,7 +35,7 @@ $headers->header('Authorization' => 'Bearer ' . $bearer_token);
 
 sub sig_twitter {
     my ($server, $target, $id) = @_;
-    prind("got signal: Target: $target, id: $id");
+    prind("got signal: Target: $target, tweet-id: $id");
     my $twitter_url = $url . $id;
     my $jsondata = KaaosRadioClass::getJSON($twitter_url, $headers);
     if ($jsondata eq '-1') {

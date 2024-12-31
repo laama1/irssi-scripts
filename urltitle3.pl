@@ -190,14 +190,15 @@ sub format_time {
 
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
-	my ($url, @rest) = @_;
+	my ($url, $method, $content, @rest) = @_;
 	dp(__LINE__.' url: ' . $url);
 	my $page = '';						# page source decoded to utf8
 	my $diffpage = '';					# page source decoded
 	my $size = 0;						# content size
 	my $md5hex = '';					# md5 of the page
 
-	my $response = $ua->get($url);
+	#my $response = $ua->get($url);
+	my $response = $ua->request(HTTP::Request->new($method, $url, \%headers, $content));
 
 	if ($response->is_success) {
 		prind("Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
@@ -901,7 +902,7 @@ sub sig_msg_pub {
 		#saveToDB();
 		#return;
 	} else {
-		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl});
+		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl}, 'GET');
 		dp(__LINE__. ' Response code: ' . $newUrlData->{responsecode} . ', fetchURl: ' . $newUrlData->{fetchurl});
 		if ($newUrlData->{responsecode} ne '') {
 			msg_to_channel($server, $target, 'Error: ' . $newUrlData->{responsecode});
@@ -1165,6 +1166,7 @@ sub dontPrintThese {
 	#return 1 if $url =~ /aamulehti\.fi/i;
 	#return 1 if $text =~ /kuvaton\.com/i;
 	#return 1 if $text =~ /explosm\.net/i;
+	return 1 if $url =~ /ircz\.de/i;
 	return 0;
 }
 
