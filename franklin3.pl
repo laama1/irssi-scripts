@@ -21,11 +21,12 @@ our $localdir = $ENV{HOME}."/.irssi/scripts/";
 my $apiurl = 'https://api.openai.com/v1/chat/completions';
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
+my $outputdir = '/var/www/html/bot/dale/';
 my $howManyImages = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $systemsg_start = 'Answer at most in 40 words. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
@@ -106,20 +107,19 @@ sub make_json_obj_f2 {
     my $prompt = get_prompt();
     $timediff = 3600;    # 1h in seconds
 
+    # add system prompt and some parameters first
     my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
             { role => 'system', content => $prompt, name => 'KD_Bat' }
         ]
     };
     my $maxcount = 0;
     if (defined $chathistory->{$channel}) {
-
-        #my @timestamps = sort { $a <=> $b } keys %$chathistory;
         my @timestamps = sort { $a <=> $b } keys %{ $chathistory->{$channel} };
 
         #foreach my $history (%$chathistory) {
         foreach my $history (@timestamps) {
-            prindd(__LINE__ . ', history (Timestamp):');
-            print Dumper $chathistory->{$channel}->{$history} if $DEBUG;
+            prindd(__LINE__ . ': history (Timestamp):');
+            prindd(Dumper $chathistory->{$channel}->{$history});
 
             if (defined $chathistory->{$channel}->{$history}) {
                 push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} } ;
@@ -131,7 +131,7 @@ sub make_json_obj_f2 {
 
     push @{ $data->{messages}}, { role => "user", content => $text, name => $nick};
     prindd(__LINE__ . ' data->messages: ');
-    print Dumper $data->{messages} if $DEBUG;
+    prindd(Dumper $data->{messages});
     return encode_json($data);
 }
 
@@ -158,21 +158,21 @@ sub format_markdown {
     return $text;
 }
 
-sub make_call {
+sub make_call_private {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
     #print $IRSSI{name}." nick: $nick";
     my $request = make_json_obj_f($text, $nick);
-    print $IRSSI{name}.' JSON request>' if $DEBUG;
-    print $request if $DEBUG;
+    prindd('JSON request');
+    prindd($request);
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        print __LINE__ if $DEBUG;
-        print Dumper $json_decd if $DEBUG;
+        prindd(__LINE__);
+        prindd(Dumper $json_decd);
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
         prind("reply: " . $answered);
@@ -181,13 +181,13 @@ sub make_call {
         #$answered =~ s/```//ug;
 
         if (!defined $chathistory->{$nick}->{history}) {
-            print $IRSSI{name}."> zig zag" if $DEBUG;
+            prindd(__LINE__ . "zig zag");
             # HACK BUGFIX
             #$chathistory->{$nick}->{history} = {};
-            prindd(__LINE__);
+            #prindd(__LINE__);
         }
         prindd(__LINE__);
-        print Dumper $chathistory->{$nick} if $DEBUG;
+        prindd(Dumper $chathistory->{$nick});
 
         #push @{ $chathistory->{$nick}}, {message => $text};
         $chathistory->{$nick}->{timestamp} = time;
@@ -197,29 +197,29 @@ sub make_call {
         return $answered;
     } elsif ($res->code == 400) {
         prindw("got error 400.");
-        print Dumper $res->{error} if $DEBUG;
+        prindd(Dumper $res->{error});
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
     return undef;
 }
 
-sub make_call2 {
+sub make_call_public {
     my ($text, $nick, $channel, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
     #print $IRSSI{name}." nick: $nick";
     my $request = make_json_obj_f2($text, $nick, $channel);
-    print __LINE__ . ' JSON request>' if $DEBUG;
-    print $request if $DEBUG;
+    prindd(__LINE__ . ' JSON request>');
+    prindd($request);
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        print __LINE__ . 'response json decoded: ' if $DEBUG;
-        print Dumper $json_decd if $DEBUG;
+        prindd(__LINE__ . 'response json decoded: ');
+        prindd(Dumper $json_decd);
         #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
         prind("reply: " . $answered);
@@ -240,11 +240,18 @@ sub make_call2 {
         return $answered;
     } elsif ($res->code == 400) {
         prindw("got error 400.");
-        print Dumper $res->{error} if $DEBUG;
+        prindd(Dumper $res->{error});
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
     return undef;
+}
+
+sub make_call3 {
+    # @TODO use KaaosRadioClass::getJSON
+    my ($text, $nick, @rest1) = @_;
+        my $timestamp = time;
+    $nick = strip_nick($nick);
 }
 
 sub get_channel_title {
@@ -263,19 +270,16 @@ sub frank {
 
     if ($msg =~ /^$mynick[\:,]* (.*)/ug ) {
         my $textcall = $1;
-        prind(__LINE__ . " textcall: $textcall") if $DEBUG;
+        prindd(__LINE__ . " textcall: $textcall");
         return undef if KaaosRadioClass::floodCheck(3);
-        prind(__LINE__ . ' passed floodcheck') if $DEBUG;
+        prindd(__LINE__ . ' passed floodcheck');
         return undef if KaaosRadioClass::Drunk($nick);
-        prind(__LINE__ . ' passed drunktest like a mf') if $DEBUG;
-        #prind("$nick asked: $textcall");
-        #my $wrote = 1;
+        prindd(__LINE__ . ' passed drunktest like a mf');
 
         # @todo fork or something
         for (0..2) {
-        #for (0..1) {
             #if (my $answer = make_call($textcall, $nick)) {
-            if (my $answer = make_call2($textcall, $nick, $channel)) {
+            if (my $answer = make_call_public($textcall, $nick, $channel)) {
                 $answer = format_markdown($answer);
                 $server->command("msg -channel $channel $nick: $answer");
                 #my $answer_cut = substr($answer, 0, $hardlimit);
@@ -344,7 +348,7 @@ sub tts {
 
             } else {
                 prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
-                print Dumper $res if $DEBUG;
+                prindd(Dumper $res);
             }
         }
         $server->command("msg -channel $channel $answer") if $answer;
@@ -367,10 +371,9 @@ sub tts {
             $server->command("msg -channel $channel $answer");
         } else {
             prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
-            print Dumper $res if $DEBUG;
+            prindd(Dumper $res);
         }
     }
-
 }
 
 sub dalle {
@@ -394,6 +397,7 @@ sub dalle {
             if (defined $json_decd->{choices}[0]->{message}->{content}) {
                 $answer = $json_decd->{choices}[0]->{message}->{content};
                 $server->command("msg -channel $channel $answer");
+                prind("success: " . $answer);
             }
         } elsif ($res->is_error) {
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
@@ -402,8 +406,8 @@ sub dalle {
         } else {
 		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
         }
-        prindd(__LINE__ . ' response:');
-        print Dumper $res if $DEBUG;
+        #prindd(__LINE__ . ' response:');
+        #prindd(Dumper $res);
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
         #my $request = make_dalle_json($query, $nick);
@@ -446,8 +450,6 @@ sub dalle {
 
 sub save_file_blob {
     my ($blob, $filename, @rest) = @_;
-    my $outputdir = '/var/www/html/bot/dale/';
-
 	open (OUTPUT, '>', $outputdir.$filename) || die $!;
     binmode OUTPUT;
 	#print OUTPUT decode_base64($blob);
@@ -490,7 +492,10 @@ sub event_privmsg {
     }
     return if ($msg =~ /^\!/);              # other !commands
     return if KaaosRadioClass::floodCheck(3);
-    if (my $text = make_call($msg, $nick)) {
+
+    # simple make_call_private, no retries
+    if (my $text = make_call_private($msg, $nick)) {
+        $text = format_markdown($text);
         $server->command("msg $nick $text");
     } else {
         $server->command("msg $nick *pier*");
