@@ -68,7 +68,8 @@ sub event_privmsg {
 
 sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $server->{nick});   #self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	return unless ($msg =~ /imdb\b/i);
 
 	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {

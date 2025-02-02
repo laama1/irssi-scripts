@@ -26,12 +26,14 @@ my $howManyImages = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
-my $systemsg_start = 'Answer at most in 40 words. ';
+#my $systemsg_start = 'Answer at most in 40 words. ';
+my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
 #my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
 my $systemsg = $systemsg_start;
 my $role = 'system';
+my $botnick = 'KD_Bat';
 #my $model = "gpt-3.5-turbo";
 #my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
@@ -48,11 +50,11 @@ $VERSION = "2.6";
 %IRSSI = (
     authors     => 'laama',
     contact     => 'laama@8-b.fi',
-    name        => 'Franklin',
+    name        => 'Franklin3',
     description => 'OpenAI chatgpt api script',
     license     => 'BSD',
     url         => 'https://bot.8-b.fi',
-    changed     => '2024-02-13',
+    changed     => '2025-01-26',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -64,6 +66,7 @@ chomp($apikey);
 close(AK);
 
 my $chathistory = {};
+my $settings = {};
 my $headers = HTTP::Headers->new;
 $headers->header("Content-Type"  => "application/json");
 $headers->header("Authorization" => "Bearer " . $apikey);
@@ -71,24 +74,27 @@ $headers->header("Authorization" => "Bearer " . $apikey);
 my $ua = LWP::UserAgent->new;
 $ua->default_headers($headers);
 
+# privmsg
 sub make_json_obj_f {
     my ($text, $nick, @rest) = @_;
 
-    my $prompt = get_prompt();
+    my $prompt = get_prompt($nick);
     $timediff = 3600;    # 1h in seconds
 
     if (defined $chathistory->{$nick}->{timestamp}) {
         $timediff = (time - $chathistory->{$nick}->{timestamp});
     }
     my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            { role => 'system', content => $prompt, name => 'KD_Bat' }
+            #{ role => 'system', content => $prompt, name => $botnick }
+            { role => 'system', content => $prompt }
         ]
     };
 
     if ($timediff < 3600 && defined $chathistory->{$nick}->{history}) {
         foreach my $history ($chathistory->{$nick}->{history}) {
             foreach my $unit (@$history) {
-                push @{ $data->{messages}}, { role => 'user', content => $unit->{message}, name => $nick };
+                #push @{ $data->{messages}}, { role => 'user', content => $unit->{message}, name => $nick };
+                push @{ $data->{messages}}, { role => 'user', content => $unit->{message} };
                 push @{ $data->{messages}}, { role => 'assistant', content => $unit->{answer} };
             }
         }
@@ -101,37 +107,43 @@ sub make_json_obj_f {
     return encode_json($data);
 }
 
+#pubmsg
 sub make_json_obj_f2 {
     my ($text, $nick, $channel, @rest) = @_;
-
-    my $prompt = get_prompt();
+    my $usernick = 'Matti';
+    my $prompt = get_prompt($channel);
     $timediff = 3600;    # 1h in seconds
 
     # add system prompt and some parameters first
     my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            { role => 'system', content => $prompt, name => 'KD_Bat' }
+            { role => 'system', content => $prompt, name => $botnick }
         ]
     };
     my $maxcount = 0;
     if (defined $chathistory->{$channel}) {
         my @timestamps = sort { $a <=> $b } keys %{ $chathistory->{$channel} };
 
-        #foreach my $history (%$chathistory) {
-        foreach my $history (@timestamps) {
-            prindd(__LINE__ . ': history (Timestamp):');
-            prindd(Dumper $chathistory->{$channel}->{$history});
+        foreach my $timestamp (@timestamps) {
+            if ($timestamp < time - $timediff) {
+                delete $chathistory->{$channel}->{$timestamp};
+                next;
+            }
+            prindd(__LINE__ . ": history (Timestamp: $timestamp):");
+            prindd(Dumper $chathistory->{$channel}->{$timestamp});
 
-            if (defined $chathistory->{$channel}->{$history}) {
-                push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} } ;
-                push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
+            if (defined $chathistory->{$channel}->{$timestamp}) {
+                #push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} };
+                push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$timestamp}->{message} };
+                #push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
+                push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$timestamp}->{answer} };
             }
             $maxcount++;
         }
     }
 
-    push @{ $data->{messages}}, { role => "user", content => $text, name => $nick};
-    prindd(__LINE__ . ' data->messages: ');
-    prindd(Dumper $data->{messages});
+    #push @{ $data->{messages}}, { role => "user", content => $text, name => $usernick};
+    push @{ $data->{messages}}, { role => "user", content => $text };
+
     return encode_json($data);
 }
 
@@ -158,38 +170,24 @@ sub format_markdown {
     return $text;
 }
 
+sub format_formula {
+    my ($text, @rest) = @_;
+    $text =~ s/\\//ug;
+    return $text;
+}
+
 sub make_call_private {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
-    #print $IRSSI{name}." nick: $nick";
     my $request = make_json_obj_f($text, $nick);
-    prindd('JSON request');
-    prindd($request);
-
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        prindd(__LINE__);
-        prindd(Dumper $json_decd);
-        #print Dumper $json_decd->{usage};
+
         my $answered = $json_decd->{choices}[0]->{message}->{content};
-        prind("reply: " . $answered);
-        #$answered =~ s/\n+/ /ug;
-        #$answered =~ s/\s{2,}//ug;
-        #$answered =~ s/```//ug;
 
-        if (!defined $chathistory->{$nick}->{history}) {
-            prindd(__LINE__ . "zig zag");
-            # HACK BUGFIX
-            #$chathistory->{$nick}->{history} = {};
-            #prindd(__LINE__);
-        }
-        prindd(__LINE__);
-        prindd(Dumper $chathistory->{$nick});
-
-        #push @{ $chathistory->{$nick}}, {message => $text};
         $chathistory->{$nick}->{timestamp} = time;
         $chathistory->{$nick}->{chatid} = $json_decd->{id};    # ?? what is id even, does it work anymore
         $chathistory->{$nick}->{floodcount} += 1;
@@ -208,24 +206,16 @@ sub make_call_public {
     my ($text, $nick, $channel, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
-    #print $IRSSI{name}." nick: $nick";
     my $request = make_json_obj_f2($text, $nick, $channel);
-    prindd(__LINE__ . ' JSON request>');
-    prindd($request);
+    #prindd(__LINE__ . ' JSON request>');
+    #prindd($request);
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        prindd(__LINE__ . 'response json decoded: ');
-        prindd(Dumper $json_decd);
-        #print Dumper $json_decd->{usage};
         my $answered = $json_decd->{choices}[0]->{message}->{content};
-        prind("reply: " . $answered);
-        #$answered =~ s/\n+/ /ug;
-        #$answered =~ s/\s{2,}//ug;
-        #$answered =~ s/```//ug;
 
         $chathistory->{$channel}->{$timestamp}->{nick} = $nick;
         $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
@@ -247,13 +237,6 @@ sub make_call_public {
     return undef;
 }
 
-sub make_call3 {
-    # @TODO use KaaosRadioClass::getJSON
-    my ($text, $nick, @rest1) = @_;
-        my $timestamp = time;
-    $nick = strip_nick($nick);
-}
-
 sub get_channel_title {
 	my ($server, $channel) = @_;
 	my $chanrec = $server->channel_find($channel);
@@ -261,26 +244,35 @@ sub get_channel_title {
 	return $chanrec->{topic};
 }
 
+sub check_flood {
+    my ($nick, $channel, @rest) = @_;
+    if ($settings->{floodprot}->{$channel} == 0) {
+        $settings->{floodprot}->{$channel} = 0;
+        #print (__LINE__ . ": Floodprot initilized");
+    } else {
+        return 1 if KaaosRadioClass::floodCheck(3);
+        return 1 if KaaosRadioClass::Drunk($nick);
+    }
+    return 0;
+}
+
 sub frank {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick; #self-test
-
+    $botnick = strip_nick($mynick);
     $msg = Encode::decode('UTF-8', $msg);
 
-    if ($msg =~ /^$mynick[\:,]* (.*)/ug ) {
+    if ($msg =~ /^$mynick[\:,] (.*)/ug ) {
         my $textcall = $1;
-        prindd(__LINE__ . " textcall: $textcall");
-        return undef if KaaosRadioClass::floodCheck(3);
-        prindd(__LINE__ . ' passed floodcheck');
-        return undef if KaaosRadioClass::Drunk($nick);
-        prindd(__LINE__ . ' passed drunktest like a mf');
+        return if check_flood($nick, $channel);
 
         # @todo fork or something
         for (0..2) {
             #if (my $answer = make_call($textcall, $nick)) {
             if (my $answer = make_call_public($textcall, $nick, $channel)) {
                 $answer = format_markdown($answer);
+                $answer = format_formula($answer);
                 $server->command("msg -channel $channel $nick: $answer");
                 #my $answer_cut = substr($answer, 0, $hardlimit);
                 #$server->command("msg -channel $channel $nick: $answer_cut");
@@ -300,7 +292,7 @@ sub make_dalle_json {
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"}; # dall-e-3 minimum size
+    my $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
     return encode_json($data); 
 }
 
@@ -309,14 +301,13 @@ sub make_vision_preview_json {
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
-    #my $data = { model => $visionmodel, max_tokens => 300, messages => [{
-    my $data = { model => $model, max_tokens => 150, messages => [{
+    my $data = { model => $model, max_tokens => 300, messages => [{
         role => "user",
         content => [
             {type => "text", text => $searchprompt},
             {type => "image_url", image_url => {url => $url}}
         ]
-    }], max_tokens => 300,
+    }]
     };
     return encode_json($data);
 }
@@ -458,16 +449,28 @@ sub save_file_blob {
     return 1;
 }
 
-sub change_prompt {
-    my ($newprompt, @rest) = @_;
+sub set_prompt {
+    my ($who, $newprompt, @rest) = @_;
     $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
-    $systemsg = $systemsg_start . $newprompt;
-    prind("new prompt: $systemsg");
+    $settings->{prompt}->{$who} = $newprompt;
+    prind("New $who prompt: $newprompt");
 }
 
 sub get_prompt {
+    my ($who, @rest) = @_;
+    if ($settings->{prompt}->{$who}) {
+        return $settings->{prompt}->{$who};
+    }
+    $settings->{prompt}->{$who} = $systemsg;
     return $systemsg;
+}
+
+# if $nick is OP or VOICE or HALFOP
+sub ifop {
+	my ($server, $channel, $nick) = @_;
+	my $nickrec = get_nickrec($server, $channel, $nick);
+	return ($nickrec->{op} == 1 || $nickrec->{voice} == 1 || $nickrec->{halfop} == 1) ? 1 : 0;
 }
 
 sub event_privmsg {
@@ -477,17 +480,22 @@ sub event_privmsg {
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
-            $server->command("msg $nick Nykyinen system prompt: " . get_prompt());
-            change_prompt($newprompt);
-            $server->command("msg $nick Uusi system prompt: " . get_prompt());
+            $server->command("msg $nick Sinun nykyinen system prompt: " . get_prompt());
+            set_prompt($nick, $newprompt);
+            $server->command("msg $nick Sinun uusi system prompt: " . get_prompt());
         } else {
-            $server->command("msg $nick Nykyinen system prompt on: " . get_prompt());
+            $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt());
         }
-
         return;
     }
     if ($msg =~ /^\!prompt/) {
-        $server->command("msg $nick Nykyinen system prompt on: " . get_prompt());
+        $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt());
+        return;
+    }
+    if ($msg =~ /^\!floodprot (\d+)/) {
+        my $floodprot = $1;
+        $settings->{floodprot}->{$nick} = $floodprot;
+        $server->command("msg $nick Floodprot asetettu: $floodprot");
         return;
     }
     return if ($msg =~ /^\!/);              # other !commands
@@ -496,6 +504,7 @@ sub event_privmsg {
     # simple make_call_private, no retries
     if (my $text = make_call_private($msg, $nick)) {
         $text = format_markdown($text);
+        $text = format_formula($text);
         $server->command("msg $nick $text");
     } else {
         $server->command("msg $nick *pier*");
@@ -506,18 +515,39 @@ sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
     my $mynick = quotemeta $server->{nick};
     return if ($nick eq $mynick);	#self-test
-
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
-            return if KaaosRadioClass::floodCheck(3);
-            return if KaaosRadioClass::Drunk($nick);
-            change_prompt($newprompt);
-            prind("$nick commanded: $1");
+            return if check_flood($nick, $target);
+            set_prompt($target, $newprompt);
             $server->command("msg -channel $target *kling*");
         }
+        return;
     } elsif ($msg =~ /^\!prompt/) {
         $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt());
+        return;
+    }
+    if ($msg =~ /^\!floodprot (\d)$/) {
+        my $floodprot = $1;
+        if (ifop($server, $target, $nick)) {
+            $settings->{floodprot}->{$target} = $floodprot;
+            if ($floodprot) {
+                $server->command("msg -channel $target Floodprotect päällä, kanavalla: $target");
+            } else {
+                $server->command("msg -channel $target Floodprotect pois päältä, kanavalla: $target");
+            }
+        }
+        prind("$nick commanded: $msg");
+        return;
+    } elsif ($msg =~ /^\!floodprot/) {
+        if ($settings->{floodprot}->{$target} == 0) {
+            $server->command("msg -channel $target Floodprotect pois päältä, kanavalla: $target");
+            $settings->{floodprot}->{$target} = 0;
+        } else {
+            $server->command("msg -channel $target Floodprotect päällä, kanavalla: $target");
+        }
+        prind("$nick commanded: $msg");
+        return;
     }
 }
 
@@ -526,11 +556,16 @@ sub save_settings {
     return;
 }
 
+# print debug messages
 sub prindd() {
+    # print debug messages2
     my ($text, @rest) = @_;
-    print $IRSSI{name} . " debug> " . $text;
+    if ($DEBUG) {
+        print $IRSSI{name} . " debug> " . $text;
+    }
 }
 
+# print to status window
 sub prind {
 	my ($text, @rest) = @_;
 	print "\00311" . $IRSSI{name} . ">\003 " . $text;
@@ -541,11 +576,15 @@ sub prindw {
 	print "\0034" . $IRSSI{name} . ">\003 " . $text;
 }
 
+
 Irssi::signal_add_last('message public', 'frank' );
 Irssi::signal_add_last('message public', 'dalle' );
 Irssi::signal_add_last('message public', 'tts' );
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
 #Irssi::signal_add_last('setup saved', 'save_settings');
+Irssi::settings_add_bool($IRSSI{name}, 'floodprot', '1');
 Irssi::settings_add_str($IRSSI{name}, 'franklin_prompt', $systemsg);
 prind("v.$VERSION loaded");
+prind("new commands: !floodprot 1/0");
+prind("              !prompt \"new prompt\"");

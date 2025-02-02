@@ -2,7 +2,6 @@ use Irssi;
 use warnings;
 use strict;
 use utf8;
-use Data::Dumper;
 use Time::HiRes;
 use vars qw($VERSION %IRSSI);
 

@@ -147,7 +147,8 @@ sub evolve {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $serverrec->{nick});	# self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	#return if $nick eq 'kaaosradio';			# ignore this nick
 	my @targets = split(/ /, Irssi::settings_get_str('tamagotchi_enabled_channels'));
     return unless $target ~~ @targets;

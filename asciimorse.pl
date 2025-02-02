@@ -20,7 +20,8 @@ $VERSION = '0.1';
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $serverrec->{nick});	# self-test
+	my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);				# self-test
 	return if $nick eq 'kaaosradio';			# ignore this nick
 
 	if ($msg =~ /\!morse (.*)/ui) {

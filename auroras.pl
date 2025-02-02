@@ -35,7 +35,8 @@ sub prind {
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $serverrec->{nick});   #self-test
+	my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /(^\!help aurora)/gi || $msg =~ /(^\!help kuu)/) {
 		return if KaaosRadioClass::floodCheck() == 1;
 		$serverrec->command("MSG $target " . getHelp);

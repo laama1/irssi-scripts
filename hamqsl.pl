@@ -32,7 +32,8 @@ sub pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	#return unless ($msg =~ /$serverrec->{nick}/i);
 	#return unless ($target ~~ @channels);
-	return if ($nick eq $serverrec->{nick});   #self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /(!help hams)/sgi) {
 		return if KaaosRadioClass::floodCheck();
 		my $help = get_help();

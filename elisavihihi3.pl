@@ -385,7 +385,8 @@ sub moviesNow {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $server->{nick});   #self-test
+	my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	# Check we have an enabled channel
 	my $enabled_raw = Irssi::settings_get_str('elisaviihde_enabled_channels');
 	my @enabled = split(/ /, $enabled_raw);

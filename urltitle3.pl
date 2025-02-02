@@ -827,7 +827,8 @@ sub url_conversion {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $server->{nick});   # self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	return if ($nick eq 'kaaosradio');
 	#return if ($nick eq 'mx');
 	#return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');

@@ -17,7 +17,8 @@ $VERSION = '0.42';
 
 sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $serverrec->{nick});	# self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	return if $nick eq 'kaaosradio';			# ignore this nick, a known bot
 	my @targets = split / /, Irssi::settings_get_str('oraakkeli_enabled_channels');
     return unless $target ~~ @targets;

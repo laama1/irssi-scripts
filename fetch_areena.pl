@@ -1,4 +1,4 @@
-# skripti lataa yleareena-linkin takaa löytyvän videon
+# skripti lataa yleareena-linkin takaa löytyvät videot ja äänet.
 # LAama1 4.4.2020
 use strict;
 use warnings;
@@ -17,15 +17,17 @@ $VERSION = '20230106';
 	changed     => $VERSION,
 );
 
-
+my $DEBUG = 1;
 my $runningnumber = 0;
+my $userpass = 'roxylady:Proxy_P455u';
 #if you have Finnish proxy, use it here.
-#my $proxy = "--proxy 10.7.0.1:3128";
+#my $proxy = " --proxy ${userpass}@83.148.240.11:31280";
+my $proxy = '';
 my $download_dir = "/mnt/music/areena";
 #my $ylescript = 'yle-dl -qq --vfat --no-overwrite --destdir '.$download_dir.' --maxbitrate best';
-my $ylescript = 'yle-dl -qq --vfat --destdir '.$download_dir.' --maxbitrate best';
+my $ylescript = 'yle-dl -qq --vfat --destdir '.$download_dir.' --maxbitrate best' . $proxy;
 #my $execscript = 'exec -msg yle-dl -name ';
-my $execscript = 'exec -window -name yledl';
+my $execscript = 'exec -window -name yledl ';
 
 prind('download dir: '.$download_dir);
 
@@ -58,15 +60,15 @@ sub sig_yle_url {
 sub get_title_desc {
 	my ($yleurl, @rest) = @_;
 	my $output = `yle-dl --showmetadata ${yleurl} 2>/dev/null`;
-	if ($output eq "") {
-
+	if ($output eq '') {
+		debu(__LINE__ . ' No metadata found');
 		return;
 	}
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
 	$json = decode_json($output);
 	foreach my $item (@$json) {
-		debu(__LINE__." episode title: ".$item->{episode_title}. ', episode description: '.$item->{description});
+		debu(__LINE__ . ' episode title: ' . $item->{episode_title} . ', episode description: ' . $item->{description});
 		return $item->{episode_title}, $item->{description};
 	}
 }
@@ -113,7 +115,7 @@ sub exec_input {
 
 sub debu {
 	my ($text, @rest) = @_;
-	print($IRSSI{name}.'> '. $text);
+	print($IRSSI{name}.'> '. $text) if $DEBUG;
 }
 
 sub prind {

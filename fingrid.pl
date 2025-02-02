@@ -23,7 +23,7 @@ $VERSION = '0.2';
 	description => 'Suomen sähkönkulutuksen tiedot',
 	license => 'BSD',
 	url => 'http://www.kaaosradio.fi',
-	changed => '2024-07-09',
+	changed => '2025-01-12',
 );
 
 =pod
@@ -97,10 +97,13 @@ my $ak_last_updated = 0;
 
 sub create_fingrid_url {
     my $dt = DateTime->now; # UTC
-    my $dura_begin = DateTime::Duration->new(minutes => -5);
-    my $start_time = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
+    my $dura_begin = DateTime::Duration->new(minutes => -15);
+    my $dura_end = DateTime::Duration->new(minutes => 15);
+    my $startTime = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
+    my $endTime = ($dt + $dura_end)->strftime('%Y-%m-%dT%H:%MZ');
     #my $temp = "https://data.fingrid.fi/api/data?datasets=177,181,188,191,192,193,209,336&pageSize=1&sortBy=startTime&sortOrder=desc&startTime=$start_time";
-    my $temp = "https://data.fingrid.fi/api/data?datasets=177,181,188,191,192,193,209,336&sortBy=startTime&sortOrder=desc&startTime=$start_time";
+    #my $temp = "https://data.fingrid.fi/api/data?datasets=177,181,188,191,192,193,209,336&sortBy=startTime&sortOrder=desc&startTime=$start_time";
+    my $temp = "https://data.fingrid.fi/api/data?pageSize=10&datasets=177,181,188,191,192,193,209,248,336&sortBy=startTime&sortOrder=desc&startTime=$startTime&endTime=$endTime";
     return $temp;
 }
 
@@ -146,30 +149,47 @@ sub get_aurinkovoima_arvio {
     my $timestring_begin = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
     my $timestring_end = $dt->strftime('%Y-%m-%dT%H:%MZ');
     my $aurinkourl = 'https://data.fingrid.fi/api/datasets/248/data?sortOrder=desc&sortBy=startTime&startTime=' . $timestring_begin . '&endTime=' .$timestring_end;
+
+    #my $aurinkourl = 'https://data.fingrid.fi/api/datasets/248/data/latest';
     my $jsondata = fetch_fingrid_api_data($aurinkourl, 1);
     return -1 if $jsondata eq '-1';
-    my $json_ref = $jsondata->{data};
-    foreach my $data (@$json_ref) {
+    #my $json_ref = $jsondata->{data};
+    #foreach my $data (@$json_ref) {
         # latest data is first on list, because sortOrder=desc
-        $av_arvio = $data->{value};
+        #$av_arvio = $data->{value};
+        $av_arvio = $jsondata->{value};
         $av_last_updated = time;
         return $av_arvio;
-    }
+    #}
 }
 
-# safe 24h interval, because total capacity does not change often
+# safe 24h interval
 sub get_aurinkokapasiteetti {
-    if ((time - $ak_last_updated) < (60*60*24) && $aurinkokapa != 0) {
+    if ((time - $ak_last_updated) < (60*60*12) && $aurinkokapa != 0) {
         return $aurinkokapa;
     }
-    my $url = "https://data.fingrid.fi/api/datasets/267/data/latest";
+    #my $url = "https://data.fingrid.fi/api/datasets/267/data/latest";
+    my $dt = DateTime->now; # UTC
+    my $dura_begin = DateTime::Duration->new(minutes => -120);
+    my $startTime = ($dt + $dura_begin)->strftime('%Y-%m-%dT%H:%MZ');
+    my $endTime = $dt->strftime('%Y-%m-%dT%H:%MZ');
+    my $url = "https://data.fingrid.fi/api/datasets/267/data/?sortOrder=desc&sortBy=startTime&starTime=$startTime&endTime=$endTime";
+
     my $jsondata = fetch_fingrid_api_data($url, 0);
     return -1 if $jsondata == -1;
+    my $json_ref = $jsondata->{data};
+    foreach my $data (@$json_ref) {
+        next unless defined $data->{datasetId};
+        $aurinkokapa = $data->{value};
+        $ak_last_updated = time;
+        return $aurinkokapa;
+    }
+    return -1;
     #print __LINE__ .': aurinkokapa value dump next' if $DEBUG;
     #print Dumper $jsondata->{value} if $DEBUG;
-    $aurinkokapa = $jsondata->{value};
-    $ak_last_updated = time;
-    return $aurinkokapa;
+    #$aurinkokapa = $jsondata->{value};
+    #$ak_last_updated = time;
+    #return $aurinkokapa;
 }
 
 sub get_help {
@@ -212,21 +232,20 @@ sub do_fingrid {
     my ($rh, $wh);
     pipe($rh, $wh);  # read handle, write handle
     my $pid = fork();
-
+    prind(__LINE__ . ': get aurinkovoima arvio next... ') if $DEBUG;
     $borked = 1;
     if (!defined $pid) {
         prindw("Cannot fork: $!");
     } elsif ($pid == 0) {
         # child
 
-        my $av_arvio2 = get_aurinkovoima_arvio();
-        print ("av_arvio2: $av_arvio2");
-        #my $aurinkokapa2 = get_aurinkokapasiteetti();
+        #my $av_arvio2 = get_aurinkovoima_arvio();
+        #my $av_arvio2 = '';
+        #print ("av_arvio2: $av_arvio2");
+        my $aurinkokapa2 = get_aurinkokapasiteetti();
         #my $newdata = parse_fingrid_data($av_arvio);
         my $jsondata = fetch_fingrid_api_data(create_fingrid_url(), 0);
-        my $printstring = parse_sahko_data($jsondata, $av_arvio2);
-
-
+        my $printstring = parse_sahko_data($jsondata, $aurinkokapa2);
         print $wh $printstring;
         close $wh;
         POSIX::_exit(1); # Exit child process
@@ -341,7 +360,7 @@ sub parse_sahkokatkot_data {
 }
 
 sub parse_sahko_data($$) {
-    my ($jsondata, $av_arvio, @rest) = @_;
+    my ($jsondata, $aurinkokapa, @rest) = @_;
     #print Dumper $jsondata;
     my $tuotanto = '';          # 192
     my $kulutus = '';           # 193
@@ -373,18 +392,19 @@ sub parse_sahko_data($$) {
             if ($lv_temp > 0) {
                 $liikennevalo = $lv_temp . '!';
             }
-            prind('liikennevalo: ' . $lv_temp);
+            #prind('liikennevalo: ' . $lv_temp);
         } elsif ($element->{datasetId} == 267) {
             # solar production capacity
             $aurinkokapa =  $element->{value} . 'MW';
-        #} elsif ($element->{datasetId} == 248) {
-            #$aurinkoennuste = '😎 ' . $element->{value} . '/';
+        } elsif ($element->{datasetId} == 248) {
+            $aurinkoennuste = $element->{value};
         } elsif ($element->{datasetId} == 336) {
             $sahkopula = $element->{value};
         }
     }
-    $aurinkoennuste = '😎 ' . $av_arvio . '/' . $aurinkokapa;
-    return "\002Kokonaiskulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste}, ~${taajuus}";
+    $aurinkoennuste = '😎 ' . $aurinkoennuste . '/' . $aurinkokapa . 'MW';
+    #$aurinkoennuste = $aurinkoennuste . '/' . $aurinkokapa . 'MW';
+    return "\002Kokonaiskulutus:\002 $kulutus. \002Tuotanto:\002 $tuotanto, $ydinvoima, $tuulivoima, $vesivoima, ${aurinkoennuste} ~${taajuus}";
 }
 
 sub fetch_price_data2 {
@@ -456,7 +476,6 @@ sub pipe_input_katkot($$) {
     msg_channel($data);
 }
 
-
 sub process_price_data($$$) {
     my ($pricedata, $time1, $time2) = @_;
     my $msg = 'Pörssisähkön hintatietoa ei saatu.';
@@ -477,7 +496,7 @@ sub process_price_data($$$) {
 sub fetch_fingrid_api_data {
     my ($url, $firstTime, @rest) = @_;
     sleep(2) unless $firstTime;
-    prind("fingrid url: $url");
+    prind("fingrid url: $url") if $DEBUG;
     my $h = HTTP::Headers->new;
     $h->header('x-api-key' => $apikey);
     return KaaosRadioClass::getJSON($url, $h);

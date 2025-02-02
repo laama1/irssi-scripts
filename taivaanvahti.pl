@@ -95,7 +95,8 @@ sub sig_taivaanvahti_search {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	return if ($nick eq $server->{nick});   # self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	#return if ($nick eq 'kaaosradio');		# bad nicks
 
 	if ($msg =~ /^[\.\!]help taivaanvahti\b/i) {

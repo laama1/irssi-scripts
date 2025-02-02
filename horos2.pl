@@ -59,7 +59,8 @@ my @userarray = ();		# who has allready requested horo today
 # private horoscope not implemented
 sub event_priv_msg {
 	my ($server, $msg, $nick, $address) = @_;
-	return if ($nick eq $server->{nick});		# self-test
+    my $mynick = quotemeta $serverrec->{nick};
+	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /\!help hor/i) { 
 		$server->command("msg -nick $nick $helpmessage2");
 	}
