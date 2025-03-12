@@ -152,7 +152,6 @@ sub msg_to_channel {
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 
 		if($window->{active}->{name} ~~ @enabled) {
-			#DP("Found! $window->{active}->{name}");
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");
 		}
 	}
@@ -231,7 +230,7 @@ sub search_db {
 	open_database_handle();
 	DP(__LINE__.' searchword: '.$searchword);
 	#my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintoid DESC LIMIT 2';
-	my $stmt = 'SELECT rowid,title,description,city,havaintodate,link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintodate DESC LIMIT 2';
+	my $stmt = 'SELECT rowid, title, description, city, havaintodate, link FROM taivaanvahti5 where TITLE like ? or DESCRIPTION like ? or CITY like ? AND deleted = 0 ORDER BY havaintodate DESC LIMIT 2';
 	my $sth = $dbh->prepare($stmt) or die DBI::errstr;
 	$sth->bind_param(1, "%$searchword%");
 	$sth->bind_param(2, "%$searchword%");

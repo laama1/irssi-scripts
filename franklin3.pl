@@ -78,7 +78,7 @@ $ua->default_headers($headers);
 sub make_json_obj_f {
     my ($text, $nick, @rest) = @_;
 
-    my $prompt = get_prompt($nick);
+    my $prompt = get_prompt($nick, 'private');
     $timediff = 3600;    # 1h in seconds
 
     if (defined $chathistory->{$nick}->{timestamp}) {
@@ -109,9 +109,9 @@ sub make_json_obj_f {
 
 #pubmsg
 sub make_json_obj_f2 {
-    my ($text, $nick, $channel, @rest) = @_;
+    my ($text, $nick, $channel, $server, @rest) = @_;
     my $usernick = 'Matti';
-    my $prompt = get_prompt($channel);
+    my $prompt = get_prompt($channel, $server->{tag});
     $timediff = 3600;    # 1h in seconds
 
     # add system prompt and some parameters first
@@ -203,10 +203,10 @@ sub make_call_private {
 }
 
 sub make_call_public {
-    my ($text, $nick, $channel, @rest1) = @_;
+    my ($text, $nick, $channel, $server, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
-    my $request = make_json_obj_f2($text, $nick, $channel);
+    my $request = make_json_obj_f2($text, $nick, $channel, $server);
     #prindd(__LINE__ . ' JSON request>');
     #prindd($request);
 
@@ -228,8 +228,8 @@ sub make_call_public {
             delete $chathistory->{$channel}->{$oldest_timestamp};
         }
         return $answered;
-    } elsif ($res->code == 400) {
-        prindw("got error 400.");
+    } elsif ($res->code >= 400) {
+        prindw("got error " . $res->code);
         prindd(Dumper $res->{error});
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
@@ -270,7 +270,7 @@ sub frank {
         # @todo fork or something
         for (0..2) {
             #if (my $answer = make_call($textcall, $nick)) {
-            if (my $answer = make_call_public($textcall, $nick, $channel)) {
+            if (my $answer = make_call_public($textcall, $nick, $channel, $server)) {
                 $answer = format_markdown($answer);
                 $answer = format_formula($answer);
                 $server->command("msg -channel $channel $nick: $answer");
@@ -450,19 +450,19 @@ sub save_file_blob {
 }
 
 sub set_prompt {
-    my ($who, $newprompt, @rest) = @_;
+    my ($who, $network, $newprompt, @rest) = @_;
     $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
-    $settings->{prompt}->{$who} = $newprompt;
+    $settings->{prompt}->{$network}->{$who} = $newprompt;
     prind("New $who prompt: $newprompt");
 }
 
 sub get_prompt {
-    my ($who, @rest) = @_;
-    if ($settings->{prompt}->{$who}) {
-        return $settings->{prompt}->{$who};
+    my ($who, $network, @rest) = @_;
+    if ($settings->{prompt}->{$network}->{$who}) {
+        return $settings->{prompt}->{$network}->{$who};
     }
-    $settings->{prompt}->{$who} = $systemsg;
+    $settings->{prompt}->{$network}->{$who} = $systemsg;
     return $systemsg;
 }
 
@@ -480,16 +480,16 @@ sub event_privmsg {
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
-            $server->command("msg $nick Sinun nykyinen system prompt: " . get_prompt());
-            set_prompt($nick, $newprompt);
-            $server->command("msg $nick Sinun uusi system prompt: " . get_prompt());
+            $server->command("msg $nick Sinun nykyinen system prompt: " . get_prompt($nick, 'private'));
+            set_prompt($nick, $server->{tag}, $newprompt);
+            $server->command("msg $nick Sinun uusi system prompt: " . get_prompt($nick, 'private'));
         } else {
-            $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt());
+            $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt($nick, 'private'));
         }
         return;
     }
     if ($msg =~ /^\!prompt/) {
-        $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt());
+        $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt($nick, 'private'));
         return;
     }
     if ($msg =~ /^\!floodprot (\d+)/) {
@@ -519,12 +519,12 @@ sub event_pubmsg {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
             return if check_flood($nick, $target);
-            set_prompt($target, $newprompt);
+            set_prompt($target, $server->{tag}, $newprompt);
             $server->command("msg -channel $target *kling*");
         }
         return;
     } elsif ($msg =~ /^\!prompt/) {
-        $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt());
+        $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt($target, $server->{tag}));
         return;
     }
     if ($msg =~ /^\!floodprot (\d)$/) {

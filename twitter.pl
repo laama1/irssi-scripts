@@ -39,7 +39,7 @@ sub sig_twitter {
     my $twitter_url = $url . $id;
     my $jsondata = KaaosRadioClass::getJSON($twitter_url, $headers);
     if ($jsondata eq '-1') {
-        $server->command("MSG $target 🐦 error..");
+        #$server->command("MSG $target 🐦 error..");
     } else {
         print Dumper($jsondata);
         $server->command("MSG $target 🐦 " . $jsondata->{data}->{text});

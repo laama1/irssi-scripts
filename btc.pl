@@ -33,7 +33,7 @@ sub event_privmsg {
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	my $mynick = quotemeta $serverrec->{nick};
+	my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);	#self-test
     if ($msg =~ /^\!btc/gi) {
         my $btc = getBtcValue();

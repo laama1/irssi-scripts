@@ -162,9 +162,7 @@ sub add_header {
 # format youtube timestamp
 sub format_time {
 	my ($value, @rest) = @_;
-	dp(__LINE__." JES1 format time value: " . $value) if $DEBUG1;
 	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
-	#dp(__LINE__ . " JES2");
 	my $local_time = localtime;
 	my $diff = $local_time - $time_object;
 	dp(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
@@ -191,15 +189,14 @@ sub format_time {
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
 	my ($url, $method, $content, @rest) = @_;
-	dp(__LINE__.' url: ' . $url);
+	dp(__LINE__.' url: ' . $url . ', method: ' . $method . ', content: ' . $content) if $DEBUG1;
 	my $page = '';						# page source decoded to utf8
 	my $diffpage = '';					# page source decoded
 	my $size = 0;						# content size
 	my $md5hex = '';					# md5 of the page
 
-	#my $response = $ua->get($url);
-	my $response = $ua->request(HTTP::Request->new($method, $url, \%headers, $content));
-
+	my $response = $ua->get($url);
+	#my $response = $ua->request(HTTP::Request->new($method, $url, \%headers, $content));
 	if ($response->is_success) {
 		prind("Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
@@ -697,13 +694,11 @@ sub api_conversion {
 		$newUrlData->{title} = KaaosRadioClass::ktrim($instajson->{title} . ' ['. $instajson->{author_name}.']');
 		return 1;
 	}
-
 	return 0;
 }
 
 sub signal_emitters {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.":signal_emitters") if $DEBUG1;
 	return 0 if $dontprint == 1;
 
 	if ($param =~ /twitter.com(.*)\/status\/(.*)/i ||
@@ -804,7 +799,8 @@ sub url_conversion {
 	if ($param =~ /imgur\.com\/(.*)/i) {
 		dp(__LINE__.": imgur.com detected!");
 		my $proxyurl = $param;
-		$proxyurl =~ s/(i\.)?imgur\.com/$imgurUrl/i;
+		$proxyurl =~ s/i\.imgur\.com/$imgurUrl/i;
+		$proxyurl =~ s/imgur\.com/$imgurUrl/i;
 		$newUrlData->{extra} = " -- proxy: $proxyurl";
 
 		# needed for now:
@@ -827,7 +823,7 @@ sub url_conversion {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-    my $mynick = quotemeta $serverrec->{nick};
+    my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 	return if ($nick eq 'kaaosradio');
 	#return if ($nick eq 'mx');

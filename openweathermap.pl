@@ -25,7 +25,7 @@ $VERSION = '20240216';
 	name        => 'openweathermap.pl',
 	description => 'Fetches weather data from openweathermap.org',
 	license     => 'Fublic Domain',
-	url         => 'https://kaaosradio.fi',
+	url         => 'https://8-b.fi.fi',
 	changed     => $VERSION,
 );
 
@@ -544,7 +544,7 @@ sub getSayLine {
 	}
 	print __LINE__ . ' city: ' . $city if $DEBUG1;
 	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt}, $json->{timezone});
-	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky . $uv_index.', air pressure: '. $pressure . ', humidity: ' . $humidity;
+	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky . $uv_index.', P: '. $pressure . ', RH: ' . $humidity;
 	return $returnvalue;
 }
 

@@ -76,7 +76,7 @@ sub get_title_desc {
 # check if metadata available and how many items
 sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
-	debu(__LINE__.' checking: '. $url);
+	debu(__LINE__.': checking yle url: '. $url);
 	
 	my $output = `yle-dl -V --showmetadata ${url} 2>/home/laama/.irssi/scripts/yle.log`;
 	if ($output eq '') { return; }
@@ -90,7 +90,7 @@ sub cmd_check_if_exist {
 
 sub cmd_start_dl {
 	my ($url, @rest) = @_;
-	debu(__LINE__.' fetching: '. $url);
+	debu(__LINE__.': fetching: '. $url);
 	$runningnumber++;
 	Irssi::command($execscript. $runningnumber. " $ylescript $url");
 	#Irssi::command("exec -close yle");	# detach
