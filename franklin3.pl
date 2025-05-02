@@ -263,7 +263,7 @@ sub frank {
     $botnick = strip_nick($mynick);
     $msg = Encode::decode('UTF-8', $msg);
 
-    if ($msg =~ /^$mynick[\:,] (.*)/ug ) {
+    if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
         my $textcall = $1;
         return if check_flood($nick, $channel);
 

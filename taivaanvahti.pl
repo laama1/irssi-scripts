@@ -95,7 +95,7 @@ sub sig_taivaanvahti_search {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-    my $mynick = quotemeta $serverrec->{nick};
+    my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 	#return if ($nick eq 'kaaosradio');		# bad nicks
 
@@ -294,7 +294,7 @@ sub parse_mini {
 	DP(__LINE__." isotime: $isotime, unixtime: $unixtime\n");
 
 	$obj_ref->{'havaintodate'} = $unixtime;
-
+	return;
 	my $dt = DateTime->new(
 		year => $year,
 		month => $month,
@@ -336,7 +336,7 @@ sub parse_extrainfo_from_link {
 		if ($heading =~ /<h1>(.*?)<\/h1>/gis) {
 			my $innerdata = KaaosRadioClass::ktrim($1);
 			DP(__LINE__.' innerdata: '. $innerdata);
-			# Parse havaintodate
+			# Parse havaintodate -- TODO, parse dates using DateTime functions
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match1!');
 				my $type = KaaosRadioClass::ktrim($1);

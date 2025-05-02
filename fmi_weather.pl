@@ -35,7 +35,8 @@ fmi_update();
 my $last_time;
 
 my $users = {};
-
+#my $fmi_script = "/home/laama/code/python/fmi1.py";
+my $fmi_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fmi1.py';"";
 # create the socket
 unlink $socket_file;
 my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
@@ -147,6 +148,9 @@ sub parse_extrainfo_from_link {
 
 sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
+	my $json = JSON->new->utf8;
+	$json->convert_blessed(1);
+
 	if ($msg =~ /^!meteo/) {
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			return;
@@ -155,24 +159,26 @@ sub event_pubmsg {
 	} elsif ($msg =~ /^!f (.*)$/ || $msg =~ /^!fmi (.*)$/) {
 		my $searchword = $1;
 		check_user_city($searchword, $nick);
-		my $result = `/home/laama/code/python/fmi1.py "$searchword"`;
-		my $json = decode_json($result);
+		my $result = `$fmi_script "$searchword"`;
+		$json = decode_json($result);
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
 	} elsif ($msg =~ /^!fe (.*)$/ || $msg =~ /^!fmie (.*)$/) {
 		my $searchword = $1;
-		my $result = `/home/laama/code/python/fmi1.py "$searchword" ennustus`;
-		my $json = decode_json($result);
-		my $sayline = getSayLine($json);
+		check_user_city($searchword, $nick);
+		my $result = `$fmi_script "$searchword" ennustus`;
+		$json = decode_json($result);
+		my $sayline = getSayLineEnnustus($json);
+		$server->command("msg $target $sayline");
 	} elsif ($msg eq '!f' || $msg eq '!fmi' && $users->{$nick}) {
-		my $result = `/home/laama/code/python/fmi1.py "$users->{$nick}"`;
-		my $json = decode_json($result);
+		my $result = `$fmi_script "$users->{$nick}"`;
+		$json = decode_json($result);
 		my $sayline = getSayLine($json);
 		$server->command("msg $target $sayline");
 	} elsif ($msg eq '!fe' || $msg eq '!fmie' && $users->{$nick}) {
-		my $result = `/home/laama/code/python/fmi1.py "$users->{$nick}" ennustus`;
-		my $json = decode_json($result);
-		my $sayline = getSayLine($json);
+		my $result = `$fmi_script "$users->{$nick}" ennustus`;
+		$json = decode_json($result);
+		my $sayline = getSayLineEnnustus($json);
 		$server->command("msg $target $sayline");
 	}
 }
@@ -197,12 +203,37 @@ sub getSayLine {
 	return $sayline;
 }
 
+sub getSayLineEnnustus {
+	my ($json, @rest) = @_;
+	my $sayline = '';
+	$sayline .= "\002" .$json->{place} . ":\002 ";
+	my $json_ref = $json->{forecasts};
+	foreach my $item (sort keys %$json_ref) {
+		my $item = $json_ref->{$item};
+		my $time = $item->{time};
+		my $temperature = $item->{temperature};
+		my $precipitation_amount = $item->{precipitation_amount};
+		my $wind_speed = $item->{wind_speed};
+		my $wind_gust = $item->{wind_gust};
+		my $cloud_cover = $item->{cloud_cover};
+		my $feels_like = $item->{feels_like};
+		$sayline .= "\002$time:\002 ";
+		$sayline .= "🌡️: " . $temperature . ", (~ $feels_like)";
+		$sayline .= "💧: " . $precipitation_amount . ", ";
+		#$sayline .= "💨: " . $wind_speed . ' (' . $wind_gust . ') m/s, ';
+		$sayline .= '☁️ : ' . $cloud_cover . ", ";
+	}
+	print($sayline);
+	return $sayline;
+}
+		
+
 sub check_user_city {
 	my ($checkcity, $nick, @rest) = @_;
 	$checkcity = KaaosRadioClass::ktrim($checkcity);
 	if (!$checkcity) {
 		if (defined $users->{$nick}) {
-			dp(__LINE__.': ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
+			dp(__LINE__ . ': ei löytynyt cityä syötteestä, vanha tallessa oleva: ' . $users->{$nick});
 			return $users->{$nick};
 		} else {
 			return undef;
