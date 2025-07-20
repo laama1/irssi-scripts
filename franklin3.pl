@@ -26,7 +26,7 @@ my $howManyImages = 2;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 #my $systemsg_start = 'Answer at most in 40 words. ';
 my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
@@ -54,7 +54,7 @@ $VERSION = "2.6";
     description => 'OpenAI chatgpt api script',
     license     => 'BSD',
     url         => 'https://bot.8-b.fi',
-    changed     => '2025-01-26',
+    changed     => '2025-07-14',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -292,7 +292,13 @@ sub make_dalle_json {
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
+    my $data = '';
+    if ($model =~ /4/) {
+        $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"};
+    } else {
+        $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
+    }
+    
     return encode_json($data); 
 }
 
@@ -454,6 +460,7 @@ sub set_prompt {
     $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
     $settings->{prompt}->{$network}->{$who} = $newprompt;
+    $chathistory->{$who} = undef;   # TEST
     prind("New $who prompt: $newprompt");
 }
 

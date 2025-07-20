@@ -23,7 +23,7 @@ $VERSION = '0.2';
 	description => 'Suomen sähkönkulutuksen tiedot',
 	license => 'BSD',
 	url => 'http://www.kaaosradio.fi',
-	changed => '2025-01-12',
+	changed => '2025-05-02',
 );
 
 =pod
@@ -224,6 +224,13 @@ sub pub_msg {
         $server_t = $serverrec;
         do_sahkokatkot($searchword);
         prind("!sähkökatko request from $nick on channel $target, done");
+    } elsif ($msg =~ /^!sähkökatko[t]?$/sgi || $msg =~ /^!sahkokatko[t]?$/sgi) {
+        return if KaaosRadioClass::floodCheck();
+        #prind("sähkökatkot request from $nick on channel $target");
+        $target_t = $target;
+        $server_t = $serverrec;
+        do_sahkokatkot('');  # empty searchword
+        prind("!sähkökatkot request from $nick on channel $target, done");
     }
 }
 
@@ -275,9 +282,13 @@ sub do_sahkonhinta {
     $timestamp2 += $duration;
     $timestamp2 = $timestamp2->strftime('%Y-%m-%dT%H:00');
 
-    if (defined($pricedata->{$timestamp}) && defined($pricedata->{$timestamp2})) {
+	my $timestamp3 = DateTime->now(time_zone => 'Europe/Helsinki');
+	$timestamp3 += ($duration + $duration);
+	$timestamp3 = $timestamp3->strftime('%Y-%m-%dT%H:00');
+
+    if (defined($pricedata->{$timestamp}) && defined($pricedata->{$timestamp2}) && defined($pricedata->{$timestamp3}) ) {
         prind("Using saved price data..");
-        process_price_data($pricedata, $timestamp, $timestamp2);
+        process_price_data($pricedata, $timestamp, $timestamp2, $timestamp3);
         return;
     }
 
@@ -298,7 +309,7 @@ sub do_sahkonhinta {
         prind(__LINE__ . ": Parent process, forked a child with PID: $pid") if $DEBUG;
         Irssi::pidwait_add($pid);
         my $pipetag;
-        my @args = ($rh, \$pipetag, $timestamp, $timestamp2);
+        my @args = ($rh, \$pipetag, $timestamp, $timestamp2, $timestamp3);
         $pipetag = Irssi::input_add(fileno($rh), INPUT_READ, \&pipe_input, \@args);
     }
 }
@@ -324,35 +335,54 @@ sub parse_sahkokatkot_data {
     my $json_areas = $jsondata->{areas};
     my $json_companies = $jsondata->{companies};
     my $printstring = '';
-    #prind(__LINE__ . ": did we get anything? searchword, searchword: " . $searchword) if $DEBUG;
+    my %result_hash;
+
     foreach my $element (@$json_areas) {
-        #print Dumper ($element) if $DEBUG;
+
         my $area = $element->{name};
         my $alias = $element->{alias};
         
         my $faults = $element->{fault} || 0;
         my $maxday = $element->{maxday};
         my $url = $element->{outagemap} || '';
-        #prind(__LINE__ . " area: " . $area . ', searchword: ' . $searchword . ", faults: $faults, maxday: $maxday") if $DEBUG;
-        if ($area =~ /$searchword/i || $alias =~ /$searchword/i) {
-            prind(__LINE__ . " area: " . $area . ', alias: ' . $alias . ', faults: ' . $faults . ', maxday: ' . $maxday . ', url: '. $url) if $DEBUG;
-            $printstring .= "\002$area:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
-            #last;
+
+        $result_hash{$area} =  {
+            'alias' => $alias,
+            'faults' => $faults,
+            'maxday' => $maxday,
+            'url' => $url
         }
     }
-    #prind(__LINE__ . ': done part 1.. printstring: '. $printstring) if $DEBUG;
 
     foreach my $element (@$json_companies) {
         my $company = $element->{name};
         my $alias = $element->{alias};
         my $faults = $element->{fault} || 0;
-        my $maxday = $element->{maxday};
+        my $maxday = $element->{maxday} || 0;
         my $url = $element->{outagemap} || '';
-        if ($company =~ /$searchword/i || $alias =~ /$searchword/i) {
-            prind(__LINE__ . " company: " . $company) if $DEBUG;
-            $printstring .= "\002$company:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
-            #last;
+
+        $result_hash{$company} =  {
+            'alias' => $alias,
+            'faults' => $faults,
+            'maxday' => $maxday,
+            'url' => $url
         }
+    }
+
+    #foreach my $key (keys %result_hash) {
+    my $index = 0;
+    foreach my $key (sort { $result_hash{$b}->{faults} <=> $result_hash{$a}->{faults} } keys %result_hash) {
+        my $value = $result_hash{$key};
+        my $alias = $value->{alias};
+        my $faults = $value->{faults};
+        my $maxday = $value->{maxday};
+        my $url = $value->{url};
+        if ($searchword eq '') {
+            prind(__LINE__ . " area/city: " . $key) if $DEBUG;
+            $printstring .= "\002$key:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
+        }
+        $index++;
+        last if $index > 5; # max 5 items
     }
 
     prind("printstring: $printstring") if $DEBUG;
@@ -423,8 +453,8 @@ sub fetch_price_data2 {
     }
 }
 
-sub pipe_input($$) {
-    my ($rh, $pipetage, $time1, $time2) = @{$_[0]};
+sub pipe_input($$$$$) {
+    my ($rh, $pipetage, $time1, $time2, $time3) = @{$_[0]};
     my $data;
     {
         select($rh);
@@ -438,7 +468,7 @@ sub pipe_input($$) {
     return unless $data;
 
     $pricedata = decode_json($data);
-    process_price_data($pricedata, $time1, $time2);
+    process_price_data($pricedata, $time1, $time2, $time3);
     $forked = 0;
 }
 
@@ -476,19 +506,23 @@ sub pipe_input_katkot($$) {
     msg_channel($data);
 }
 
-sub process_price_data($$$) {
-    my ($pricedata, $time1, $time2) = @_;
+sub process_price_data($$$$) {
+    my ($pricedata, $time1, $time2, $time3) = @_;
     my $msg = 'Pörssisähkön hintatietoa ei saatu.';
     my $timenow = DateTime->now(time_zone => 'Europe/Helsinki');
     $timenow = $timenow->strftime('%H:00');
 
     if (defined $pricedata->{$time1}) {
         my $price1 = sprintf("%.2f", $pricedata->{$time1});
-        $msg = "\002Pörssisähkön hinta (Alv 0%) (klo. $timenow):\002 " . $price1 . 'c/kwh';
+        $msg = "\002Pörssisähkön hinta (Alv 0%) (klo. $timenow):\002 " . $price1 . 'c/kWh';
     }
     if (defined $pricedata->{$time2}) {
         my $price2 = sprintf("%.2f", $pricedata->{$time2});
-        $msg .= ", \002+1h:\002 " . $price2 . 'c/kwh';
+        $msg .= ", \002+1h:\002 " . $price2 . 'c/kWh';
+    }
+	if (defined $pricedata->{$time3}) {
+		my $price3 = sprintf("%.2f", $pricedata->{$time3});
+		$msg .= ", \002+2h:\002 " . $price3 . 'c/kWh';
     }
     msg_channel($msg);
 }

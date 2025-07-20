@@ -36,7 +36,7 @@ my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes
 
 my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
 my $infofile;
-my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe', '#kaaosradio');
+my @channels = ('#salamolo', '#mobiilisauna', '#psykoosilaakso', '#killahoe', '#kaaosradio', '#irc-galleriaa');
 
 #my $enableChannels = {};
 #$enableChannels->{'nerv'}->{'#salamolo'};
@@ -59,7 +59,7 @@ my @userarray = ();		# who has allready requested horo today
 # private horoscope not implemented
 sub event_priv_msg {
 	my ($server, $msg, $nick, $address) = @_;
-    my $mynick = quotemeta $serverrec->{nick};
+    my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /\!help hor/i) { 
 		$server->command("msg -nick $nick $helpmessage2");

@@ -502,7 +502,7 @@ sub parseAwayKeywords {
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 
-    my $mynick = quotemeta $serverrec->{nick};
+    my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 
 	if ($msg =~ /^!help korv/i || $msg =~ /^\!korvamato$/i || $msg =~ /^\!km$/i) {

@@ -56,19 +56,19 @@ sub print_help {
 
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
-	return if ($nick eq $server->{nick});   #self-test
-	return unless ($msg =~ /^!imdb/i);
+	my $mynick = quotemeta $server->{nick};
+	return if ($nick eq $mynick);   #self-test
+	#return unless ($msg =~ /^!imdb/i);
 	return if KaaosRadioClass::floodCheck() == 1;
 	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
 		sayit($server, $nick, $helpmessage);
 		return;
 	}
-
 }
 
 sub do_imdb {
 	my ($server, $msg, $nick, $address, $target) = @_;
-    my $mynick = quotemeta $serverrec->{nick};
+    my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 	return unless ($msg =~ /imdb\b/i);
 
@@ -159,8 +159,7 @@ sub do_imdb {
 # Signal received from another function. URL as parameter
 sub sig_imdb_search {
 	my ($server, $searchparam, $target, $searchword) = @_;
-	# 'imdb_search_id', $server, 'tt-search', $target, $1
-	#return unless $target ~~ Irssi::settings_get_str('imdb_enabled_channels');
+
     my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 	return unless grep /^$target$/i, @enabled;

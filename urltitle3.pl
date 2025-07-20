@@ -54,7 +54,7 @@ $VERSION = '2024-06-12';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $DEBUG_decode = 0;
 
@@ -165,7 +165,7 @@ sub format_time {
 	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
 	my $local_time = localtime;
 	my $diff = $local_time - $time_object;
-	dp(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
+	print(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
 	my $result = '';
 	if ($diff >= 29030400) {
     	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
@@ -554,14 +554,13 @@ sub createFstDB {
 # Save to sqlite DB
 sub saveToDB {
 	my (@rest) = @_;
-	dp(__LINE__.': saveToDB') if $DEBUG1;
 	my $pvm = time;
 	#my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_shorten_url_channels'));
     #return if $channel ~~ @dontsave;
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
 	
-	dp(__LINE__.":saveToDB: $db, pvm: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
+	dp(__LINE__.": saveToDB: $db, pvm: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
@@ -797,15 +796,15 @@ sub url_conversion {
 	}
 
 	if ($param =~ /imgur\.com\/(.*)/i) {
-		dp(__LINE__.": imgur.com detected!");
+		
 		my $proxyurl = $param;
 		$proxyurl =~ s/i\.imgur\.com/$imgurUrl/i;
 		$proxyurl =~ s/imgur\.com/$imgurUrl/i;
 		$newUrlData->{extra} = " -- proxy: $proxyurl";
-
+		dp(__LINE__.": imgur.com detected! proxyurl: $proxyurl");
 		# needed for now:
-		#$param =~ s/imgur\.com/$imgurUrl/i;
-		$param =~ s/(i\.)?imgur\.com/$imgurUrl/i;
+		$param =~ s/i\.imgur\.com/$imgurUrl/i;
+		$param =~ s/imgur\.com/$imgurUrl/i;
 
 		#if ($param =~ /i\.imgur\.com/i) {
 			# if direct link to a image/video, must use proxy
@@ -817,6 +816,7 @@ sub url_conversion {
 	if ($param =~ /reddit\.com/i) {
 		$param =~ s/https\:\/\/reddit\.com/$redditurl/i;
 		$newUrlData->{extra} = " -- proxy: $param";
+		dp(__LINE__ . " reddit url detected! proxyurl: $param")
 	}
 	return $param;
 }
@@ -838,7 +838,7 @@ sub sig_msg_pub {
 		dp(__LINE__.": sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{260})(.*)/$1 .../);
 	
 		msg_to_channel($server, $target, $sayline);
-		clearUrlData();
+		#clearUrlData();
 		return;
 	}
 
@@ -848,7 +848,6 @@ sub sig_msg_pub {
 	} elsif ($msg =~ /(www\.\S+)/i) {
 		$newUrlData->{url} = "http://$1";
 	} else {
-		#clearUrlData();
 		return;
 	}
 	
@@ -865,6 +864,8 @@ sub sig_msg_pub {
 	
 	# check if flooding too many times in a row
 	my $isDrunk = KaaosRadioClass::Drunk($nick);
+
+	# check if sombody playing (now playing) in radio
 	if ($target =~ /kaaosradio/i || $target =~ /salamolo/i) {
 		if (get_channel_topic($server, $target) =~ /npv?\:/i) {
 			# disabled 2023-11-01 $dontprint = 1;
@@ -895,9 +896,6 @@ sub sig_msg_pub {
 	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
 
 	if (api_conversion($newUrlData->{fetchurl})) {
-		#msg_to_channel($server, $target, $newUrlData->{title});
-		#saveToDB();
-		#return;
 	} else {
 		($newUrlData->{title}, $newUrlData->{desc}, $isTitleInUrl, $newUrlData->{md5}) = fetch_title($newUrlData->{fetchurl}, 'GET');
 		dp(__LINE__. ' Response code: ' . $newUrlData->{responsecode} . ', fetchURl: ' . $newUrlData->{fetchurl});
@@ -1209,7 +1207,7 @@ sub clearUrlData {
 	$newUrlData->{shorturl} = '';	# short url
 	$newUrlData->{responsecode} = '';	# response code if error
 	$newUrlData->{extra} = '';
-	KaaosRadioClass::floodCheck();	# write current timestamp to flood file
+	#KaaosRadioClass::floodCheck();	# write current timestamp to flood file
 }
 
 

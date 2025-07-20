@@ -15,7 +15,7 @@ my $fi = new Number::Format(-decimal_point => ',', -thousands_sep => ' ');
 # http://www.perl.com/pub/1998/12/cooper-01.html
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2022-03-11';
+$VERSION = '2025-05-02';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -42,8 +42,7 @@ unlink $socket_file;
 my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
 								   Type   => SOCK_STREAM,
 								   Listen => 5) or die $@;
-# set this socket as nonblocking so we can check stuff without interrupting
-# irssi.
+# set this socket as nonblocking so we can check stuff without interrupting irssi.
 nonblock($my_socket);
 $my_socket->autoflush();
 
@@ -62,7 +61,6 @@ sub check_sock {
 		chomp($msg);
 		prind("Got message from socket: $msg");# if $msg;
 		if ($msg =~ /^Aja/) {
-			#DP(__LINE__." AJA!");
 			if (parse_extrainfo_from_link($fmiURL)) {
 				timeout_1h();
 			}
@@ -90,7 +88,7 @@ sub DA {
 # @TODO
 sub print_help {
 	my ($server, $targe, @rest) = @_;
-	my $help = 'fmi-weather -skripti hakee päivän Meteorologin sääkatsauksen.';
+	my $help = 'fmi-weather -skripti hakee päivän Meteorologin sääkatsauksen. Hakee myös säätiedot fmi.fi:stä';
 	return;
 }
 
@@ -225,8 +223,7 @@ sub getSayLineEnnustus {
 	}
 	print($sayline);
 	return $sayline;
-}
-		
+}	
 
 sub check_user_city {
 	my ($checkcity, $nick, @rest) = @_;
@@ -280,9 +277,9 @@ sub timeout_545 {
 }
 sub timeout_start {
 	prind("Starting 10 sec timeout for reading the socket for new data...");
-	timeout_1h();
+	timeout_1h();	# start only once
 	#timeout_545();
-	$timeout_tag = Irssi::timeout_add(10000, 'check_sock', undef);      # 10 seconds
+	$timeout_tag = Irssi::timeout_add(5000, 'check_sock', undef);      # every 5 seconds
 }
 
 Irssi::command_bind('fmi_update', \&fmi_update, 'fmi_weather');
@@ -291,7 +288,7 @@ Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_priv');
 Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', 'Add channels where to print meteo.');
-	
+
 timeout_start();
 
 prind("v. $VERSION Loaded!");

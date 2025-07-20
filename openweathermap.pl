@@ -46,12 +46,12 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
-my $DEBUG1 = 0;
+my $DEBUG = 0;
+my $DEBUG1 = 1;
 my $db = Irssi::get_irssi_dir(). '/scripts/openweathermap.db';
 my $dbh;	# database handle
 
-my $users = {};
+my $users_cache = {};
 
 my $helptext = 'Openweathermap sääskripti. Ohje: https://bot.8-b.fi/#s';
 
@@ -234,31 +234,31 @@ sub FINDWEATHER {
 	my $newurl;
 	my $urltail = $searchword;
 	if ($searchword =~ /(\d{5})/) {
-		$newurl = $url.'zip=';
-		$urltail = $1.',fi';		# Search post numbers from finland only
+		$newurl = $url . 'zip=';
+		$urltail = $1 . ',fi';		# Search post numbers from finland only
 	} else {
-		$newurl = $url.'q=';
+		$newurl = $url . 'q=';
 	}
 	my $json = request_api($newurl.$urltail);
-	#da(__LINE__.' json', $json);
+	da(__LINE__.' json', $json);
 	my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 
 	if ($json eq '-1') {
 		# searchword not found from API
-		dp(__LINE__.' city not found from API, searchword: '.$searchword) if $DEBUG1;
+		#dp(__LINE__.' city not found from API, searchword: '.$searchword) if $DEBUG1;
 		#return undef unless defined $name;
 		$urltail = $name;
 		$json = request_api($newurl.$urltail) if $urltail;
 		if ($json eq '-1') {
 			#return "Paikkaa ei löydy!";
-			dp(__LINE__.' city not available, name: '.$name) if $DEBUG1;
+			#dp(__LINE__.' city not available, name: '.$name) if $DEBUG1;
 		}
 		return undef if (!defined $json || $json eq '-1');
 	}
 
 	$json->{uvindex} = 0;
 	if ($lat && $lon) {
-		$json->{uvindex} = FINDUVINDEX($lat, $lon);
+		$json->{uvindex} = $fi->format_number(FINDUVINDEX($lat, $lon), 0);
 	}
 
 	SAVECITY($json);
@@ -269,21 +269,25 @@ sub FINDWEATHER {
 sub FINDFORECAST {
 	my ($searchword, $days, @rest) = @_;
 	my $json;
-	
+	dp(__LINE__);
 	if ($searchword =~ /(\d{5})/) {
+		dp(__LINE__);
 		my $urltail = 'zip='.$1.',fi';		# Search postcode numbers only from finland
 		$json = request_api($forecastUrl.$urltail);
 	} else {
+		dp(__LINE__);
 		$json = request_api($forecastUrl.'q='.$searchword);
 	}
+	dp(__LINE__);
 	if ($json eq '-1') {
+		dp(__LINE__);
 		$dbh = KaaosRadioClass::connectSqlite($db);
 		my ($lat, $lon, $name) = GETCITYCOORDS($searchword);
 		$dbh = KaaosRadioClass::closeDB($dbh);
 		$json = request_api($forecastUrl.'q='.$name) if defined $name;
 		return 0 if ($json eq '-1');
 	}
-	
+	dp(__LINE__);
 	if (defined $days && $days == 5) {
 		return forecastloop5($json);
 	} else {
@@ -309,7 +313,7 @@ sub forecastloop1 {
 			#print ("Timezone: " . $timezone) if $DEBUG;
 			$returnstring = "\002" . $use_this_city . ','.$json->{city}->{country} . " $timezone klo:\002 ";
 		}
-		#print __LINE__ if $DEBUG1;
+
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main},
 												$json->{city}->{sunrise},
 												$json->{city}->{sunset},
@@ -329,29 +333,41 @@ sub forecastloop5 {
 	my $index = 0;
 	my $returnstring = '';
 	my $daytemp = '';
-	my @weekdayarray = ('su','ma', 'ti','ke','to','pe','la','su');
-	#print __LINE__ . ': dump json next';
-	#print Dumper $json;
+	my @weekdayarray = ('su','ma','ti','ke','to','pe','la','su');
+	my $timezone = $json->{city}->{timezone};
+	#print __LINE__ . ': dump json next' if $DEBUG1;
+	#print Dumper $json if $DEBUG1;
 	foreach my $item (@{$json->{list}}) {
 		my $tiem = $item->{dt_txt};
+		#if ($index < 4 && $DEBUG1) {
+		#	print __LINE__ . ': dump item next';
+		#	print Dumper $item;
+		#}
 
-		#my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $item->{dt};
-		#print __LINE__ . ': dt_txt: '. $tiem . ', dt: ' . $item->{dt} . ', timezone: ' . $item->{timezone} if $DEBUG;
-		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime ($item->{dt} + $item->{timezone});
+		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime ($item->{dt} + $timezone);
+		
 		my $weekdaystring = $weekdayarray[$wday];
-		if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {	# TODO: per timezone not UTC
+		#if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {	# TODO: per timezone not UTC
+		if ($hour == 0 || $hour == 12) {
+			print __LINE__ . ': sec: ' . $sec . ', min: ' . $min . ', hour: ' . $hour . ', mday: ' . $mday . ', mon: ' . $mon . ', year: ' . $year . ', wday: ' . $wday . ', yday: ' . $yday . ', isdst: ' . $isdst if $DEBUG1;
 			if ($index == 0) {
-				$returnstring = "\002" . $json->{city}->{name} . ','.$json->{city}->{country} . "\002 ";
+				$returnstring = "\002" . $json->{city}->{name} . ',' . $json->{city}->{country} . "\002 ";
 			}
-			#print __LINE__ .': returnstring: ' . $returnstring if $DEBUG;
-			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, $json->{city}->{sunrise},	$json->{city}->{sunset}, $item->{dt}, $json->{timezone});
+
+			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, 
+												$json->{city}->{sunrise},
+												$json->{city}->{sunset}, 
+												$item->{dt}, 
+												$timezone
+												);
 			if ($wday eq $daytemp) {
 				$returnstring .= sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
 			} else {
 				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 				$returnstring .= "\002".$weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 			}
-			if ($tiem =~ /12:00:00/) {
+			#if ($tiem =~ /12:00:00/) {
+			if ($hour == 12) {
 				# end of temperature pair
 				#print("Time: " . $tiem);
 				$returnstring .= "\002)\002, ";
@@ -404,7 +420,7 @@ sub FINDUVINDEX {
 	if ($json eq '-1') {
 		return '';
 	}
-	return $json->{value}
+	return $json->{value};
 }
 
 sub make_weather_desc {
@@ -458,7 +474,12 @@ sub getSayLine2 {
 	#}
 	my $newcity = changeCity($json->{name});
 	#print __LINE__ . 'weatherdesc: ' . $weatherdesc if $DEBUG;
-	my $returnvalue = $newcity.': '.$fi->format_number($json->{main}->{temp}, 1).'°C, '.replace_with_emoji($weatherdesc, $sunrise, $sunset, time, $json->{timezone});
+	my $returnvalue = $newcity.': '.$fi->format_number($json->{main}->{temp}, 0).'°C, '.replace_with_emoji($weatherdesc, 
+																											$sunrise, 
+																											$sunset, 
+																											time, 
+																											$json->{timezone}
+																											);
 	return $returnvalue;
 }
 
@@ -486,26 +507,29 @@ sub changeCity {
 # format the message
 sub getSayLine {
 	my ($json, @rest) = @_;
-	return undef unless defined $json;
-	if ($json eq '0' || $json eq '-1') {
-		return undef;
-	}
+	return undef unless defined $json || $json eq '0' || $json eq '-1';
+	#if ($json eq '0' || $json eq '-1') {
+	#	return undef;
+	#}
+	print __LINE__ . ': dump json' if $DEBUG1;
+	print Dumper $json if $DEBUG1;
+
 	my $tempmin = $fi->format_number($json->{main}->{temp_min}, 1);
 	my $tempmax = $fi->format_number($json->{main}->{temp_max}, 1);
 	my $pressure = $json->{main}->{pressure} . 'hPa';
 	my $humidity = $json->{main}->{humidity} . '%';
 	my $temp;
-	if ($tempmin ne $tempmax) {
-		$temp = "($tempmin…$tempmax)°C"
-	} else {
-		$temp = $fi->format_number($json->{main}->{temp}, 1).'°C';
-	}
+	#if ($tempmin ne $tempmax) {
+	#	$temp = "($tempmin…$tempmax)°C"
+	#} else {
+		$temp = $fi->format_number($json->{main}->{temp}, 0).'°C';
+	#}
 	#my $havaintotime = gmtime($json->{dt})->strftime('%H:%M');
 	my $apparent_temp = get_apparent_temp($json->{main}->{temp}, $json->{main}->{humidity}, $json->{wind}->{speed}, $json->{clouds}->{all}, $json->{coord}->{lat}, $json->{dt});
 	my $sky = '';
 
 	if ($apparent_temp) {
-		$apparent_temp = ' (~ '.$fi->format_number($apparent_temp, 1).'°C)';
+		$apparent_temp = ' (~ '.$fi->format_number($apparent_temp, 0).'°C)';
 	} else {
 		$apparent_temp = '';
 	}
@@ -513,13 +537,13 @@ sub getSayLine {
 	my $sunrisedt = DateTime->from_epoch( epoch => ($json->{sys}->{sunrise} + $json->{timezone}));
 	my $sunsetdt = DateTime->from_epoch( epoch => ($json->{sys}->{sunset} + $json->{timezone}));
 
-	my $sunrise = '🌇 '.$sunrisedt->hour .':'.sprintf('%.2d', $sunrisedt->minute);
+	my $sunrise = '🌇 '.$sunrisedt->hour . ':' . sprintf('%.2d', $sunrisedt->minute);
 
 	#my $sunset = '-> ' .localtime($json->{sys}->{sunset})->strftime('%H:%M');
 	my $sunset = '-> ' .$sunsetdt->hour . ':'.sprintf('%.2d', $sunsetdt->minute);
-	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 1);
+	my $wind_speed = $fi->format_number($json->{wind}->{speed}, 0);
 	my $wind_gust = '';
-	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 1) if (defined $json->{wind}->{gust});
+	$wind_gust .= $fi->format_number($json->{wind}->{gust}, 0) if (defined $json->{wind}->{gust});
 	my $winddir = make_winddir_arrow($json->{wind}->{deg});
 
 	my $wind = '💨 '.$wind_speed;
@@ -540,10 +564,15 @@ sub getSayLine {
 	
 	my $uv_index = '';
 	if (defined $json->{uvindex} && $json->{uvindex} && $json->{uvindex} > 1) {
-		$uv_index = ', UVI: '.$json->{uvindex};
+		$uv_index = ', UVI: ' . $fi->format_number($json->{uvindex}, 0);
 	}
-	print __LINE__ . ' city: ' . $city if $DEBUG1;
-	my $newdesc = replace_with_emoji($weatherdesc, $json->{sys}->{sunrise}, $json->{sys}->{sunset}, $json->{dt}, $json->{timezone});
+	#print __LINE__ . ' city: ' . $city if $DEBUG1;
+	my $newdesc = replace_with_emoji($weatherdesc, 
+									$json->{sys}->{sunrise},
+									$json->{sys}->{sunset},
+									$json->{dt},
+									$json->{timezone}
+									);
 	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky . $uv_index.', P: '. $pressure . ', RH: ' . $humidity;
 	return $returnvalue;
 }
@@ -597,11 +626,9 @@ sub GETCITYCOORDS {
 	if ($city eq '') {
 		return undef;
 	}
-	dp(__LINE__ . ' search city from DB: '.$city) if $DEBUG1;
 	$city = "%${city}%";
 	my $sql = 'SELECT DISTINCT LAT,LON,NAME from CITIES where NAME Like ? or (POSTNUMBER like ? AND POSTNUMBER is not null) LIMIT 1;';
 	my @results = KaaosRadioClass::bindSQL($db, $sql, ($city, $city));
-	da(__LINE__.' GETCITYCOORDS results', @results) if $DEBUG1;
 	return $results[0], $results[1], decode('UTF-8', $results[2]);
 }
 
@@ -609,7 +636,7 @@ sub GETCITYCOORDS {
 sub SAVECITY {
 	my ($json, @rest) = @_;
 	my $now = time;
-	# primary key is POSTNUMBER
+	# primary key is ID
 	my $sql = "INSERT OR IGNORE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)";
 	#my $sql = "INSERT OR UPDATE INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)";
 	#my $sql = "INSERT INTO CITIES (ID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -699,14 +726,14 @@ sub check_user_city {
 	return undef if KaaosRadioClass::floodCheck();
 	$checkcity = KaaosRadioClass::ktrim($checkcity);
 	if (!$checkcity) {
-		if (defined $users->{$nick}) {
-			dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users->{$nick});
-			return $users->{$nick};
+		if (defined $users_cache->{$nick}) {
+			dp(__LINE__.', ei löytynyt cityä syötteestä, vanha tallessa oleva: '.$users_cache->{$nick});
+			return $users_cache->{$nick};
 		} else {
 			return undef;
 		}
 	} else {
-		$users->{$nick} = $checkcity;
+		$users_cache->{$nick} = $checkcity;
 		return $checkcity;
 	}
 }
@@ -740,12 +767,12 @@ sub filter_keyword {
 		return FINDFORECAST($city, 5);
 	} elsif ($msg =~ /!help sää/) {
 		return $helptext;
-	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!sa') && $users->{$nick}) {
+	} elsif (($msg eq '!s' || $msg =~ /!se/ || $msg eq '!sa') && $users_cache->{$nick}) {
 		# when user's city is allready saved and user writes the short command only
-		dp(__LINE__.', herecy: '.$users->{$nick});
-		return filter_keyword($msg . ' ' . $users->{$nick}, $nick);
-	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!se5' || $msg eq '!sa') && !$users->{$nick}) {
-		return 'Unohdin, missä asuitkaan..';
+		dp(__LINE__.', herecy: '.$users_cache->{$nick});
+		return filter_keyword($msg . ' ' . $users_cache->{$nick}, $nick);
+	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!se5' || $msg eq '!sa') && !$users_cache->{$nick}) {
+		return 'Unohdin, missä asuitkaan.. Kirjoita: !s kaupunki';
 	}
 	return $returnstring;
 }
@@ -766,7 +793,7 @@ sub request_api {
 # debug print
 sub dp {
 	my ($string, @rest) = @_;
-	return unless $DEBUG == 1;
+	return unless $DEBUG == 1 || $DEBUG1 == 1;
 	print $IRSSI{name}." debug> ".$string;
 	return;
 }
@@ -774,7 +801,7 @@ sub dp {
 # debug print array
 sub da {
 	my ($title, @array) = @_;
-	return unless $DEBUG == 1;
+	return unless $DEBUG == 1 || $DEBUG1 == 1;
 	print $IRSSI{name}." $title, array>";
 	print Dumper(@array);
 	return;
@@ -795,6 +822,43 @@ sub is_enabled_channel {
 	return 0;
 }
 
+sub add_enabled_channel {
+	my ($channel, $network, @rest) = @_;
+	my $enabled_raw = Irssi::settings_get_str('openweathermap_enabled_channels');
+	my @enabled = split / /, $enabled_raw;
+	foreach my $item (@enabled) {
+		if (grep /$channel/i, $item) {
+			if (grep /$network/i, $item) {
+				prind("Channel $channel\@$network is already enabled.");
+				return 1;
+			}
+		}
+	}
+	push @enabled, "$channel\@$network";
+	Irssi::settings_set_str('openweathermap_enabled_channels', join(' ', @enabled));
+	prind("Enabled channels: " . Irssi::settings_get_str('openweathermap_enabled_channels'));
+	return 0;
+}
+
+sub remove_enabled_channel {
+	my ($channel, $network, @rest) = @_;
+	my $enabled_raw = Irssi::settings_get_str('openweathermap_enabled_channels');
+	my @enabled = split / /, $enabled_raw;
+	foreach my $item (@enabled) {
+		if (grep /$channel/i, $item) {
+			if (grep /$network/i, $item) {
+				@enabled = grep { $_ ne $item } @enabled;
+				prind("Channel $channel\@$network removed from enabled channels.");
+				Irssi::settings_set_str('openweathermap_enabled_channels', join(' ', @enabled));
+				# print enabled channels
+				prind("Enabled channels: " . Irssi::settings_get_str('openweathermap_enabled_channels'));
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	my $mynick = quotemeta $server->{nick};
@@ -802,6 +866,14 @@ sub sig_msg_pub {
 	return if $nick ~~ @ignorenicks;
 	return unless is_enabled_channel($target, $server->{chatnet});
 
+	if ($msg =~ /\!enable openweathermap/) {
+		add_enabled_channel($target, $server->{chatnet});
+		return;
+	}
+	if ($msg =~ /\!disable openweathermap/) {
+		remove_enabled_channel($target, $server->{chatnet});
+		return;
+	}
 	$msg = Encode::decode('UTF-8', $msg);
 	my $sayline = filter_keyword(stripc($msg), $nick);
 	$server->command("msg -channel $target $sayline") if $sayline;
@@ -818,8 +890,9 @@ sub sig_msg_priv {
 
 # print nicks and cities that we remember
 sub print_cities {
-	foreach ( $users ) {
-		print Dumper @_;
+	prind("Printing users and their cities:");
+	foreach my $user (%{$users_cache}) {
+		print Dumper $user;
 	}
 }
 
@@ -835,10 +908,13 @@ sub prindw {
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
 Irssi::command_bind('openweathermap_cities', \&print_cities);
+Irssi::command_bind('openweathermap_add_channel', \&add_enabled_channel);
+Irssi::command_bind('openweathermap_remove_channel', \&remove_enabled_channel);
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message private', 'sig_msg_priv');
 
 prind("v. $VERSION loaded.");
 prind('New commands:');
 prind('/set openweathermap_enabled_channels #channel1@IRCnet #channel2@nerv, /openweathermap_cities');
+prind('/openweathermap_add_channel #channel network, /openweathermap_remove_channel #channel network');
 prind("Enabled on:\n". Irssi::settings_get_str('openweathermap_enabled_channels'));
