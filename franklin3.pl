@@ -18,15 +18,16 @@ use KaaosRadioClass;
 our $localdir = $ENV{HOME}."/.irssi/scripts/";
 
 #my $apiurl = "https://api.openai.com/v1/completions";
-my $apiurl = 'https://api.openai.com/v1/chat/completions';
+#my $apiurl = 'https://api.openai.com/v1/chat/completions';
+my $apiurl = 'https://api.openai.com/v1/responses';
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
 my $outputdir = '/var/www/html/bot/dale/';
-my $howManyImages = 2;        # how many images we want to generate
+my $howManyImages = 1;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 #my $systemsg_start = 'Answer at most in 40 words. ';
 my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
@@ -37,8 +38,11 @@ my $botnick = 'KD_Bat';
 #my $model = "gpt-3.5-turbo";
 #my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
-my $model = 'gpt-4o-mini';
-my $visionmodel = 'gpt-4-vision-preview';
+#my $model = 'gpt-4o-mini';
+my $model = 'gpt-5';
+#my $visionmodel = 'gpt-4-vision-preview';
+my $visionmodel = 'dall-e-3';
+#my $visionmodel = 'gpt-image-1';
 my $heat  = 0.4;
 my $hardlimit = 500;
 my $timediff = 3600;    # 1h in seconds. length of lastlog history
@@ -107,7 +111,7 @@ sub make_json_obj_f {
     return encode_json($data);
 }
 
-#pubmsg
+# pubmsg
 sub make_json_obj_f2 {
     my ($text, $nick, $channel, $server, @rest) = @_;
     my $usernick = 'Matti';
@@ -147,6 +151,45 @@ sub make_json_obj_f2 {
     return encode_json($data);
 }
 
+# pubmsg, gpt-5
+sub make_json_obj_f3 {
+    my ($text, $nick, $channel, $server, @rest) = @_;
+    my $usernick = 'Matti';
+    my $prompt = get_prompt($channel, $server->{tag});
+    $timediff = 3600;    # 1h in seconds
+
+    # add system prompt and some parameters first
+    my $data = { model => $model, input => [
+            { role => 'system', content => $prompt}
+        ]
+    };
+    my $maxcount = 0;
+    if (defined $chathistory->{$channel}) {
+        my @timestamps = sort { $a <=> $b } keys %{ $chathistory->{$channel} };
+
+        foreach my $timestamp (@timestamps) {
+            if ($timestamp < time - $timediff) {
+                delete $chathistory->{$channel}->{$timestamp};
+                next;
+            }
+            prindd(__LINE__ . ": history (Timestamp: $timestamp):");
+            prindd(Dumper $chathistory->{$channel}->{$timestamp});
+
+            if (defined $chathistory->{$channel}->{$timestamp}) {
+                #push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} };
+                push @{ $data->{input}}, { role => 'user', content => $chathistory->{$channel}->{$timestamp}->{message} };
+                #push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
+                push @{ $data->{input}}, { role => 'assistant', content => $chathistory->{$channel}->{$timestamp}->{answer} };
+            }
+            $maxcount++;
+        }
+    }
+
+    push @{ $data->{input}}, { role => "user", content => $text };
+
+    return encode_json($data);
+}
+
 sub strip_nick {
     my ($nick1, @rest2) = @_;
     $nick1 =~ s/[^a-zA-Z0-9_]*//ug;
@@ -167,6 +210,11 @@ sub format_markdown {
     $text =~ s/\`\`\`(.*?)\`\`\`/${color_s}${1}${color_e}/ug;    # code quote
     $text =~ s/\`(.*?)\`/${color_s2}${1}${color_e}/ug;
     $text =~ s/`(.*?)`/${color_s2}${1}${color_e}/ug;
+
+    # replace links [text](url)
+    $text =~ s/\[(.*?)\]\((.*?)\)/$2/ug;
+    # replace ?utm_source=openai
+    $text =~ s/\?utm_source=openai//ug;
     return $text;
 }
 
@@ -206,16 +254,19 @@ sub make_call_public {
     my ($text, $nick, $channel, $server, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
-    my $request = make_json_obj_f2($text, $nick, $channel, $server);
-    #prindd(__LINE__ . ' JSON request>');
-    #prindd($request);
+    #my $request = make_json_obj_f2($text, $nick, $channel, $server);
+    my $request = make_json_obj_f3($text, $nick, $channel, $server);
+    prindd(__LINE__ . ' JSON request>');
+    prindd($request);
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
+        prindd(Dumper $res);
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        my $answered = $json_decd->{choices}[0]->{message}->{content};
+        #my $answered = $json_decd->{choices}[0]->{message}->{content};
+        my $answered =  $json_decd->{output}[1]->{content}[0]->{text}; # gpt-5
 
         $chathistory->{$channel}->{$timestamp}->{nick} = $nick;
         $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
@@ -230,7 +281,8 @@ sub make_call_public {
         return $answered;
     } elsif ($res->code >= 400) {
         prindw("got error " . $res->code);
-        prindd(Dumper $res->{error});
+        #prindd(Dumper $res->{error});
+        prindd(Dumper $res);
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
@@ -246,7 +298,7 @@ sub get_channel_title {
 
 sub check_flood {
     my ($nick, $channel, @rest) = @_;
-    if ($settings->{floodprot}->{$channel} == 0) {
+    if (not defined $settings->{floodprot}->{$channel} or $settings->{floodprot}->{$channel} == 0) {
         $settings->{floodprot}->{$channel} = 0;
         #print (__LINE__ . ": Floodprot initilized");
     } else {
@@ -294,9 +346,12 @@ sub make_vision_json {
     my ($prompt, $nick) = @_;
     my $data = '';
     if ($model =~ /4/) {
-        $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"};
+        $data = { model => $model, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"};
+    } elsif ($model =~ /5/) {
+        $data = { model => $visionmodel, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd' };
     } else {
-        $data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
+        #$data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
+        $data = { model => $visionmodel, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
     }
     
     return encode_json($data); 
@@ -417,7 +472,8 @@ sub dalle {
         if ($res->is_success) {
             my $json_rep  = $res->content();
             my $json_decd = decode_json($json_rep);
-            
+            #prindd(__LINE__ . ' response:');
+            #prindd(Dumper $json_decd);
             if (defined $json_decd->{data}) {
                 my $time = time;
                 my $answer = 'DALL-e results: ';
@@ -429,6 +485,7 @@ sub dalle {
                     }
                     $index++;
                 }
+                $answer .= '(revised prompt: ' . $json_decd->{data}[0]->{revised_prompt} . ')';
                 $server->command("msg -channel $channel $answer");
                 #my $filename = $nick.'_'.$time.'.png';
             }
@@ -534,6 +591,7 @@ sub event_pubmsg {
         $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt($target, $server->{tag}));
         return;
     }
+
     if ($msg =~ /^\!floodprot (\d)$/) {
         my $floodprot = $1;
         if (ifop($server, $target, $nick)) {
@@ -556,6 +614,121 @@ sub event_pubmsg {
         prind("$nick commanded: $msg");
         return;
     }
+
+    if ($msg =~ /^\!web (.*)/) {
+        my $query = $1;
+        $query = KaaosRadioClass::ktrim($query);
+        if (length $query > 0) {
+            return if check_flood($nick, $target);
+            my $answer = make_web_request($query, $nick);
+            if (defined $answer) {
+                $answer = format_markdown($answer);
+                $answer = format_formula($answer);
+                $server->command("msg -channel $target $nick: $answer");
+            } else {
+                prindw("Web request failed.");
+                $server->command("msg -channel $target $nick: \0035Web request failed.\003");
+            }
+        }
+    } elsif ($msg =~ /^!test (.*)/) {
+        my $answer = make_search_request($1, $target);
+        if (defined $answer) {
+            $answer = format_markdown($answer);
+            $answer = format_formula($answer);
+            $server->command("msg -channel $target $nick: $answer");
+        } else {
+            prindw("Search request failed.");
+            $server->command("msg -channel $target $nick: \0035Search request failed.\003");
+        }
+    }
+}
+
+
+sub make_search_request {
+    my ($query, $nick) = @_;
+    my $url = 'https://api.openai.com/v1/chat/completions';
+    my $urii = URI->new($url);
+    my $newua = LWP::UserAgent->new;
+    $newua->default_headers($headers);
+    my $prompt = get_prompt($nick, 'private');
+    my $data = {
+        model => 'gpt-4o-mini-search-preview',
+        messages => [
+            { role => 'user', content => $query },
+            { role => 'system', content => $prompt }
+        ]
+    };
+    my $request = encode_json($data);
+    prindd(__LINE__ . ' JSON request:');
+    prindd($request);
+    my $res = $newua->post($urii, Content => $request);
+    if ($res->is_success) {
+        my $json_rep  = $res->content();
+        my $json_decd = decode_json($json_rep);
+        #prindd(__LINE__ . ' response in decoded json:');
+        #prindd(Dumper $json_decd);
+        if (defined $json_decd->{choices}[0]->{message}->{content}) {
+            my $answer = $json_decd->{choices}[0]->{message}->{content};
+            prindd(__LINE__ . ' answer:');
+            prindd($answer);
+            return $answer;
+        } else {
+            prindw("No content in response.");
+        }
+    } elsif ($res->is_error) {
+        prindd(__LINE__ . ' response:');
+        prindd(Dumper $res);
+        my $errormsg = decode_json($res->decoded_content())->{error}->{message};
+        prindw("Error: $errormsg");
+    } else {
+        prindd(__LINE__ . ' response:');
+        prindd(Dumper $res);
+        prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
+    }
+    return undef;
+}
+
+sub make_web_request {
+    my ($query, $nick) = @_;
+    my $data = {
+        model => $model,
+        tools => [
+            { type => 'web_search_preview' }
+        ],
+        input => $query 
+    };
+    my $request = encode_json($data);
+    prindd(__LINE__ . ' JSON request:');
+    prindd($request);
+    my $res = $ua->post($uri, Content => $request);
+    if ($res->is_success) {
+        my $json_rep  = $res->content();
+        my $json_decd = decode_json($json_rep);
+        prindd(__LINE__ . ' response in decoded json0:');
+        prindd(Dumper $json_decd->{output}[0]);
+        prindd(__LINE__ . ' response in decoded json1:');
+        prindd(Dumper $json_decd->{output}[1]);
+        if (defined $json_decd->{output}[0]->{content}[0]->{text}) {
+            my $answer = $json_decd->{output}[0]->{content}[0]->{text};
+            return $answer;
+        } elsif (defined $json_decd->{output}[1]->{content}[0]->{text}) {
+            my $answer = $json_decd->{output}[1]->{content}[0]->{text};
+            return $answer;
+        } else {
+            prindw("No content in response.");
+        }
+    } elsif ($res->is_error) {
+        prindd(__LINE__ . ' response:');
+        prindd(Dumper $res);
+        my $errormsg = decode_json($res->decoded_content())->{error}->{message};
+        prindw("Error: $errormsg");
+    } else {
+        prindd(__LINE__ . ' response:');
+        prindd(Dumper $res);
+        prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
+
+    }
+    return undef;
 }
 
 sub save_settings {

@@ -441,7 +441,7 @@ sub fetch_price_data2 {
     my $url = get_sahkohinta_api_url();
     my $json_data = '-1';
     $json_data = KaaosRadioClass::getJSON($url);
-    if ($json_data ne '-1') {
+    if ($json_data ne '-1' and $json_data ne '-2') {
         foreach my $data (@$json_data) {
             my $timestamp = $data->{aikaleima_suomi};
             my $price = $data->{hinta};
@@ -449,7 +449,7 @@ sub fetch_price_data2 {
         }
         return $pricedata;
     } else {
-        prindw("JSON data not found.");
+        prindw("JSON data not found. " . $json_data);
     }
 }
 

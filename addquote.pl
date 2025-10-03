@@ -54,7 +54,8 @@ unless (-e $vitsidb) {
 
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
-	return if ($nick eq $server->{nick});	#self-test
+	my $mynick = quotemeta $server->{nick};
+	return if ($nick eq $mynick);   #self-test
 	parseQuote($msg, $nick, $nick, $server);
 	return;
 }

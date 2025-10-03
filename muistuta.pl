@@ -80,21 +80,21 @@ sub event_pubmsg {
 	my ($sec,$min,$hour,$mday,$mon,$year,$wday, $yday, $isdst) = localtime(time);
 	my ($unit, $value, $note);
 
-	if ($msg =~ /^!muistuta ([1-9])h ?(.*)$/) {
+	if ($msg =~ /^!muistuta ([1-9])\s?h ?(.*)$/ || $msg =~ /^!muistuta ([1-9])\s?t ?(.*)$/) {
 		# 1-9 hours. Try to keep script loaded until that.
 		$unit = 'hours';
 		$value = $1;
 		$note = $2;
 		$timer = Irssi::timeout_add_once(($value*1000*60*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$note);
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}h)");
-	} elsif ($msg =~ /^!muistuta (\d+)sek ?(.*)$/ || $msg =~ /^!muistuta (\d+)s ?(.*)$/) {
+	} elsif ($msg =~ /^!muistuta (\d+)\s?sek ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?s ?(.*)$/) {
 		# some seconds
 		$unit = 'seconds';
 		$value = $1;
 		$note = $2;
 		$timer = Irssi::timeout_add_once(($value*1000), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$note);
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}s)");
-	} elsif ($msg =~ /^!muistuta (\d+)h ?(.*)$/) {
+	} elsif ($msg =~ /^!muistuta (\d+)\s?h ?(.*)$/) {
 		# 10+ hours. create a cron job.
 		$unit = 'hours';
 		$value = $1;
@@ -104,7 +104,7 @@ sub event_pubmsg {
 		my $cron_month = `date --date="" +"%m"`;
 		create_at_command($server, $target, $nick, $value.' '. $unit, $note);
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}h)");
-	} elsif ($msg =~ /^!muistuta (\d+)kk ?(.*)$/) {
+	} elsif ($msg =~ /^!muistuta (\d+)\s?kk ?(.*)$/) {
 		# months
 		$unit = 'months';
 		$value = $1;
@@ -120,7 +120,7 @@ sub event_pubmsg {
 		$note = parse_bad($note);
 		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan.. (${value}kk)");
-	} elsif ($msg =~ /^!muistuta (\d+)pv ?(.*)$/ || $msg =~ /^!muistuta (\d+)d ?(.*)$/) {
+	} elsif ($msg =~ /^!muistuta (\d+)\s?pv ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?d ?(.*)$/) {
 		# days
 		$unit = 'days';
 		$value = $1;
@@ -135,7 +135,7 @@ sub event_pubmsg {
 		$note = parse_bad($note);
 		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan... (${value}pv)");
-	} elsif ($msg =~ /^!muistuta (\d+)min ?(.*)$/ || $msg =~ /^!muistuta (\d+)m ?(.*)$/) {
+	} elsif ($msg =~ /^!muistuta (\d+)\s?min ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?m ?(.*)$/) {
 		echota("$msg from: $target, $nick");
 		$unit = 'minutes';
 		$value = $1;
@@ -147,6 +147,11 @@ sub event_pubmsg {
 	
 	elsif ($msg =~ /!muistutukset/) {
 		Irssi::command("exec -name atq -interactive atq");
+	}
+
+	else {
+		$server->command("msg -channel $target Käytä: !muistuta <aika> <viesti>, missä aika on esim. 10s, 5min, 2h, 3pv, 1kk. Esim: !muistuta 10min Käy hakemassa maito.");
+		#$server->command("msg -channel $target Katso myös: !muistutukset");
 	}
 	return;
 }

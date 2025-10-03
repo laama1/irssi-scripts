@@ -152,6 +152,7 @@ sub replace_with_emoji {
 	$string =~ s/heavy intensity shower rain/🌊 🌧️ /u;
 	$string =~ s/scattered clouds/☁ /u;
 	$string =~ s/shower rain/🌧️ /su;
+	$string =~ s/moderate rain/🌧️ /su;
 	my $sunup = is_sun_up($sunrise, $sunset, $comparetime);
 	if ($sunup == 1) {
 		$string =~ s/overcast clouds/🌥️ /sui;
@@ -335,17 +336,9 @@ sub forecastloop5 {
 	my $daytemp = '';
 	my @weekdayarray = ('su','ma','ti','ke','to','pe','la','su');
 	my $timezone = $json->{city}->{timezone};
-	#print __LINE__ . ': dump json next' if $DEBUG1;
-	#print Dumper $json if $DEBUG1;
 	foreach my $item (@{$json->{list}}) {
 		my $tiem = $item->{dt_txt};
-		#if ($index < 4 && $DEBUG1) {
-		#	print __LINE__ . ': dump item next';
-		#	print Dumper $item;
-		#}
-
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime ($item->{dt} + $timezone);
-		
 		my $weekdaystring = $weekdayarray[$wday];
 		#if ($tiem =~ /00:00:00/ || $tiem =~ /12:00:00/) {	# TODO: per timezone not UTC
 		if ($hour == 0 || $hour == 12) {
@@ -361,21 +354,19 @@ sub forecastloop5 {
 												$timezone
 												);
 			if ($wday eq $daytemp) {
-				$returnstring .= sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
+				$returnstring .= "\002" . sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) . "°C";
 			} else {
 				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
-				$returnstring .= "\002".$weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
+				$returnstring .= "\002" . $weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 			}
 			#if ($tiem =~ /12:00:00/) {
 			if ($hour == 12) {
 				# end of temperature pair
-				#print("Time: " . $tiem);
 				$returnstring .= "\002)\002, ";
-				#print("returnstring: " . $returnstring);
+
 			}
 			$daytemp = $wday;
 			$index++;
-			#print __LINE__ .': returnstring: ' . $returnstring if $DEBUG;
 		}
 	}
 
@@ -733,6 +724,7 @@ sub check_user_city {
 			return undef;
 		}
 	} else {
+		# save city
 		$users_cache->{$nick} = $checkcity;
 		return $checkcity;
 	}
@@ -769,7 +761,7 @@ sub filter_keyword {
 		return $helptext;
 	} elsif (($msg eq '!s' || $msg =~ /!se/ || $msg eq '!sa') && $users_cache->{$nick}) {
 		# when user's city is allready saved and user writes the short command only
-		dp(__LINE__.', herecy: '.$users_cache->{$nick});
+		dp(__LINE__.', herecy, msg: ' . $msg . ', city: '.$users_cache->{$nick});
 		return filter_keyword($msg . ' ' . $users_cache->{$nick}, $nick);
 	} elsif (($msg eq '!s' || $msg eq '!se' || $msg eq '!se5' || $msg eq '!sa') && !$users_cache->{$nick}) {
 		return 'Unohdin, missä asuitkaan.. Kirjoita: !s kaupunki';
@@ -777,6 +769,7 @@ sub filter_keyword {
 	return $returnstring;
 }
 
+# strip strange chars
 sub stripc {
 	my ($word, @rest) = @_;
 	$word =~ s/['~"`;\:]//ug;
@@ -786,7 +779,6 @@ sub stripc {
 sub request_api {
 	my ($url, @rest) = @_;
 	$url .= $apikey;
-	#dp(__LINE__ . ' url: ' . $url);
 	return KaaosRadioClass::getJSON($url);
 }
 

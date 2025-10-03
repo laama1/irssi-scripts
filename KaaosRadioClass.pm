@@ -41,7 +41,9 @@ my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 my $tsfile = "$currentDir/ts";
 my $djlist = "$currentDir/dj_list.txt";
 
-my $DEBUG = 0;
+my $mozilla_useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+
+my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
 my $floodernick = '';
@@ -101,7 +103,6 @@ sub closeDB {
 
 sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
-	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
@@ -115,7 +116,6 @@ sub readLineFromDataBase {
 	dp(__LINE__.': -- Did not find a result');
 	$sth->finish();
 	$dbh->disconnect();
-	#return @returnArray, "jee", $db, $string;
 	return;
 }
 
@@ -133,7 +133,6 @@ sub bindSQL {
 	}
 	$sth->finish();
 	$dbh->disconnect();
-	dp(__LINE__.': -- How many results: '. $idx);
 	return @results;
 }
 
@@ -396,8 +395,6 @@ sub readArrayFromOpenDB {
 	return @elements;
 }
 
-
-
 # get month based on integer 1-12. Optional parameter: lowercase enabled or not
 sub getMonthString {
 	my ($month, $lowercase, @rest);
@@ -418,13 +415,13 @@ sub readDjList {
 
 sub fetchResponse {
 	my ($url, @rest) = @_;
-	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,
 	);
-	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
+	my $ua = LWP::UserAgent->new('agent' => $mozilla_useragent, max_size => 265536, max_redirect => 7);
 	$ua->cookie_jar($cookie_jar);
 	$ua->timeout(3);				# 3 seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
@@ -437,16 +434,16 @@ sub fetchResponse {
 sub fetchUrl {
 	my ($url, $getsize, $headers);
 	($url, $getsize, $headers) = @_;
-	dp(__LINE__.': fetchUrl url: '. $url);
-	da(__LINE__, $headers);
+	dp(__LINE__ . ': fetchUrl url: '. $url . ', headers: ');
+	da(__LINE__ , $headers);
 	#$url = decode_entities($url);
-	my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,
 	);
-	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
+	my $ua = LWP::UserAgent->new('agent' => $mozilla_useragent, max_size => 265536, max_redirect => 7);
 	if (defined $headers) {
 		$ua->default_headers($headers);
 	}
@@ -471,10 +468,11 @@ sub fetchUrl {
 		} else {
 			$size = $size.'B';
 		}
-		$finalURI = $response->request()->uri() || '';
-		print("KaaosRadioClass Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
+		$finalURI = $response->request->uri || '';
+		dp(__LINE__ . ": KaaosRadioClass Successfully fetched $url. " . $response->content_type . 
+			", " . $response->status_line . ", " . $size . ', finalURI: ' . $finalURI);
 	} else {
-		print("KaaosRadioClass fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		dp(__LINE__ . ": KaaosRadioClass fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
 	}
 	if (defined $getsize && $getsize == 1) {
@@ -500,6 +498,7 @@ sub getJSON {
 	return $json;
 }
 
+# TODO: implement this
 sub getXML {
 	my ($url, @rest) = @_;
     #my $url = 'http://www.hamqsl.com/solarxml.php';
@@ -515,7 +514,7 @@ sub dp {
 
 sub da {
 	return unless $DEBUG == 1;
-	print('krc-debug array:');
+	print('krc-debug array: ');
 	print Dumper (@_);
 	return;
 }

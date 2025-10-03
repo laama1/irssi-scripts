@@ -73,7 +73,8 @@ my $invidiousUrl = 'https://farside.link/invidious';
 #my $twitterurl = 'https://xcancel.com';
 my $twitterurl = 'https://farside.link/nitter';
 my $instaurl = 'https://farside.link/proxigram';
-my $redditurl = 'https://farside.link/libreddit';
+my $redditUrl = 'farside.link/libreddit';
+my $hsUrl = 'https://archive.is/newest/';
 
 my $myname = 'urltitle3.pl';
 
@@ -742,7 +743,7 @@ sub url_conversion {
 	# kuvaton conversion
 	$param =~ s/\:\/\/kuvaton\.com\/browse\/[\d]{1,6}/\:\/\/kuvaton.com\/kuvei/;
 
-	# set more recent headers if mixcloud or other known website
+	# set more recent request headers if mixcloud or other known website
 	if ($param =~ /mixcloud\.com/i || $param =~ /k-ruoka\.fi/i || $param =~ /drive\.google\.com/i) {
 		set_useragent(2);
 	}
@@ -784,7 +785,7 @@ sub url_conversion {
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
-	if ($param =~ /yle.fi/i) {
+	if ($param =~ /yle\.fi/i) {
 		# add header x-forwarded-for to circumvent geo-blocking
 		# print($IRSSI{'name'}.'> yle.fi detected!');
 		# does not seem to work yet.. add_header('X-Forwarded-For', '54.192.99.2');
@@ -814,10 +815,16 @@ sub url_conversion {
 	}
 
 	if ($param =~ /reddit\.com/i) {
-		$param =~ s/https\:\/\/reddit\.com/$redditurl/i;
+		$param =~ s/reddit\.com/$redditUrl/i;
 		$newUrlData->{extra} = " -- proxy: $param";
 		dp(__LINE__ . " reddit url detected! proxyurl: $param")
 	}
+
+	if ($param =~ /hs.fi/i) {
+		my $proxyurl = $hsUrl. $param;
+		$newUrlData->{extra} = " -- proxy: $proxyurl";
+	}
+
 	return $param;
 }
 
@@ -1161,7 +1168,9 @@ sub dontPrintThese {
 	#return 1 if $url =~ /aamulehti\.fi/i;
 	#return 1 if $text =~ /kuvaton\.com/i;
 	#return 1 if $text =~ /explosm\.net/i;
+	return 1 if $url =~ /apina\.biz/i;
 	return 1 if $url =~ /ircz\.de/i;
+	return 1 if $url =~ /explosm\.net\/comics/i;
 	return 0;
 }
 
