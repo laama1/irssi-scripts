@@ -482,10 +482,10 @@ sub dp {
 Irssi::signal_add("message public", \&public_responder);
 # LAama1 2022-04-20 Irssi::signal_add("setup changed", \&load_settings);
 Irssi::signal_add("setup reread", \&load_settings);
-Irssi::command_bind('savebrain', \&save_brain);
-Irssi::command_bind('save', \&save_brain);
-Irssi::command_bind('resetbrain', \&reset_brain);
-Irssi::command_bind('megahal_learn_from_url','learn_txt_file', "MegaHAL commands");
+Irssi::command_bind('savebrain', \&save_brain, 'megahal2');
+Irssi::command_bind('save', \&save_brain, 'megahal2');
+Irssi::command_bind('resetbrain', \&reset_brain, 'megahal2');
+Irssi::command_bind('megahal_learn_from_url','learn_txt_file', "megahal2");
 
 Irssi::settings_add_str('MegaHAL', 'megahal_brain', '');
 Irssi::settings_add_str('MegaHAL', 'megahal_channels', '');

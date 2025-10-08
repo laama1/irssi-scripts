@@ -246,8 +246,8 @@ sub timerfunc {
 	getXML();
 }
 
-Irssi::command_bind('killahoe_update', \&timerfunc);
-Irssi::command_bind('killahoe_search', \&searchDB);
+Irssi::command_bind('killahoe_update', \&timerfunc, 'killahoe_rss');
+Irssi::command_bind('killahoe_search', \&searchDB, 'killahoe_rss');
 Irssi::settings_add_str('killahoe', 'killahoe_enabled_channels', '');
 Irssi::signal_add('message public', 'sig_msg_pub');
 

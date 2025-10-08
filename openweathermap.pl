@@ -899,9 +899,9 @@ sub prindw {
 }
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
-Irssi::command_bind('openweathermap_cities', \&print_cities);
-Irssi::command_bind('openweathermap_add_channel', \&add_enabled_channel);
-Irssi::command_bind('openweathermap_remove_channel', \&remove_enabled_channel);
+Irssi::command_bind('openweathermap_cities', \&print_cities, 'openweathermap');
+Irssi::command_bind('openweathermap_add_channel', \&add_enabled_channel, 'openweathermap');
+Irssi::command_bind('openweathermap_remove_channel', \&remove_enabled_channel, 'openweathermap');
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message private', 'sig_msg_priv');
 

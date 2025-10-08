@@ -337,7 +337,7 @@ sub dp {
 	return;
 }
 
-Irssi::command_bind('kickpellestats', \&getStats);
+Irssi::command_bind('kickpellestats', \&getStats, 'kickpelle');
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 #print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');

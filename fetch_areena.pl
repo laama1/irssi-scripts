@@ -6,7 +6,7 @@ use Irssi;
 use JSON;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
-$VERSION = '20230106';
+$VERSION = '2025-10-05';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -19,7 +19,7 @@ $VERSION = '20230106';
 
 my $DEBUG = 1;
 my $runningnumber = 0;
-my $userpass = 'roxylady:Proxy_P455u';
+#my $userpass = 'roxylady:Proxy_P455u';
 #if you have Finnish proxy, use it here.
 #my $proxy = " --proxy ${userpass}@83.148.240.11:31280";
 my $proxy = '';
@@ -27,7 +27,9 @@ my $download_dir = "/mnt/music/areena";
 #my $ylescript = 'yle-dl -qq --vfat --no-overwrite --destdir '.$download_dir.' --maxbitrate best';
 my $ylescript = 'yle-dl -qq --vfat --destdir '.$download_dir.' --maxbitrate best' . $proxy;
 #my $execscript = 'exec -msg yle-dl -name ';
-my $execscript = 'exec -window -name yledl ';
+#my $execscript = 'exec -window -name yledl ';
+my $execscript = 'exec -interactive -name yledl ';
+my $logfile = Irssi::get_irssi_dir() . '/scripts/yle.log';
 
 prind('download dir: '.$download_dir);
 
@@ -38,7 +40,8 @@ sub sig_msg_pub {
 		$msg =~ /(https?:.*\.yle\.fi\S+)/i) {
 		if (my $count = cmd_check_if_exist($1)) {
 			#$server->command("msg -channel $target Found $count items. Downloading..");
-			prind("Found $count items. Downloading...");
+			create_window('yledl');
+			prind("Found $count items. Downloading: " . $1);
 			cmd_start_dl($1);
 		}
 	}
@@ -59,7 +62,7 @@ sub sig_yle_url {
 # return first found item title and description
 sub get_title_desc {
 	my ($yleurl, @rest) = @_;
-	my $output = `yle-dl --showmetadata ${yleurl} 2>/dev/null`;
+	my $output = `yle-dl --showmetadata ${yleurl} 2>${logfile}`;
 	if ($output eq '') {
 		debu(__LINE__ . ' No metadata found');
 		return;
@@ -73,12 +76,23 @@ sub get_title_desc {
 	}
 }
 
+sub create_window {
+    my ($window_name) = @_;
+    my $window = Irssi::window_find_name($window_name);
+    unless ($window) {
+        prind("Create new window: $window_name");
+        Irssi::command("window new hidden");
+        Irssi::command("window name $window_name");
+    }
+    Irssi::command("window goto $window_name");
+}
+
 # check if metadata available and how many items
 sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
-	debu(__LINE__.': checking yle url: '. $url);
+	debu(__LINE__ . ': checking yle url: '. $url);
 	
-	my $output = `yle-dl -V --showmetadata ${url} 2>/home/laama/.irssi/scripts/yle.log`;
+	my $output = `yle-dl -V --showmetadata ${url} 2>${logfile}`;
 	if ($output eq '') { return; }
 
 	my $json = JSON->new->utf8;
@@ -90,21 +104,23 @@ sub cmd_check_if_exist {
 
 sub cmd_start_dl {
 	my ($url, @rest) = @_;
-	debu(__LINE__.': fetching: '. $url);
 	$runningnumber++;
-	Irssi::command($execscript. $runningnumber. " $ylescript $url");
+	debu(__LINE__ . ': fetching: '. $url .' runningnumber: '. $runningnumber);
+	create_window('yledl');
+	#Irssi::command($execscript. $runningnumber. " $ylescript $url");
+	Irssi::command($execscript . "$ylescript $url");
 	#Irssi::command("exec -close yle");	# detach
 	# -interactive
 }
 
 sub exec_new {
 	debu('exec_new');
-	#print(Dumper(@_));
+	debu(Dumper(@_));
 }
 
 sub exec_remove {
 	debu('exec_remove');
-	#print(Dumper(@_));
+	debu(Dumper(@_));
 }
 
 sub exec_input {

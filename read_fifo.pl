@@ -185,9 +185,9 @@ print FIFO "\033[2J\033[1;1H"; # erase screen & jump to 0,0
 # store initial status
 store_status();
 Irssi::print('act_fifo.pl loaded.');
-Irssi::command_bind('act_fifo', \&msg_to_fifo);
-Irssi::command_bind('act_fifo_read', \&read_fifo);
-Irssi::command_bind('act_fifo_flush', \&flush_fifo);
+Irssi::command_bind('act_fifo', \&msg_to_fifo, 'read_fifo');
+Irssi::command_bind('act_fifo_read', \&read_fifo, 'read_fifo');
+Irssi::command_bind('act_fifo_flush', \&flush_fifo, 'read_fifo');
 signal_add_last('setup changed', \&store_status);
 signal_add_last('window item activity', \&item_status_changed);
 signal_add_last('window refnum changed', \&store_status);

@@ -39,15 +39,11 @@ sub pub_msg {
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /(!hams)/sgi) {
-		print("1");
 		return if KaaosRadioClass::floodCheck();
-		print("2");
 		my $xml = fetch_hams_data();
-        print("3");
 		my $newdata = parse_hams_data($xml);
-		print("4");
 		$serverrec->command("MSG $target $newdata");
-		Irssi::print($IRSSI{"name"}.": request from $nick on channel $target");
+		prind("request from $nick on channel $target");
 	}
 }
 
@@ -67,18 +63,19 @@ sub parse_hams_data {
 		", Sunspot number: $sunspots, Proton Flux: ${protonflux}, Electron Flux: ${electronflux}e/cm²/s, Solar Wind: ${solarwind}km/s, Heliumline: ${heliumline}p/cm²/s, " .
 		"Magnetic field: ${magfield}nT";
     return $returnstring;
-    #Irssi::print(Dumper($solarflux));
 }
 
 sub fetch_hams_data {
     my $url = 'http://www.hamqsl.com/solarxml.php';
     my $textdata = KaaosRadioClass::fetchUrl($url, 0);
     my $dom = $parser->load_xml(string => $textdata);
-    #Irssi::print(Dumper($dom));
     return $dom;
-    #return KaaosRadioClass::getXML($url);
 }
 
+sub prind {
+	my ($text, @rest) = @_;
+	print "\0039" . $IRSSI{name} . ">\003 " . $text;
+}
 
 Irssi::signal_add_last('message public', 'pub_msg');
 

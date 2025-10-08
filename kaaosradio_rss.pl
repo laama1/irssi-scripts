@@ -239,8 +239,8 @@ sub timerfunc {
 	getXML();
 }
 
-Irssi::command_bind('kaaosradio_aikataulu_update', \&timerfunc);
-Irssi::command_bind('kaaosradio_aikataulu_search', \&searchDB);
+Irssi::command_bind('kaaosradio_aikataulu_update', \&timerfunc, 'kaaosradio_rss');
+Irssi::command_bind('kaaosradio_aikataulu_search', \&searchDB, 'kaaosradio_rss');
 Irssi::settings_add_str('kaaos', 'kaaosradio_aikataulu_enabled_channels', '');
 Irssi::signal_add('message public', 'sig_msg_pub');
 

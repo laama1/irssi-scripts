@@ -555,5 +555,5 @@ sub prindw {
 	print CLIENTCRAP "\0034" . $IRSSI{name} . ">\003 ". $text;
 }
 timeout_start();
-prind("$IRSSI{name} v$VERSION loaded.");
+prind("$IRSSI{name} $VERSION loaded.");
 Irssi::signal_add_last('message public', 'pub_msg');
