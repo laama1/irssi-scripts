@@ -138,11 +138,12 @@ sub msg_to_channel {
     my $enabled_raw = Irssi::settings_get_str('taivaanvahti_enabled_channels');
     my @enabled = split / /, $enabled_raw;
 
-	if (defined $desc && length $desc > 300) {
+	if (not defined $desc) {
+		$desc = '';
+	}
+	if (length $desc > 300) {
 		$desc = substr $desc, 0, 300;
 		$desc .= ' ...';
-	} else {
-		#$desc = "";
 	}
 	my $sayline = "\002$title ($date):\002 $link $desc";
 

@@ -7,6 +7,9 @@
 addquote.pl:
 - Encode
 
+fetch_areena.pl
+- JSON
+
 openweathermap.pl:
 - Number::Format
 - Encode
