@@ -3,6 +3,15 @@ use POSIX qw(strftime);
 use DateTime;
 use locale;
 
+my $dt = DateTime->now;
+my $dura_begin = DateTime::Duration->new(minutes => -3);
+my $start_time = ($dt + $dura_begin)->iso8601 . 'Z';
+$temp = "https://data.fingrid.fi/api/data?datasets=177,181,188,191,192,193?startTime=$start_time";
+print $temp;
+print "\n";
+exit;
+
+
 my $timeint = time;
 
 #$ENV{'LANG'}='fi_FI.utf-8';
