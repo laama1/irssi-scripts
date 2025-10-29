@@ -41,8 +41,6 @@ my $currentDir = $ENV{HOME}.'/.irssi/scripts';
 my $tsfile = "$currentDir/ts";
 my $djlist = "$currentDir/dj_list.txt";
 
-my $mozilla_useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
-
 my $DEBUG = 1;
 my $DEBUG_decode = 0;
 
@@ -50,18 +48,20 @@ my $floodernick = '';
 my $floodertimes = 0;
 my $flooderdate = time;		# initialize
 
+my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+
 # returns last line from file -param.
 sub readLastLineFromFilename {
 	my ($filename, @rest) = @_;
 
 	my $readline = '';
 	if (defined $filename && -e $filename) {
-		open (INPUT, "<:encoding(UTF-8)", $filename) || return -1;
+		open (INPUT, "<:encoding(UTF-8)", $filename) or return -1;
 		while (<INPUT>) {
 			chomp;
 			$readline = $_;
 		}
-		close (INPUT) || return -2;
+		close (INPUT) or return -2;
 	} else {
 		return -3;
 	}
@@ -103,6 +103,7 @@ sub closeDB {
 
 sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
+	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return $dbh if ($dbh < 0);
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
@@ -116,6 +117,7 @@ sub readLineFromDataBase {
 	dp(__LINE__.': -- Did not find a result');
 	$sth->finish();
 	$dbh->disconnect();
+	#return @returnArray, "jee", $db, $string;
 	return;
 }
 
@@ -133,6 +135,7 @@ sub bindSQL {
 	}
 	$sth->finish();
 	$dbh->disconnect();
+	dp(__LINE__.': -- How many results: '. $idx);
 	return @results;
 }
 
@@ -171,25 +174,25 @@ sub readTextFile {
 		chomp;
 		push @returnArray, $_;
 	}
-	close (INPUT) || return -2;
+	close (INPUT) or return -2;
 	return (\@returnArray);
 }
 
 # add one line of text to a file given in param
 sub addLineToFile {
 	my ($filename, $textToWrite, @rest) = @_;
-	open OUTPUT, '>>:utf8', $filename || return -1;
+	open OUTPUT, '>>:utf8', $filename or return -1;
 	print OUTPUT $textToWrite ."\n";
-	close OUTPUT || return -2;
+	close OUTPUT or return -2;
 	return 0;
 }
 
 # add content to new file or overwrite existing
 sub writeToFile {
 	my ($filename, $textToWrite, @rest) = @_;
-	open (OUTPUT, '>:utf8', $filename) || return -1;
+	open (OUTPUT, '>:utf8', $filename) or return -1;
 	print OUTPUT $textToWrite ."\n";
-	close OUTPUT || return -2;
+	close OUTPUT or return -2;
 	dp(__LINE__.': Write done to '. $filename);
 	return 0;
 }
@@ -197,13 +200,13 @@ sub writeToFile {
 # overwrite file
 sub writeArrayToFile {
 	my ($filename, @array) = @_;
-	open my $OUTPUT, '>:utf8', $filename || do {
+	open my $OUTPUT, '>:utf8', $filename or do {
 		return -1;
 	};
 	foreach my $line (@array) {
 		print $OUTPUT $line . "\n";
 	}
-	close $OUTPUT || return -2;
+	close $OUTPUT or return -2;
 	dp(__LINE__.': write array done');
 	return 0;
 }
@@ -227,11 +230,12 @@ sub Drunk {
 	my ($nick, @rest) = @_;
 	if ($nick eq $floodernick) {
 		$floodertimes++;
-		if ($floodertimes > 5 && (time - $flooderdate) <= 600) {	# < 10min
+		if ($floodertimes > 5 && (time - $flooderdate <= 600)) {
 			return 1;
-		} elsif ($floodertimes > 5 && (time - $flooderdate) > 600) {	# > 10min
+		} elsif ($floodertimes > 5 && (time - $flooderdate > 600)) {	#10min
 			$flooderdate = time;
 			$floodertimes = 0;
+		} else {
 		}
 	} else {
 		$floodernick = $nick;
@@ -413,6 +417,24 @@ sub readDjList {
 	return readTextFile($djlist);
 }
 
+sub quickfetch {
+	my ($url, $headers) = @_;
+	my $starttime = time;
+	my $ua = LWP::UserAgent->new();
+	$ua->timeout(5);				# 5 seconds
+	dp(__LINE__ . ' url: ' . $url . ' time: ' . (time - $starttime));
+	my $request = HTTP::Request->new('GET', $url, $headers);
+	dp(__LINE__ . ' ua request next .. time: ' . (time - $starttime));
+	my $response = $ua->request($request);
+	dp(__LINE__ . ' after ua request, time: ' . (time - $starttime));
+	if ($response->is_success) {
+		return $response->decoded_content();
+	} else {
+		dp("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		return -1;
+	}
+}
+
 sub fetchResponse {
 	my ($url, @rest) = @_;
 	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
@@ -421,7 +443,7 @@ sub fetchResponse {
 		file => $cookie_file,
 		autosave => 1,
 	);
-	my $ua = LWP::UserAgent->new('agent' => $mozilla_useragent, max_size => 265536, max_redirect => 7);
+	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
 	$ua->cookie_jar($cookie_jar);
 	$ua->timeout(3);				# 3 seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
@@ -431,11 +453,12 @@ sub fetchResponse {
 	return $ua->get($url);
 }
 
+
 sub fetchUrl {
 	my ($url, $getsize, $headers);
 	($url, $getsize, $headers) = @_;
-	dp(__LINE__ . ': fetchUrl url: '. $url . ', headers: ');
-	da(__LINE__ , $headers);
+	dp(__LINE__ . ': fetchUrl url: ' . $url);
+	da($headers);
 	#$url = decode_entities($url);
 	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
@@ -443,22 +466,29 @@ sub fetchUrl {
 		file => $cookie_file,
 		autosave => 1,
 	);
-	my $ua = LWP::UserAgent->new('agent' => $mozilla_useragent, max_size => 265536, max_redirect => 7);
-	if (defined $headers) {
-		$ua->default_headers($headers);
-	}
+	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
+
+	#dp(__LINE__);
+	#if (defined $headers) {
+	#	$ua->default_header($headers);
+	#}
+	dp(__LINE__);
 	$ua->cookie_jar($cookie_jar);
-	$ua->timeout(10);				# seconds
+	$ua->timeout(3);				# 3 seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
 	$ua->protocols_forbidden( [ 'file', 'mailto'] );
 	#$ua->proxy(['http', 'ftp'], 'http://proxy.jyu.fi:8080/');
 	$ua->ssl_opts('verify_hostname' => 0);
-
-	my $response = $ua->get($url);
+	my $request = HTTP::Request->new('GET', $url, $headers);
+	dp(__LINE__);
+	my $response = $ua->request($request);
+	#my $response = $ua->get($url);
+	dp(__LINE__);
 	my $size = 0;
 	my $page = '';
 	my $finalURI = '';
 	if ($response->is_success) {
+		dp(__LINE__ . ' response is success');
 		$page = $response->decoded_content();		# $page = $response->decoded_content(charset => 'none');
 		$size = $response->content_length || 0;		# or content_size?
 		if ($size / (1024*1024) > 1) {
@@ -468,13 +498,13 @@ sub fetchUrl {
 		} else {
 			$size = $size.'B';
 		}
-		$finalURI = $response->request->uri || '';
-		dp(__LINE__ . ": KaaosRadioClass Successfully fetched $url. " . $response->content_type . 
-			", " . $response->status_line . ", " . $size . ', finalURI: ' . $finalURI);
+		$finalURI = $response->request()->uri() || '';
+		#print("Successfully fetched $url. ".$response->content_type.", ".$response->status_line.", ". $size);
 	} else {
-		dp(__LINE__ . ": KaaosRadioClass fetchUrl Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
+		dp("Failure ($url): " . $response->code() . ', ' . $response->message() . ', ' . $response->status_line);
 		return -1;
 	}
+
 	if (defined $getsize && $getsize == 1) {
 		return $page, $size, $finalURI;
 	} else {
@@ -483,22 +513,32 @@ sub fetchUrl {
 }
 
 sub getJSON {
-	my ($url, $headers, @rest) = @_;
-	my $response = fetchUrl($url, 0, $headers);
+	my ($url, $headers) = @_;
+	my $comparetime = time;
+	#my $response = fetchUrl($url, 0, $headers);
+	my $response = quickfetch($url, $headers);
+	df(__LINE__. ' response: ' . $response);
 	if ($response && $response eq '-1') {
-		dp(__LINE__.': error fetching url!');
+		df(__LINE__.': error fetching url! time: ' . (time - $comparetime));
 		return -1;
 	}
 	return -2 unless $response;
-
+	df(__LINE__ . ' getJSON success, time: ' . (time - $comparetime));
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
+	#dp (__LINE__);
+	eval {
+		$json = decode_json($response);
+	};
+	if ($@) {
+		df(__LINE__.': JSON decode error: '. $@  . ' time: ' . (time - $comparetime));
+		return -3;
+	}
 
-	$json = decode_json($response);
+	df(__LINE__ . ' json decoded succesfully, time: ' . (time - $comparetime));
 	return $json;
 }
 
-# TODO: implement this
 sub getXML {
 	my ($url, @rest) = @_;
     #my $url = 'http://www.hamqsl.com/solarxml.php';
@@ -514,8 +554,16 @@ sub dp {
 
 sub da {
 	return unless $DEBUG == 1;
-	print('krc-debug array: ');
+	print('krc-debug array:');
 	print Dumper (@_);
+	return;
+}
+
+# write to log file
+sub df {
+	my ($text, @rest) = @_;
+	my $logfile = $currentDir . '/kaaosradio_debug.log';
+	addLineToFile($logfile, $text);
 	return;
 }
 
@@ -553,5 +601,51 @@ sub conway {
 	return $moonarray[$r] .", ikä: $age vrk.";
 }
 
-#print ">>>> using .irssi/scripts/irssi-scripts/KaaosRadioClass.pm";
+# Check we have an enabled channel@network
+sub is_enabled_channel {
+	my ($setting_string, $network, $channel, @rest) = @_;
+	return 0 unless defined $setting_string && defined $network && defined $channel;
+	my @enabled = split / /, $setting_string;
+	foreach my $item (@enabled) {
+		if (grep /$channel/i, $item) {
+        	if (grep /$network/i, $item) {
+				return 1;
+			}
+    	}
+	}
+	return 0;
+}
+
+sub add_enabled_channel {
+	my ($setting_string, $network, $channel, @rest) = @_;
+	my @enabled = split / /, $setting_string;
+	foreach my $item (@enabled) {
+		if (grep /$channel/i, $item) {
+			if (grep /$network/i, $item) {
+				# allready enabled
+				return $setting_string;
+			}
+		}
+	}
+	push @enabled, "$channel\@$network";
+	return join(' ', @enabled);
+}
+
+sub remove_enabled_channel {
+	my ($setting_string, $network, $channel, @rest) = @_;
+	my @enabled = split / /, $setting_string;
+	foreach my $item (@enabled) {
+		if (grep /$channel/i, $item) {
+			if (grep /$network/i, $item) {
+				# found, remove it
+				@enabled = grep { $_ ne $item } @enabled;
+				return join(' ', @enabled);
+			}
+		}
+	}
+	return $setting_string;	# not found, return original
+}
+
+
+#print ">>>> using .irssi/scripts/KaaosRadioClass.pm";
 1;		# loaded OK
