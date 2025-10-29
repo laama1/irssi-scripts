@@ -174,8 +174,7 @@ sub kickPerson {
 sub doKick {
 	my ($server, $channel, $nick, $reason) = @_;
 	dp(__LINE__ . ": doKick: $channel $nick $reason");
-	#return;
-	$server->send_raw("kick $channel $nick :*BOOT $reason*");
+	$server->command("kick $channel $nick *BOOT $reason*");
 	return;
 }
 
