@@ -5,7 +5,7 @@ use lib $ENV{HOME}.'/perl5/lib/perl5';
 use utf8;
 binmode STDOUT, ':utf8';
 binmode STDIN, ':utf8';
-
+use Irssi;
 use Exporter;
 use DBI;			# https://metacpan.org/pod/DBI
 use LWP::UserAgent;
@@ -31,8 +31,11 @@ use Data::Dumper;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 $VERSION = 1.03;
 @ISA = qw(Exporter);
-@EXPORT = ();
-@EXPORT_OK = qw(readLastLineFromFilename readTextFile writeToFile addLineToFile getNytsoi24h replaceWeird stripLinks connectSqlite writeToDB getMonthString);
+@EXPORT_OK = ();
+@EXPORT = qw(readLastLineFromFilename readFromDB 
+readLinesFromDataBase connectSqlite closeDB readLineFromDataBase bindSQL bindSQL_nc insertSQL 
+readTextFile addLineToFile writeToFile writeArrayToFile getNytsoi24h replaceWeird stripLinks writeToDB getMonthString
+is_enabled_channeö add_enabled_channel remove_enabled_channel);
 
 #$currentDir = cwd();
 my $currentDir = $ENV{HOME}.'/.irssi/scripts';
@@ -42,7 +45,6 @@ my $tsfile = "$currentDir/ts";
 my $djlist = "$currentDir/dj_list.txt";
 
 my $DEBUG = 1;
-my $DEBUG_decode = 0;
 
 my $floodernick = '';
 my $floodertimes = 0;
@@ -68,10 +70,26 @@ sub readLastLineFromFilename {
 	return $readline;
 }
 
+# read from database, return hashref
+sub readFromDB {
+	my ($db, $querystring, $key, @rest) = @_;
+	my $dbh = connectSqlite($db);
+	return -1 unless defined  $dbh;
+	my $sth = $dbh->prepare($querystring) 
+		or 
+			return $dbh->errstr;
+	$sth->execute() 
+		or 
+			return $sth->errstr;
+	return $sth->fetchall_hashref($key);
+		#or 
+		#	$dbh->errstr;
+}
+
 sub readLinesFromDataBase {
 	my ($db, $string, @rest) = @_;
 	my $dbh = connectSqlite($db);
-	return $dbh if ($dbh < 0);
+	return undef unless $dbh;
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
 	my @returnArray;
@@ -97,7 +115,7 @@ sub connectSqlite {
 
 sub closeDB {
 	my ($dbh, @rest) = @_;
-	$dbh->disconnect() or return -1;
+	defined $dbh and $dbh->disconnect() or return -1;
 	return 0;
 }
 
@@ -105,7 +123,7 @@ sub readLineFromDataBase {
 	my ($db, $string, @rest) = @_;
 	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
-	return $dbh if ($dbh < 0);
+	return undef unless $dbh;
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
 	$sth->execute();
 
@@ -124,18 +142,18 @@ sub readLineFromDataBase {
 sub bindSQL {
 	my ($db, $sql, @params, @rest) = @_;
 	my $dbh = connectSqlite($db);							# DB handle
-	my $sth = $dbh->prepare($sql) or return $dbh->errstr;	# Statement handle
-	$sth->execute(@params) or return $dbh->errstr;
+	my $sth = $dbh->prepare($sql) or return $DBI::errstr;	# Statement handle
+	$sth->execute(@params) or return $DBI::errstr;
 	my @results;
 	my $idx = 0;
 	while(my @row = $sth->fetchrow_array) {
 		#$results[$idx] = @row;
-		push @results, @row;
+		push @results, [@row];
 		$idx++;
 	}
 	$sth->finish();
 	$dbh->disconnect();
-	dp(__LINE__.': -- How many results: '. $idx);
+	#dp(__LINE__.': -- How many results: '. $idx);
 	return @results;
 }
 
@@ -162,7 +180,7 @@ sub insertSQL {
 
 	$sth->finish();
 	$dbh->disconnect();
-	return $rv
+	return $rv	# $rv contains number of rows affected
 }
 
 # give param filename, read textfile, return as array
@@ -337,6 +355,29 @@ sub replaceWeird {
 	return $text;
 }
 
+sub replace_non_url_chars {
+	my ($row, @rest) = @_;
+
+	$row =~ s/ä/a/ug;
+	$row =~ s/Ä/a/ug;
+	$row =~ s/ö/o/ug;
+	$row =~ s/Ö/o/ug;
+	$row =~ s/Ã¤/a/g;
+	$row =~ s/Ã¶/o/g;
+
+	$row =~ s/\(/ /g;
+	$row =~ s/\)/ /g;
+	$row =~ s/"/ /g;
+	$row =~ s/'/ /g;		# you're
+	$row =~ s/\!//g;		# !
+
+	$row =~ s/ / /g;		# no-break space nbsp
+	$row =~ s/\*//g;		# * char
+	$row =~ s/—/ /g;		# long dash to normal dash
+
+	return $row;
+}
+
 sub stripLinks {
 	my ($string, @rest) = @_;
 	if ( $string =~ /(<a.*href.*>)[\s\S]+?<\/a>/) {
@@ -350,7 +391,7 @@ sub stripLinks {
 sub writeToDB {
 	my ($db, $string) = @_;
 	my $dbh = connectSqlite($db);
-	return $dbh if ($dbh < 0);
+	return undef unless $dbh;
 
 	my $rv = $dbh->do($string);
 	if ($rv < 0){
@@ -422,11 +463,11 @@ sub quickfetch {
 	my $starttime = time;
 	my $ua = LWP::UserAgent->new();
 	$ua->timeout(5);				# 5 seconds
-	dp(__LINE__ . ' url: ' . $url . ' time: ' . (time - $starttime));
+	#dp(__LINE__ . ' url: ' . $url . ' time: ' . (time - $starttime));
 	my $request = HTTP::Request->new('GET', $url, $headers);
-	dp(__LINE__ . ' ua request next .. time: ' . (time - $starttime));
+	#dp(__LINE__ . ' ua request next .. time: ' . (time - $starttime));
 	my $response = $ua->request($request);
-	dp(__LINE__ . ' after ua request, time: ' . (time - $starttime));
+	#dp(__LINE__ . ' after ua request, time: ' . (time - $starttime));
 	if ($response->is_success) {
 		return $response->decoded_content();
 	} else {
@@ -457,10 +498,8 @@ sub fetchResponse {
 sub fetchUrl {
 	my ($url, $getsize, $headers);
 	($url, $getsize, $headers) = @_;
-	dp(__LINE__ . ': fetchUrl url: ' . $url);
-	da($headers);
-	#$url = decode_entities($url);
-	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
+	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers));
+
 	my $cookie_file = $currentDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
@@ -468,11 +507,6 @@ sub fetchUrl {
 	);
 	my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 265536);
 
-	#dp(__LINE__);
-	#if (defined $headers) {
-	#	$ua->default_header($headers);
-	#}
-	dp(__LINE__);
 	$ua->cookie_jar($cookie_jar);
 	$ua->timeout(3);				# 3 seconds
 	$ua->protocols_allowed( [ 'http', 'https', 'ftp'] );
@@ -480,10 +514,7 @@ sub fetchUrl {
 	#$ua->proxy(['http', 'ftp'], 'http://proxy.jyu.fi:8080/');
 	$ua->ssl_opts('verify_hostname' => 0);
 	my $request = HTTP::Request->new('GET', $url, $headers);
-	dp(__LINE__);
 	my $response = $ua->request($request);
-	#my $response = $ua->get($url);
-	dp(__LINE__);
 	my $size = 0;
 	my $page = '';
 	my $finalURI = '';
@@ -601,14 +632,15 @@ sub conway {
 	return $moonarray[$r] .", ikä: $age vrk.";
 }
 
-# Check we have an enabled channel@network
+# Check we have an enabled channel@network, todo: split by @
 sub is_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
 	return 0 unless defined $setting_string && defined $network && defined $channel;
-	my @enabled = split / /, $setting_string;
+	my $enabled_raw = Irssi::settings_get_str($setting_string);
+	my @enabled = split / /, $enabled_raw;
 	foreach my $item (@enabled) {
-		if (grep /$channel/i, $item) {
-        	if (grep /$network/i, $item) {
+		if (grep /$channel\@/i, $item) {
+        	if (grep /\@$network/i, $item) {
 				return 1;
 			}
     	}
@@ -618,34 +650,38 @@ sub is_enabled_channel {
 
 sub add_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
-	my @enabled = split / /, $setting_string;
+	my $enabled_raw = Irssi::settings_get_str($setting_string);
+	my @enabled = split / /, $enabled_raw;
 	foreach my $item (@enabled) {
-		if (grep /$channel/i, $item) {
-			if (grep /$network/i, $item) {
+		if (grep /$channel\@/i, $item) {
+			if (grep /\@$network/i, $item) {
 				# allready enabled
-				return $setting_string;
+				return 0;
 			}
 		}
 	}
 	push @enabled, "$channel\@$network";
-	return join(' ', @enabled);
+	Irssi::settings_set_str($setting_string, join(' ', @enabled));
+	return 1;
 }
 
 sub remove_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
-	my @enabled = split / /, $setting_string;
+	my $enabled_raw = Irssi::settings_get_str($setting_string);
+	my @enabled = split / /, $enabled_raw;
 	foreach my $item (@enabled) {
-		if (grep /$channel/i, $item) {
-			if (grep /$network/i, $item) {
+		if (grep /$channel\@/i, $item) {
+			if (grep /\@$network/i, $item) {
 				# found, remove it
 				@enabled = grep { $_ ne $item } @enabled;
-				return join(' ', @enabled);
+				Irssi::settings_set_str($setting_string, join(' ', @enabled));
+				return 1;
 			}
 		}
 	}
-	return $setting_string;	# not found, return original
+	return 0;	# not found, return 0
 }
 
 
-#print ">>>> using .irssi/scripts/KaaosRadioClass.pm";
+print ">>>> using .irssi/scripts/KaaosRadioClass.pm";
 1;		# loaded OK

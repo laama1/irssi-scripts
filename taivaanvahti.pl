@@ -30,7 +30,7 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 my $timeout_tag;
@@ -151,6 +151,7 @@ sub msg_to_channel {
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
 		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
+		next unless ($window->{active_server}->{tag} eq "nerv");
 
 		if($window->{active}->{name} ~~ @enabled) {
 			$window->{active_server}->command("msg $window->{active}->{name} $sayline");

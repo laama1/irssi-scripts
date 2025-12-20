@@ -114,8 +114,14 @@ sub parse_extrainfo_from_link {
 	my ($url, @rest) = @_;
 	my $text = KaaosRadioClass::fetchUrl($url);
 	my $date = '';
-	if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
-		$date = $2;
+	if ($text =~ /Meteorologin sääkatsaus/) {
+		# scroll the cursor to right position
+	}
+	# old: if ($text =~ /<span class="datetime"(.*?)>(.*?)<\/span>/gis) {
+	if ($text =~ /<div class="font-bold">(.*?)<\/div>/is) {
+	# example: <div class="font-bold">7.11.2025 21:50</div>
+		$date = $1;
+
 		# argument example: Tue, 04 Sep 2018 22:37:34 +0300 (using "%a, %d %b %Y %H:%M:%S %z")
 		# We need: 15.3.2023 15:56
 		my $formatter = DateTime::Format::Strptime->new(
@@ -128,9 +134,12 @@ sub parse_extrainfo_from_link {
 		$date = $dt->strftime('%d.%m. %H:%M');
 	}
 
-	if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
-		my $meteotext = $2;
+	# old: if ($text =~ /<span class="meteotext"(.*?)>(.*?)<\/span>/gis) {
+	if ($text =~ /<div class="text-blueberry">(.*?)<\/div>/gis) {
+	# example: <div class="text-blueberry"><!----> Vesisadealue, joka yltää  Pohjanmaalta kaakonkulmalle, heikkenee ja kuihtuu yöllä, kuitenkin tihkusade jatkuu.  Myöhään iltapäivällä sadealue saapuu lännestä maan keskivaiheille, Kainuussa, Koillismaalla ja Etelä-Lapissa sataa hieman lunta, muualla vettä.</div>
+		my $meteotext = $1;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;		# div inside span
+		$meteotext =~ s/<!---->//gis;						# remove comments
 		$meteotext = KaaosRadioClass::ktrim($meteotext);
 		$meteotext = "\002Meteorologin sääkatsaus ($date):\002 ".$meteotext;
 		DP(__LINE__.' meteotext: '. $meteotext);
@@ -148,37 +157,36 @@ sub event_pubmsg {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
+	my $sayline = '';
 
 	if ($msg =~ /^!meteo/) {
 		if (get_channel_title($server, $target) =~ /npv?\:/i) {
 			return;
 		}
-		$server->command("msg $target $last_meteo");
+		$sayline = $last_meteo;
 	} elsif ($msg =~ /^!f (.*)$/ || $msg =~ /^!fmi (.*)$/) {
 		my $searchword = $1;
 		check_user_city($searchword, $nick);
 		my $result = `$fmi_script "$searchword"`;
 		$json = decode_json($result);
-		my $sayline = getSayLine($json);
-		$server->command("msg $target $sayline");
+		$sayline = getSayLine($json);
 	} elsif ($msg =~ /^!fe (.*)$/ || $msg =~ /^!fmie (.*)$/) {
 		my $searchword = $1;
 		check_user_city($searchword, $nick);
 		my $result = `$fmi_script "$searchword" ennustus`;
 		$json = decode_json($result);
-		my $sayline = getSayLineEnnustus($json);
-		$server->command("msg $target $sayline");
+		$sayline = getSayLineEnnustus($json);
 	} elsif ($msg eq '!f' || $msg eq '!fmi' && $users->{$nick}) {
 		my $result = `$fmi_script "$users->{$nick}"`;
 		$json = decode_json($result);
-		my $sayline = getSayLine($json);
-		$server->command("msg $target $sayline");
+		$sayline = getSayLine($json);
 	} elsif ($msg eq '!fe' || $msg eq '!fmie' && $users->{$nick}) {
 		my $result = `$fmi_script "$users->{$nick}" ennustus`;
 		$json = decode_json($result);
-		my $sayline = getSayLineEnnustus($json);
-		$server->command("msg $target $sayline");
+		$sayline = getSayLineEnnustus($json);
 	}
+
+	$server->command("msg $target $sayline") if $sayline;
 }
 
 sub getSayLine {
@@ -276,7 +284,7 @@ sub timeout_545 {
 	my $retval = `$command`;
 }
 sub timeout_start {
-	prind("Starting 10 sec timeout for reading the socket for new data...");
+	prind("Starting 5 sec timeout_add for reading the socket for new data...");
 	timeout_1h();	# start only once
 	#timeout_545();
 	$timeout_tag = Irssi::timeout_add(5000, 'check_sock', undef);      # every 5 seconds
@@ -287,7 +295,7 @@ Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_priv');
-Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', 'Add channels where to print meteo.');
+Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '');
 
 timeout_start();
 
