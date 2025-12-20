@@ -16,9 +16,10 @@ use Data::Dumper;
 use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 our $localdir = $ENV{HOME}."/.irssi/scripts/";
+our $database = $localdir . "franklin3.db";
 
 #my $apiurl = "https://api.openai.com/v1/completions";
-#my $apiurl = 'https://api.openai.com/v1/chat/completions';
+my $visionapiurl = 'https://api.openai.com/v1/chat/completions';
 my $apiurl = 'https://api.openai.com/v1/responses';
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
@@ -28,6 +29,7 @@ my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 
 my $DEBUG = 1;
+my $runningnumber = 0;
 
 #my $systemsg_start = 'Answer at most in 40 words. ';
 my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
@@ -40,17 +42,22 @@ my $botnick = 'KD_Bat';
 #my $model = 'text-davinci-003';
 #my $model = 'gpt-4o-mini';
 my $model = 'gpt-5';
-#my $visionmodel = 'gpt-4-vision-preview';
-my $visionmodel = 'dall-e-3';
-#my $visionmodel = 'gpt-image-1';
+
+
 my $heat  = 0.4;
 my $hardlimit = 500;
+
+# dall-e models: 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-2', and 'dall-e-3'.
+my $visionmodel = 'dall-e-3';
+my $fetch_dalle = 'wget -q -O ' . $outputdir;
+my $execscript = 'exec -window -name franklin3_';
+
 my $timediff = 3600;    # 1h in seconds. length of lastlog history
 #my $json = JSON->new->utf8;
 my $json = JSON->new;
 $json->convert_blessed(1);
 
-$VERSION = "2.6";
+$VERSION = "2.7";
 %IRSSI = (
     authors     => 'laama',
     contact     => 'laama@8-b.fi',
@@ -58,7 +65,7 @@ $VERSION = "2.6";
     description => 'OpenAI chatgpt api script',
     license     => 'BSD',
     url         => 'https://bot.8-b.fi',
-    changed     => '2025-07-14',
+    changed     => '2025-10-29',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -69,6 +76,16 @@ $apikey =~ s/\n//g;
 chomp($apikey);
 close(AK);
 
+unless (-e $database) {
+	unless(open FILE, '>'.$database) {
+		prindw("Unable to create file: $database");
+		die;
+	}
+	close FILE;
+	create_prompt_table();
+	prind("Database file created.");
+}
+
 my $chathistory = {};
 my $settings = {};
 my $headers = HTTP::Headers->new;
@@ -77,6 +94,20 @@ $headers->header("Authorization" => "Bearer " . $apikey);
 
 my $ua = LWP::UserAgent->new;
 $ua->default_headers($headers);
+
+my @tts_voices = (
+    "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx",
+    "nova", "sage", "shimmer", "verse"
+);
+my $default_tts_voice = 'alloy';
+
+my @tts_vibes = (
+    'old', 'smooth', 'serene', 'sympathetic', 'calm'
+);
+my $default_tts_vibe = 'smooth';
+
+# read prompts from DB
+read_all_prompts();
 
 # privmsg
 sub make_json_obj_f {
@@ -172,8 +203,8 @@ sub make_json_obj_f3 {
                 delete $chathistory->{$channel}->{$timestamp};
                 next;
             }
-            prindd(__LINE__ . ": history (Timestamp: $timestamp):");
-            prindd(Dumper $chathistory->{$channel}->{$timestamp});
+            #prindd(__LINE__ . ": history (Timestamp: $timestamp):");
+            #prindd(Dumper $chathistory->{$channel}->{$timestamp});
 
             if (defined $chathistory->{$channel}->{$timestamp}) {
                 #push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} };
@@ -250,19 +281,17 @@ sub make_call_private {
     return undef;
 }
 
-sub make_call_public {
+sub make_call_public {  
     my ($text, $nick, $channel, $server, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
     #my $request = make_json_obj_f2($text, $nick, $channel, $server);
     my $request = make_json_obj_f3($text, $nick, $channel, $server);
-    prindd(__LINE__ . ' JSON request>');
-    prindd($request);
 
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
-        prindd(Dumper $res);
+
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
         #my $answered = $json_decd->{choices}[0]->{message}->{content};
@@ -338,18 +367,20 @@ sub frank {
 
 sub make_dalle_json {
     my ($prompt, $nick) = @_;
-    my $data = {prompt => $prompt, n => $howManyImages, size => "640x640", response_format => "b64_json"};
+    my $data = {model => $visionmodel, prompt => $prompt, size => "1024x1024"};
     return encode_json($data);
 }
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
+    print(__LINE__ . ": make_vision_json called with model: $model") if $DEBUG;
     my $data = '';
     if ($model =~ /4/) {
         $data = { model => $model, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"};
     } elsif ($model =~ /5/) {
         $data = { model => $visionmodel, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd' };
     } else {
+        # visionmodel
         #$data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
         $data = { model => $visionmodel, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
     }
@@ -359,6 +390,7 @@ sub make_vision_json {
 
 sub make_vision_preview_json {
     my ($url, $searchprompt, @rest) = @_;
+    print(__LINE__ . ": make_vision_preview_json called") if $DEBUG;
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
@@ -373,17 +405,101 @@ sub make_vision_preview_json {
     return encode_json($data);
 }
 
+sub make_vision_preview_json2 {
+    my ($url, $searchprompt, @rest) = @_;
+    print(__LINE__ . ": make_vision_preview_json2 called") if $DEBUG;
+    if ($searchprompt eq '') {
+        $searchprompt = 'Describe this image in 40 words?';
+    }
+    my $data = { model => $visionmodel, max_tokens => 300, messages => [{
+        role => "user",
+        content => [
+            {type => "text", text => $searchprompt},
+            {type => "image_url", image_url => {url => $url}}
+        ]
+    }]
+    };
+    return encode_json($data);
+}
+
 sub tts {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
+
+    if ($msg =~ /^!tts$/u ) {
+        # print help
+        my $answer = "\002OpenAI TTS voices:\002 ";
+        $answer .= join(', ', @tts_voices);
+        
+        $answer .= " \002OpenAI TTS vibes:\002 ";
+        $answer .= join(', ', @tts_vibes);
+        $server->command("msg -channel $channel $answer");
+        $server->command("msg -channel $channel $nick: text-to-speech usage: !tts voice vibe text .. or !tts voice/vibe text ..");
+        return;
+    }
+
+    if ($msg =~ /^!tts (\w+) (\w+) (.*)/u ) {
+        my $voicemodel = $1;
+        my $vibe = $2;
+        my $query = $3;
+        my $answer = '';
+
+        if (not grep { $_ eq lcfirst($voicemodel) } @tts_voices and not grep { $_ eq lcfirst($voicemodel) } @tts_vibes) {
+            # if first param is not voice or vibe, use defaults
+            $query = "$voicemodel $vibe $query";
+            $voicemodel = $default_tts_voice;
+            $vibe = $default_tts_vibe;
+            prindd(__LINE__ . ": using default voice and vibe. query: $query");
+        } elsif (grep { $_ eq lcfirst($voicemodel) } @tts_voices) {
+            # voicemodel found in first param
+            $voicemodel = lcfirst($voicemodel);
+            $query = "$vibe $query";
+            $vibe = $default_tts_vibe;
+            prindd(__LINE__ . ": voicemodel found as first param: $voicemodel, query: $query");
+        } elsif (grep { $_ eq lcfirst($voicemodel) } @tts_vibes) {
+            # vibe found in voicemodel place
+            $query = "$vibe $query";
+            $vibe = lcfirst($voicemodel);
+            $voicemodel = $default_tts_voice;
+            prindd(__LINE__ . ": vibe found as first param: $vibe");
+        } else {
+            prindd(__LINE__ . ": something went wrong parsing tts params.");
+        }
+
+        if (grep { $_ eq lcfirst($vibe) } @tts_vibes) {
+            $vibe = lcfirst($vibe);
+        }
+
+        $answer = "voice: $voicemodel, vibe: $vibe, query: $query, ";
+        prindd(__LINE__ . ": voicemodel: $voicemodel, vibe: $vibe, query: $query");
+
+        my $data = { model => "tts-1-hd", voice => $voicemodel, vibe => $vibe,  input => $query, response_format => "mp3"};
+        my $request = encode_json($data);
+        my $res = $ua->post($speechurl, Content => $request);
+        if ($res->is_success) {
+            my $data = $res->content;
+            my $time = time;
+            my $filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
+            if (save_file_blob($data, $filename)) {
+                $answer .= "\002OpenAI TTS result:\002 ";
+                $answer .= "https://bot.8-b.fi/dale/$filename (" .length($data). 'b)';
+                $server->command("msg -channel $channel $answer");
+            }
+
+        } else {
+            prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
+            prindd(Dumper $res);
+        }
+        return;
+    }
+
     if ($msg =~ /^!tts (.*)/u ) {
         my $query = $1;
-        #my $voicemodels = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
         my $voicemodels = ['onyx'];
         my $answer = "\002OpenAI TTS results:\002 ";
         foreach my $voicemodel (@$voicemodels) {
-            prindd(__LINE__ . ' voicemodel: ' . $voicemodel);
+            prindd(__LINE__ . ' voicemodel: ' . $voicemodel . ', query: ' . $query);
             my $data = { model => "tts-1-hd", voice => $voicemodel, input => $query, response_format => "mp3"};
             my $request = encode_json($data);
             my $res = $ua->post($speechurl, Content => $request);
@@ -405,26 +521,6 @@ sub tts {
         }
         $server->command("msg -channel $channel $answer") if $answer;
         return;
-        my $data = { model => "tts-1", voice => "alloy", input => $query, response_format => "mp3"};
-        my $request = encode_json($data);
-        #print __LINE__ . ' request:' if $DEBUG;
-        #xprint Dumper $request if $DEBUG;
-        my $res = $ua->post($speechurl, Content => $request);
-        if ($res->is_success) {
-            my $data = $res->content;
-            my $time = time;
-            my $index = 0;
-            my $answer = 'TTS results: ' .length($data). ' bytes, ';
-            my $filename = $nick . '_' . $time . '_' . $index.'.mp3';
-            if (save_file_blob($data, $filename) >= 0) {
-                $answer .= "https://bot.8-b.fi/dale/$filename ";
-            }
-
-            $server->command("msg -channel $channel $answer");
-        } else {
-            prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
-            prindd(Dumper $res);
-        }
     }
 }
 
@@ -438,10 +534,11 @@ sub dalle {
         # image guessing 2024-02-13
         my $imagesearchurl = $1;
         my $question = $2;
-        my $request = make_vision_preview_json($imagesearchurl, $question);
+        my $request = make_vision_preview_json2($imagesearchurl, $question);
 
         # @todo fork or something
-        my $res = $ua->post($uri, Content => $request);
+        #my $res = $ua->post($uri, Content => $request);
+        my $res = $ua->post($visionapiurl, Content => $request);
         if ($res->is_success) {
             my $json_rep  = $res->content();
             my $json_decd = decode_json($json_rep);
@@ -462,9 +559,8 @@ sub dalle {
         #prindd(Dumper $res);
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
-        #my $request = make_dalle_json($query, $nick);
-        my $request = make_vision_json($query, $nick);
-        #print('request vision dalle json: ' . $request) if $DEBUG;
+        my $request = make_dalle_json($query, $nick);
+        #my $request = make_vision_json($query, $nick);
 
         # @todo fork or something
         my $res = $ua->post($duri, Content => $request);
@@ -472,22 +568,28 @@ sub dalle {
         if ($res->is_success) {
             my $json_rep  = $res->content();
             my $json_decd = decode_json($json_rep);
-            #prindd(__LINE__ . ' response:');
-            #prindd(Dumper $json_decd);
+
             if (defined $json_decd->{data}) {
+                #prindd(Dumper $json_decd);
                 my $time = time;
                 my $answer = 'DALL-e results: ';
                 my $index = 0;
                 while ($index < $howManyImages) {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
-                    if (save_file_blob(decode_base64($json_decd->{data}[$index]->{b64_json}), $filename) >= 0) {
+                    my $imageurl = $json_decd->{data}[$index]->{url};
+                    my $result = `wget -q -O ${outputdir}${filename} "$imageurl"`;
+                    debu(__LINE__ . ": wget result: $result, output file: " . $outputdir.$filename);
+                    my $dallecmd = make_dalle_curl_cmd($query, $filename);
+                    start_cmd($dallecmd);
+
+                    #if (save_file_blob(decode_base64($json_decd->{data}[$index]->{b64_json}), $filename) >= 0) {
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
-                    }
+                    #}
                     $index++;
                 }
                 $answer .= '(revised prompt: ' . $json_decd->{data}[0]->{revised_prompt} . ')';
                 $server->command("msg -channel $channel $answer");
-                #my $filename = $nick.'_'.$time.'.png';
+
             }
         } elsif ($res->is_error) {
             #print "ERROR!" if $DEBUG;
@@ -502,13 +604,36 @@ sub dalle {
     }
 }
 
+# start chatgpt request in background process
+sub start_cmd {
+    my ($cmd, @rest) = @_;
+    $runningnumber += 1;
+    create_window('franklin3');
+    my $fullcmd = $execscript . $runningnumber . ' ' . $cmd;
+    debu(__LINE__ . ": starting command: $fullcmd");
+    
+}
+
+sub make_dalle_curl_cmd {
+    my ($prompt, $filename, @rest) = @_;
+    my $curlcmd = 'curl ' . $dalleurl . ' ' .
+        '-H "Authorization: Bearer ' . $apikey . '" ' .
+        '-H "Content-Type: application/json" ' .
+        '-d \'{"model": "' . $visionmodel . '", "prompt": "' . $prompt . '", "size": "1024x1024"}\' ' .
+        '| jq -r \'.data[0].url\' ' .
+        '| xargs -I {} curl -L "{}" -o ' . $outputdir . $filename;
+    #debu(__LINE__ . ": DALL-e curl command: $curlcmd");
+    return $curlcmd;
+
+}
+
 sub save_file_blob {
     my ($blob, $filename, @rest) = @_;
-	open (OUTPUT, '>', $outputdir.$filename) || die $!;
+	open (OUTPUT, '>>', $outputdir.$filename) or die $!;
     binmode OUTPUT;
 	#print OUTPUT decode_base64($blob);
     print OUTPUT $blob;
-	close OUTPUT || return -2;
+	close OUTPUT or return -2;
     return 1;
 }
 
@@ -517,18 +642,21 @@ sub set_prompt {
     $newprompt =~ s/[\"]*//ug;
     $newprompt = KaaosRadioClass::ktrim($newprompt);
     $settings->{prompt}->{$network}->{$who} = $newprompt;
-    $chathistory->{$who} = undef;   # TEST
+    $chathistory->{$who} = undef;   # reset chat history on prompt change
+    add_prompt_to_db($network, $who, $newprompt);
     prind("New $who prompt: $newprompt");
 }
 
 sub get_prompt {
     my ($who, $network, @rest) = @_;
-    if ($settings->{prompt}->{$network}->{$who}) {
+    if (defined $settings->{prompt}->{$network}->{$who}) {
         return $settings->{prompt}->{$network}->{$who};
     }
     $settings->{prompt}->{$network}->{$who} = $systemsg;
     return $systemsg;
 }
+
+
 
 # if $nick is OP or VOICE or HALFOP
 sub ifop {
@@ -546,7 +674,7 @@ sub event_privmsg {
         if (length $newprompt > 1) {
             $server->command("msg $nick Sinun nykyinen system prompt: " . get_prompt($nick, 'private'));
             set_prompt($nick, $server->{tag}, $newprompt);
-            $server->command("msg $nick Sinun uusi system prompt: " . get_prompt($nick, 'private'));
+            $server->command("msg $nick Sinun uusi system prompt (tallennettu myös tietokantaan tulevaa käyttöä varten): " . get_prompt($nick, 'private'));
         } else {
             $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt($nick, 'private'));
         }
@@ -631,7 +759,7 @@ sub event_pubmsg {
             }
         }
     } elsif ($msg =~ /^!test (.*)/) {
-        my $answer = make_search_request($1, $target);
+        my $answer = make_search_request($server, $1, $target);
         if (defined $answer) {
             $answer = format_markdown($answer);
             $answer = format_formula($answer);
@@ -645,12 +773,12 @@ sub event_pubmsg {
 
 
 sub make_search_request {
-    my ($query, $nick) = @_;
+    my ($server, $query, $nick) = @_;
     my $url = 'https://api.openai.com/v1/chat/completions';
     my $urii = URI->new($url);
     my $newua = LWP::UserAgent->new;
     $newua->default_headers($headers);
-    my $prompt = get_prompt($nick, 'private');
+    my $prompt = get_prompt($nick, $server->{tag});
     my $data = {
         model => 'gpt-4o-mini-search-preview',
         messages => [
@@ -756,6 +884,63 @@ sub prindw {
 	print "\0034" . $IRSSI{name} . ">\003 " . $text;
 }
 
+sub debu {
+	my ($text, @rest) = @_;
+	return unless $DEBUG;
+	create_window('franklin3');
+	Irssi::active_win()->print($IRSSI{name}.'> '. $text);
+}
+
+# read prompt from database per channel or per user
+sub read_prompt_from_db {
+    my ($network, $channel, @rest) = @_;
+    my $selectcmd = "SELECT prompt FROM prompts WHERE network = ? AND channel = ?";
+    my $result = KaaosRadioClass::bindSQL($database, $selectcmd, ($network, $channel));
+    return $result;
+}
+
+sub read_all_prompts {
+    my $prompts = {};
+    my $sql = 'SELECT * from prompts';
+    my @result = KaaosRadioClass::bindSQL($database, $sql);
+    foreach my $row (@result) {
+        #print Dumper $row;
+        my $network = $row->[0];
+        my $who = $row->[1];
+        my $prompt = $row->[2];
+        $settings->{prompt}->{$network}->{$who} = $prompt;
+    }
+
+    print Dumper $settings->{prompt};
+}
+
+# add or replace prompt to database per channel or per user
+sub add_prompt_to_db {
+    my ($network, $channel, $prompt, @rest) = @_;
+    my $insertcmd = "INSERT OR REPLACE INTO prompts (network, channel, prompt) VALUES (?, ?, ?)";
+    my $result = KaaosRadioClass::insertSQL($database, $insertcmd, ($network, $channel, $prompt));
+    prind("Prompt '$prompt' saved to database for ${channel} @ ${network} : " . $result);
+    return $result;
+}
+
+# create SQLite table for per channel prompts.
+sub create_prompt_table {
+    my $tablecmd = "CREATE TABLE IF NOT EXISTS prompts (network TEXT, channel TEXT, prompt TEXT, PRIMARY KEY (network, channel))";
+    my $result = KaaosRadioClass::writeToDB($database, $tablecmd);
+    prind('Creating table.. ' . $result);
+}
+
+sub create_window {
+    my ($window_name) = @_;
+    my $window = Irssi::window_find_name($window_name);
+    unless ($window) {
+        prind("Create new window: $window_name");
+        Irssi::command("window new hidden");
+        Irssi::command("window name $window_name");
+		debu("Window created: " . Irssi::active_win()->{name});
+    }
+    Irssi::command("window goto $window_name");
+}
 
 Irssi::signal_add_last('message public', 'frank' );
 Irssi::signal_add_last('message public', 'dalle' );
