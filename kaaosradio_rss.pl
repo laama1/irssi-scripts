@@ -68,9 +68,12 @@ sub print_help {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 
-    my $enabled_raw = Irssi::settings_get_str('kaaosradio_aikataulu_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
-    return unless grep(/$target/i, @enabled);
+    #my $enabled_raw = Irssi::settings_get_str('kaaosradio_aikataulu_enabled_channels');
+    #my @enabled = split(/ /, $enabled_raw);
+    #return unless grep(/$target/i, @enabled);
+
+	#my $is_enabled = KaaosRadioClass::is_enabled_channel('kaaosradio_aikataulu_enabled_channels', $server->{chatnet}, $target);
+	#return unless $is_enabled;
 
 	if ($msg =~ /^[\.\!]help\b/i) {
 		print_help($server, $target);
@@ -85,9 +88,12 @@ sub sig_msg_pub {
 
 sub msg_to_channel {
 	#my ($title, $link, $date, $desc, $forumlink, @rest) = @_;
-	my ($title, $link, @rest) = @_;
-    my $enabled_raw = Irssi::settings_get_str('kaaosradio_aikataulu_enabled_channels');
-    my @enabled = split(/ /, $enabled_raw);
+	#my ($title, $link, @rest) = @_;
+    #my $enabled_raw = Irssi::settings_get_str('kaaosradio_aikataulu_enabled_channels');
+    #my @enabled = split(/ /, $enabled_raw);
+
+	my $is_enabled = KaaosRadioClass::is_enabled_channel('kaaosradio_aikataulu_enabled_channels', $server->{chatnet}, $target);
+	return unless $is_enabled;
 
 	#if (defined($desc) && length($desc) > 150) {
 	#	$desc = substr($desc, 0, 150);

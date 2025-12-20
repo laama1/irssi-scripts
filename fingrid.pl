@@ -7,7 +7,6 @@ use open ':std', ':encoding(UTF-8)';  # Terminal expects UTF-8
 use POSIX;
 use Data::Dumper;
 use JSON;
-use POSIX;
 use DateTime;
 use Time::HiRes;
 use HTTP::Headers;
@@ -72,7 +71,9 @@ my $target_t;   # for fork processes
 #my $sahkohintaurl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
 
 # sahkohinta-api.fi
-my $sahkohintaurl = 'https://sahkohinta-api.fi/api/v1/halpa?tunnit=12&tulos=sarja&aikaraja=';
+my $sahkohintaurl = 'https://www.sahkohinta-api.fi/api/v1/halpa?tunnit=12&tulos=sarja&aikaraja=';
+my $sahkohintatanaan = 'https://www.sahkonhintatanaan.fi/api/v1/prices/';
+# https://www.sahkonhintatanaan.fi/api/v1/prices/2025/11-23.json
 #my $sahkohintaurl = 'https://kd.8-b.fi/test.json?';
 my $katkourl = 'https://sqtb-api.azureedge.net/outagemap/tailored/summary/';
 my $pricedata = {};
@@ -136,6 +137,13 @@ sub get_sahkohinta_api_url {
     $datetimestring .= $enddatetime->strftime('%Y-%m-%dT%H:00');
 
     my $newurl = $sahkohintaurl . $datetimestring;
+    return $newurl;
+}
+
+sub create_sahkohinta_tanaan_url {
+    my $datetime = DateTime->now(time_zone => 'Europe/Helsinki');
+    my $yearstring = $datetime->strftime('%Y/%m-%d');
+    my $newurl = $sahkohintatanaan . $yearstring . '.json';
     return $newurl;
 }
 
@@ -273,25 +281,27 @@ sub do_sahkonhinta {
     my ($rh, $wh);
     pipe($rh, $wh);  # read handle, write handle
     my $now = time;
-    my $returnvalue = 'Pörssisähkön hintatietoa ei saatu.';
+    #my $returnvalue = 'Pörssisähkön hintatietoa ei saatu.';
     my $timestamp = DateTime->now(time_zone => 'Europe/Helsinki');
-    $timestamp = $timestamp->strftime('%Y-%m-%dT%H:00');
+    my $tz_offset = $timestamp->strftime('%z');
+    $tz_offset =~ s/(\d{2})(\d{2})/$1:$2/; # +0200 --> +02:00
+    $timestamp = $timestamp->strftime('%Y-%m-%dT%H:00:00') . $tz_offset;
+
 
     my $timestamp2 = DateTime->now(time_zone => 'Europe/Helsinki');
-    my $duration = DateTime::Duration->new(hours => 1);
+    my $duration = DateTime::Duration->new(hours => 1); # 1 hour duration
     $timestamp2 += $duration;
-    $timestamp2 = $timestamp2->strftime('%Y-%m-%dT%H:00');
+    $timestamp2 = $timestamp2->strftime('%Y-%m-%dT%H:00:00') . $tz_offset;
 
 	my $timestamp3 = DateTime->now(time_zone => 'Europe/Helsinki');
 	$timestamp3 += ($duration + $duration);
-	$timestamp3 = $timestamp3->strftime('%Y-%m-%dT%H:00');
-
+	$timestamp3 = $timestamp3->strftime('%Y-%m-%dT%H:00:00') . $tz_offset;
     if (defined($pricedata->{$timestamp}) && defined($pricedata->{$timestamp2}) && defined($pricedata->{$timestamp3}) ) {
         prind("Using saved price data..");
         process_price_data($pricedata, $timestamp, $timestamp2, $timestamp3);
         return;
     }
-
+    print_file(__LINE__ . ': ' . get_sahkohinta_api_url());
     my $pid = fork();
     $forked = 1;
 
@@ -300,13 +310,12 @@ sub do_sahkonhinta {
     } elsif ($pid == 0) {
         # child process
         $pricedata = fetch_price_data2();
-        print $wh encode_json($pricedata);
+        print $wh encode_json($pricedata) if $pricedata;
         close $wh;
         POSIX::_exit(1); # Exit child process
     } else {
         # parent
         close $wh;
-        prind(__LINE__ . ": Parent process, forked a child with PID: $pid") if $DEBUG;
         Irssi::pidwait_add($pid);
         my $pipetag;
         my @args = ($rh, \$pipetag, $timestamp, $timestamp2, $timestamp3);
@@ -321,7 +330,7 @@ sub do_sahkokatkot($) {
     my $h = HTTP::Headers->new;
     $h->header('Accept-Encoding' => 'gzip,deflate,br', 'Host' => 'sqtb-api.azureedge.net');
     my $jsondata = KaaosRadioClass::getJSON($katkourl, $h);
-    #print Dumper $jsondata if $DEBUG;
+    print_file(__LINE__ . ': ' . Dumper $jsondata) if $DEBUG;
     if ($jsondata ne '-1') {
         my $printstring = parse_sahkokatkot_data($searchword, $jsondata);
         msg_channel($printstring);
@@ -438,23 +447,30 @@ sub parse_sahko_data($$) {
 }
 
 sub fetch_price_data2 {
-    my $url = get_sahkohinta_api_url();
+    #my $url = get_sahkohinta_api_url();
+    my $url = create_sahkohinta_tanaan_url();
     my $json_data = '-1';
+    print_file("Fetching price data from URL: $url") if $DEBUG;
     $json_data = KaaosRadioClass::getJSON($url);
     if ($json_data ne '-1' and $json_data ne '-2') {
         foreach my $data (@$json_data) {
-            my $timestamp = $data->{aikaleima_suomi};
-            my $price = $data->{hinta};
+            #my $timestamp = $data->{aikaleima_suomi};
+            #my $price = $data->{hinta};
+            my $timestamp = $data->{time_start};
+            my $price = $data->{EUR_per_kWh};
             $pricedata->{$timestamp} = $price;
+            print_file(__LINE__ . ": Fetched price data: $timestamp => $price") if $DEBUG;
         }
         return $pricedata;
     } else {
-        prindw("JSON data not found. " . $json_data);
+        print_file("JSON data not found. " . $json_data) if $DEBUG;
     }
+    return undef;
 }
 
 sub pipe_input($$$$$) {
     my ($rh, $pipetage, $time1, $time2, $time3) = @{$_[0]};
+    print_file(__LINE__ . ": pipe_input called... pipetage: " . Dumper $pipetage . ', time1: ' . $time1 . ', time2: ' . $time2 . ', time3: ' . $time3) if $DEBUG;
     my $data;
     {
         select($rh);
@@ -467,7 +483,11 @@ sub pipe_input($$$$$) {
     Irssi::input_remove($$pipetage);
     return unless $data;
 
+	my $jsoni = JSON->new->utf8;
+	$jsoni->convert_blessed(1);
+    $jsoni = decode_json($data);
     $pricedata = decode_json($data);
+    #print_file(__LINE__ . ': jsoni: ' . Dumper $jsoni) if $DEBUG;
     process_price_data($pricedata, $time1, $time2, $time3);
     $forked = 0;
 }
@@ -509,19 +529,19 @@ sub pipe_input_katkot($$) {
 sub process_price_data($$$$) {
     my ($pricedata, $time1, $time2, $time3) = @_;
     my $msg = 'Pörssisähkön hintatietoa ei saatu.';
-    my $timenow = DateTime->now(time_zone => 'Europe/Helsinki');
-    $timenow = $timenow->strftime('%H:00');
-
+    my $timenow_dt = DateTime->now(time_zone => 'Europe/Helsinki');
+    my $timenow = $timenow_dt->strftime('%H:00');
+    print_file(__LINE__ . ': ' . Dumper $pricedata) if $DEBUG;
     if (defined $pricedata->{$time1}) {
-        my $price1 = sprintf("%.2f", $pricedata->{$time1});
-        $msg = "\002Pörssisähkön hinta (Alv 0%) (klo. $timenow):\002 " . $price1 . 'c/kWh';
+        my $price1 = sprintf("%.2f", $pricedata->{$time1}*100);
+        $msg = "\002Pörssisähkön hinta (Alv 0%, 1h ka.) (klo. $timenow):\002 " . $price1 . 'c/kWh';
     }
     if (defined $pricedata->{$time2}) {
-        my $price2 = sprintf("%.2f", $pricedata->{$time2});
+        my $price2 = sprintf("%.2f", $pricedata->{$time2}*100);
         $msg .= ", \002+1h:\002 " . $price2 . 'c/kWh';
     }
 	if (defined $pricedata->{$time3}) {
-		my $price3 = sprintf("%.2f", $pricedata->{$time3});
+		my $price3 = sprintf("%.2f", $pricedata->{$time3}*100);
 		$msg .= ", \002+2h:\002 " . $price3 . 'c/kWh';
     }
     msg_channel($msg);
@@ -530,7 +550,7 @@ sub process_price_data($$$$) {
 sub fetch_fingrid_api_data {
     my ($url, $firstTime, @rest) = @_;
     sleep(2) unless $firstTime;
-    prind("fingrid url: $url") if $DEBUG;
+    print_file("fingrid url: $url") if $DEBUG;
     my $h = HTTP::Headers->new;
     $h->header('x-api-key' => $apikey);
     return KaaosRadioClass::getJSON($url, $h);
@@ -554,6 +574,22 @@ sub prindw {
 	my ($text, @test) = @_;
 	print CLIENTCRAP "\0034" . $IRSSI{name} . ">\003 ". $text;
 }
+
+# print to file
+sub print_file {
+    my ($text, @rest) = @_;
+    my $timestamp = strftime("%Y-%m-%d %H:%M:%S", localtime);
+    $text = $timestamp . ' ' . $text;
+    open(OUT, '>>', $localdir . 'fingrid.log') or die "$!";
+    print OUT $text . "\n";
+    close(OUT);
+}
+
 timeout_start();
+
+prind('Public commands:');
+prind('!sähkö tai !sahko - Pörssisähkön hinta sekä sähkön tuotanto- ja kulutustietoja.');
+prind('!sähkökatkot tai !sahkokatkot [hakusana] - Sähkökatkotiedot');
+
 prind("$IRSSI{name} $VERSION loaded.");
 Irssi::signal_add_last('message public', 'pub_msg');

@@ -77,31 +77,34 @@ sub do_imdb {
 		return;
 	}
 
-    my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    my @enabled = split / /, $enabled_raw;
-	my $is_enabled = grep /^$target$/i, @enabled;
+    #my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
+    #my @enabled = split / /, $enabled_raw;
+	#my $is_enabled = grep /^$target$/i, @enabled;
+	my $is_enabled = KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 	#dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
-	if ($msg eq "!imdb enable" || $msg eq "!imdb on") {
+	if ($msg eq "!enable imdb") {
 		if ($is_enabled) {
 			sayit($server, $target, 'IMDB-skripti on jo Aktivoitu! (kanavalla: '. $target.')');
 			return;
 		} else {
-			Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
+			#Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
+			KaaosRadioClass::add_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 			sayit($server, $target, 'Aktivoitiin IMDB-skripti kanavalla: ' . $target);
 			Irssi::print('Aktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
 		}
-	} elsif ($msg eq "!imdb disable" || $msg eq "!imdb off") {
+	} elsif ($msg eq "!disable imdb") {
 		if (!$is_enabled) {
 			sayit($server, $target, 'IMDB-skripti on Deaktivoitu jo! (kanavalla: '.$target.')');
 			return;
 		} else {
-			my $index = 0;
-			$index++ until $enabled[$index] eq $target;
-			splice(@enabled, $index, 1);
-			Irssi::settings_set_str('imdb_enabled_channels', join(' ', @enabled));
+			#my $index = 0;
+			#$index++ until $enabled[$index] eq $target;
+			#splice(@enabled, $index, 1);
+			#Irssi::settings_set_str('imdb_enabled_channels', join(' ', @enabled));
+			KaaosRadioClass::remove_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
 			Irssi::print('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
@@ -160,9 +163,7 @@ sub do_imdb {
 sub sig_imdb_search {
 	my ($server, $searchparam, $target, $searchword) = @_;
 
-    my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    my @enabled = split / /, $enabled_raw;
-	return unless grep /^$target$/i, @enabled;
+	return unless is_enabled_channel('imdb_enabled_channels', $target, $server->{chatnet});
 
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';
@@ -266,116 +267,11 @@ sub search_omdb {
 	return;
 }
 
-=pod
-sub search_theimdb {
-	#my ($query, @rest) = @_;
-	my ($url, @rest) = @_;
-	Irssi::print("url: ".$url) if $DEBUG;
-	#my $url = "http://www.theimdbapi.org/api/find/movie?${query}";
-	#http://www.theimdbapi.org/api/find/movie?title=terminator&year=1984
-	my $got = KaaosRadioClass::fetchUrl($url, 0);
-	Irssi::print("imdb3.pl debug search_theimdb: ".$url) if $DEBUG;
-	my $imdb = $json->utf8->decode($got);
-	
-	return -1 unless $imdb;
-	
-	my $ind = 0;
-	foreach my $result (@$imdb) {
-		#Irssi::print("result: ". Dumper $result);
-		#Irssi::print("end of result ".$i);
-		Irssi::print("rating: ". $result->{rating});
-		Irssi::print("title: ". $result->{original_title});
-		Irssi::print("title2: ". $result->{title});
-		Irssi::print("IMDB ID: ". $result->{imdb_id});
-		Irssi::print("director: ". $result->{director});
-		Irssi::print("URL: ". $result->{url}->{url});
-		Irssi::print("Description: ". $result->{description});
-		$ind++;
-	}
-
-
-	if ($ind > 0) {
-		my $manyfound = $ind;
-		my $sayline = "";
-		my $i = 0;
-		if ($manyfound > 1) {
-			$sayline = "Results: ";
-			while ($i < $manyfound && $i < 6) {			# max 6 items
-				Irssi::print("Search ${i}:") if $DEBUG;
-				Irssi::print Dumper @$imdb[$i] if $DEBUG;
-				#$sayline .= $imdb->{"Search"}[$i]->{Title}. " ".$imdb->{"Search"}[$i]->{Year}." (".$imdb->{"Search"}[$i]->{Type}."), ";
-				$sayline .= print_short_line_from_multiple_results(@$imdb[$i]);
-				$i++;
-			}
-			return $sayline ."<$manyfound found>";
-		} elsif ($manyfound == 1) {
-			my $imdbID = @$imdb[0]->{imdb_id};
-			Irssi::print("imdbid: ".$imdbID) if $DEBUG;
-			#$sayline = ""
-			#$imdb = do_search("http://theimdbapi.org/api/find/movie?movie_id=".$imdbID);
-			return print_line_from_search_result(@$imdb[0]);
-		}
-	} else {
-		return "No results!";
-	}
-
-	} elsif ($imdb->{totalResults} && $imdb->{totalResults} == 1) {
-		
-		Irssi::print("imdb3.pl debug search_theimdb imdb dumber: ") if $DEBUG;
-		Irssi::print Dumper $imdb if $DEBUG;
-		
-		#Irssi::print("imdbID: $imdbID") if $DEBUG;
-		
-		
-		Irssi::print("imdb3.pl debug imdb duber after:") if $DEBUG;
-		Irssi::print Dumper $imdb if $DEBUG;
-		return print_line_from_search_result($imdb);
-	}
-
-	return 1;
-}
-=cut
-
 sub print_short_line_from_multiple_results {
 	my ($param, @rest) = @_;
 	my $sayline = $param->{title} . " (" .$param->{year}. "), ";
 	return $sayline; 
 }
-
-=pod
-sub print_line_from_search_result {
-	# theimdbapi
-	my (@param, @rest) = @_;
-	Irssi::print("imdb3.pl debug print_line_from_search_result param dumper: ") if $DEBUG;
-	Irssi::print Dumper @param if $DEBUG;
-	
-	my ($link, $title, $title2, $actors, $plot, $rating) = "";
-
-	$link = "http://www.imdb.com/title/" . $param[0]->{imdb_id};
-	#$link = $param[0]->{url}->{url};
-	$title = "\002".$param[0]->{title}." [".$param[0]->{year}."]\002";
-	$title2 = "";
-	#Irssi::print "genre: ". Dumper $param[0]->{genre};
-	Irssi::print "genre: ". $param[0]->{genre};
-	foreach my $genre (@{$param[0]->{genre}}) {
-		Irssi::print "genre123: ". $genre;
-		$title2 .= "$genre, ";
-	}
-
-	$title2 .= "\002Directed by\002 ".$param[0]->{director} if ($param[0]->{director} ne 'N/A');
-	$actors = "\002Actors:\002 ";
-	Irssi::print "actors: ". Dumper $param[0]->{'stars'};
-	#Irssi::print "actors: ". $param[0]->{'stars'};
-	foreach my $actor (@{$param[0]->{stars}}) {
-		Irssi::print "actor123: ". $actor;
-		$actors .= "$actor, "
-	}
-
-	$plot = "\002Plot:\002 ".$param[0]->{storyline}. " " if ($param[0]->{storyline} ne 'N/A');
-	$rating = "\002Rate:\002 ".$param[0]->{rating}." (".$param[0]->{rating_count}.")" if ($param[0]->{rating} ne 'N/A');
-	return "$title $title2, ${actors}${plot}${rating}, $link";
-}
-=cut
 
 # OMDB-api
 sub print_line_from_search_result {

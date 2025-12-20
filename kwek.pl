@@ -32,7 +32,7 @@ sub sayit {
 
 sub if_kwek {
 	my ($msg, $nick, @rest) = @_;
-	if($msg ~~ @keywords) {
+	if ($msg ~~ @keywords) {
 		if ($nick ~~ @botnick) {
 			prind($msg);
 			return $answers[int(rand(scalar @answers))];

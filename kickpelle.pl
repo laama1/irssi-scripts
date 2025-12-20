@@ -86,6 +86,7 @@ sub getStats {
 sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
 	# TODO: sanitize badsword
+	$badsword = encode('utf8', $badsword);
 	if ($badsword ~~ @badwords) {
 		return 1;
 	}
@@ -257,9 +258,8 @@ sub event_pubmsg {
 	my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 
-	my $enabled_raw = Irssi::settings_get_str('kickpelle_enabled_channels');
-	my @enabled = split / /, $enabled_raw;
-	return unless grep /$target/i, @enabled;
+	my $is_enabled = KaaosRadioClass::is_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $target);
+	return unless $is_enabled;
 
 	if ($msg =~ /^!help kick/i) {
 		print_help($server, $target);
@@ -341,4 +341,4 @@ Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 #print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-prind("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1 #chan2, /kickpellestats");
+prind("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1\@network #chan2\@network, /kickpellestats");

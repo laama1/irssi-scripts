@@ -18,8 +18,6 @@
 #	/set urltitle_enable_descriptions 0/1.
 #
 #
-
-
 use warnings;
 use strict;
 use Irssi;
@@ -39,7 +37,8 @@ use Digest::MD5 qw(md5_hex);		# LAama1 28.4.2017
 #use Encode qw(encode_utf8);
 use Encode;
 use Time::Piece;
-use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
+#use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
+use lib  '/home/laama/.irssi/scripts/irssi-scripts';
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
@@ -51,25 +50,25 @@ $VERSION = '2024-06-12';
 	description => 'Fetches urls and prints their title and does other shit also.',
 	license     => 'Fublic Domain',
 	url         => 'http://kaaosradio.fi',
-	changed     => $VERSION,
+	changed     => $VERSION
 );
 
-my $DEBUG = 1;
-my $DEBUG1 = 0;
-my $DEBUG_decode = 0;
+print __LINE__;
 
-my $logfile = Irssi::get_irssi_dir().'/scripts/urllog_v2.txt';
-my $cookie_file = Irssi::get_irssi_dir() . '/scripts/urltitle3_cookies.dat';
-my $db = Irssi::get_irssi_dir(). '/scripts/links_fts.db';
-my $debugfile = Irssi::get_irssi_dir().'/scripts/urlurldebug.txt';
-my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/youtube_apikey';
-my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
+my $DEBUG = 1;
+my $DEBUG1 = 1;
+my $DEBUG_decode = 0;
+my $irssidir = '/home/laama/.irssi';
+my $logfile = $irssidir.'/scripts/urllog_v2.txt';
+my $cookie_file = $irssidir . '/scripts/urltitle3_cookies.dat';
+my $db = $irssidir. '/scripts/links_fts.db';
+my $debugfile = $irssidir.'/scripts/urlurldebug.txt';
+my $google_apikeyfile = $irssidir. '/scripts/youtube_apikey';
+my $google_apikey = KaaosRadioClass::readLastLineFromFilename($google_apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
 my $imgurUrl = 'farside.link/rimgo';
-#my $invidiousUrl = 'https://invidious.private.coffee';
-my $invidiousUrl = 'https://farside.link/invidious';
-#my $invidiousUrl ='https://invidious.protokolla.fi';
+
 #my $twitterurl = 'https://xcancel.com';
 my $twitterurl = 'https://farside.link/nitter';
 my $instaurl = 'https://farside.link/proxigram';
@@ -140,7 +139,7 @@ eval {
 	1;
 } or do {
 };
-print(%headers) if $DEBUG1;
+
 
 # new headers for youtube and mixcloud etc.
 sub set_useragent {
@@ -160,44 +159,15 @@ sub add_header {
 	#$headers{$name} = $value;
 }
 
-# format youtube timestamp
-sub format_time {
-	my ($value, @rest) = @_;
-	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
-	my $local_time = localtime;
-	my $diff = $local_time - $time_object;
-	print(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min');	# debug
-	my $result = '';
-	if ($diff >= 29030400) {
-    	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
-	} elsif ($diff >= 2419200) {
-		$result = sprintf("%.1f", ($diff / 2419200)) . 'mon';
-	} elsif ($diff >= 604800) {
-		$result = sprintf("%.1f", ($diff / 604800)) . 'wk';
-	} elsif ($diff > 86400) {
-		$result = sprintf("%.1f", ($diff / 86400)) . 'days';
-	} elsif ($diff > 3600) {
-		$result = sprintf("%.1f", ($diff / 3600)) . 'h';
-	} elsif($diff > 60) {
-		$result = sprintf("%.f", $diff / 60) . 'mins';
-	} else {
-		$result .= 's';
-	}
-	$result .= ' ago';
-	return $result;
-}
-
 # Strip and html-decode title or get size from url. Params: url
 sub fetch_title {
 	my ($url, $method, $content, @rest) = @_;
-	dp(__LINE__.' url: ' . $url . ', method: ' . $method . ', content: ' . $content) if $DEBUG1;
 	my $page = '';						# page source decoded to utf8
 	my $diffpage = '';					# page source decoded
 	my $size = 0;						# content size
 	my $md5hex = '';					# md5 of the page
 
 	my $response = $ua->get($url);
-	#my $response = $ua->request(HTTP::Request->new($method, $url, \%headers, $content));
 	if ($response->is_success) {
 		prind("Successfully fetched $url, ".$response->content_type.', '.$response->status_line.', size: '.$size.', redirects: '.$response->redirects);
 		my $finalURI = $response->request()->uri() || '';
@@ -207,8 +177,6 @@ sub fetch_title {
 		}
 
 		$diffpage = $response->decoded_content();
-		#$diffpage = $response->decoded_content(charset => 'none');
-		#$page = $response->decoded_content(charset => 'none');
 		$page = $response->decoded_content(charset => 'UTF-8');
 		my $datasize = length $page;
 		if ($page ne $diffpage) {
@@ -218,10 +186,8 @@ sub fetch_title {
 		}
 
 		if ($datasize > $max_size) {
-			#dd(__LINE__.": fetch_title: DIFFERENT SIZES!! data: $datasize, max: $max_size") if $DEBUG1;
 			$page = substr $page, 0, $max_size;
 			$datasize = length $page;
-			#dd(__LINE__.": fetch_title: NEW SIZE data: $datasize") if $DEBUG1;
 		}
 
 		$size = $response->content_length || 0;
@@ -245,15 +211,12 @@ sub fetch_title {
 	} else {
 		prindw("Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		$newUrlData->{responsecode} = $response->code();
-		#da(__LINE__, $response);
-		#return 'Error: '.$response->status_line, 0,0, $md5hex;
 		return '',0,0,'';
 	}
 
 	if ($response->content_type !~ /(text)|(xml)/) {
 		# if not text or xml
 		if ($shortModeEnabled == 1) {
-			dp(__LINE__.': Short mode enabled = 1') if $DEBUG1;
 			return '', 0 , 0, $md5hex;
 		} else {
 			return 'Mimetype: '.$response->content_type.", $size", 0, 0, $md5hex;		# not text, but some other type of file
@@ -281,11 +244,8 @@ sub getTitle {
 	my $contentcharset = $response->content_charset || '';
 
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
-	#my $ogdescription = $response->header('og:description') || '';		# open graph desc
 	
 	my $testcharset = $response->header('charset') || $response->content_charset || '';
-	#dd(__LINE__.": \ngetTitle: response header charset: $testcharset\nheader charset: ".$headercharset.', content charset: '.$contentcharset);
-	#dd('og:title: '.$ogtitle.', og:description: '.$ogdescription);
 
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
@@ -294,13 +254,13 @@ sub getTitle {
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
 	while ($temppage =~ s/<script.*?>(.*?)<\/script>//si) {
-		dp(__LINE__.':getTitle script tags filtered..') if $DEBUG1;
+
 	}
 	while ($temppage =~ s/<style.*?>(.*?)<\/style>//si) {
-		dp(__LINE__.':getTitle style tags filtered..') if $DEBUG1;
+
 	}
 	while ($temppage =~ s/\<\!--(.*?)--\>//si) {
-		dp(__LINE__.':getTitle comment tags filtered..') if $DEBUG1;
+
 	}
 	KaaosRadioClass::writeToFile($debugfile . '2', $temppage) if $DEBUG1;
 	
@@ -320,8 +280,7 @@ sub getTitle {
 		#$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
-		dd(__LINE__.':getTitle testcharset not UTF-8: '. $testcharset);
-		dd(__LINE__.':getTitle newtitle again: '. $newtitle);
+
 		$newtitle = checkAndEncode($newtitle, $testcharset);
 		$newdescription = checkAndEncode($newdescription, $testcharset);
 	}
@@ -331,17 +290,14 @@ sub getTitle {
 	if ($newtitle eq '') {
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
 			$title = decode_entities($1);
-			dp(__LINE__.':getTitle backup titlematch: '. $title) if $DEBUG1;
 		}
 
 	} elsif ($newtitle) {
-		dd(__LINE__.": getTitle: title equals newtitle! $newtitle") if $DEBUG1;
 		$title = decode_entities($newtitle);
 	}
 
 	my $titleInUrl = 0;
 	if ($title ne '') {
-		dd(__LINE__.": getTitle undecoded title: $title") if $DEBUG1;
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
 	return $title, decode_entities($newdescription), $titleInUrl;
@@ -400,62 +356,32 @@ sub checkAndEncode {
 ### Check if title is allready found in URL. Params: $url, $title. Return 1/0
 sub checkIfTitleInUrl {
 	my ($url, $title, @rest) = @_;
-
 	my ($samewords, $titlewordCount) = count_same_words($url, $title);
-	dd(__LINE__.": checkIfTitleInUrl titlewordCount: $titlewordCount, samewords: $samewords");
-	#dd(__LINE__.': checkIfTitleInUrl number1: '. ($samewords / $titlewordCount));
-	dd(__LINE__.': checkIfTitleInUrl number2: '. (0.83 * $titlewordCount));
 
-	#if ($samewords >= 4 && ( $titlewordCount / $samewords) > (0.83 * $titlewordCount)) {
 	if ($samewords >= 4 && ($samewords) > (0.83 * $titlewordCount)) {
-		dd(__LINE__.": checkIfTitleInUrl bling1!");
 		return 1;
 	} elsif ($samewords == $titlewordCount) {
-		dd(__LINE__.": checkIfTitleInUrl bling2!");
 		return 1;
 	}
-	dd(__LINE__.':checkIfTitleInUrl: title not found from url!');
 	return 0;
-}
-
-## Count words from sentence after special chars are removed. Param: string
-sub count_words {
-	my ($row,@rest) = @_;
-	my @array = split_row_to_array($row);
-	#my $count = 0;
-	#foreach my $val (@array) {
-	#	$count++;
-	#}
-	return $#array +1;
 }
 
 sub count_same_words {
 	my ($url, $title, @rest) = @_;
-	dp(__LINE__.": count_same_words url: $url, title: $title");
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
 	my $titlewordCount = $#rows2 + 1;
 	my $count1 = 0;
-	#dd(__LINE__.": count_same_words titlewordCount: $titlewordCount");
 	foreach my $item (@rows2) {
 		if ($item ~~ @rows1) {
-		    #if (grep /^$item/, @rows1 ) {
 			$count1++;
-			dp(__LINE__.": count_same_words item found: $item, total count: $count1");
-			#if ($count1 == $titlewordCount) {
-			#	dd(__LINE__.": count_same_words: bingo!") if $DEBUG1;
-			#	return $count1, $titlewordCount;
-			#}
 		} elsif (length $item > 1 && $url =~ /\Q$item\E/g) {
 			$count1++;
-			dp(__LINE__.": $item found from url.");
 		}
         if ($count1 == $titlewordCount) {
-	        dp(__LINE__.": count_same_words: bingo!");
     	    return $count1, $titlewordCount;
         }
 	}
-	#dd(__LINE__.": >   same words: $count1");
 	return $count1, $titlewordCount;
 }
 
@@ -463,47 +389,17 @@ sub count_same_words {
 sub split_row_to_array {
 	my ($row, @rest) = @_;
 
-	$row = replace_non_url_chars($row);
+	$row = KaaosRadioClass::replace_non_url_chars($row);
 	#$row =~ s/[^\w\s\-\.\/\+\#]//g;
 	$row =~ s/\s+/ /g;
 	#$row = KaaosRadioClass::ktrim($row);
 	$row = lc($row);
 
-	dd(__LINE__.": split_row_to_array after: $row") if $DEBUG1;
+	dd(__LINE__.": split_row_to_array after: $row");
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
-	dd('split_row_to_array word count: ' . ($#returnArray+1)) if $DEBUG1;
-	da(@returnArray) if $DEBUG1;
+	dd('split_row_to_array word count: ' . ($#returnArray+1));
+	da(@returnArray) if $DEBUG_decode;
 	return @returnArray;
-}
-
-sub replace_non_url_chars {
-	my ($row, @rest) = @_;
-	dd(__LINE__.": replace_non_url_chars row: $row");
-
-	my $debugString = '';
-	if ($DEBUG_decode == 1 && 1) {
-		foreach my $char (split //, $row) {
-			$debugString .= " " .ord($char) . Encode::encode_utf8(":$char");
-		}
-		dd(__LINE__.": replace_non_url_chars debugstring: ".$debugString);
-	}
-
-	$row =~ s/ä/a/ug;
-	$row =~ s/Ä/a/ug;
-	$row =~ s/ö/o/ug;
-	$row =~ s/Ö/o/ug;
-	$row =~ s/Ã¤/a/g;
-	$row =~ s/Ã¶/o/g;
-
-	$row =~ s/\(/ /g;
-	$row =~ s/\)/ /g;
-	$row =~ s/"/ /g;
-
-	$row =~ s/ / /g;		# no-break space nbsp
-	$row =~ s/\*//g;		# * char
-
-	dd(__LINE__.": replace non url chars row after: $row");
-	return $row;
 }
 
 sub shortenURL {
@@ -530,7 +426,6 @@ sub shortenURL {
 
 # Create FTS4 table (full text search)
 sub createFstDB {
-    #my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $dbh = KaaosRadioClass::connectSqlite($db);
 
 	# Using FTS (full-text search)
@@ -556,12 +451,10 @@ sub createFstDB {
 sub saveToDB {
 	my (@rest) = @_;
 	my $pvm = time;
-	#my @dontsave = split(/ /, Irssi::settings_get_str('urltitle_shorten_url_channels'));
-    #return if $channel ~~ @dontsave;
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
 	
-	dp(__LINE__.": saveToDB: $db, pvm: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
+	dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
@@ -584,17 +477,11 @@ sub saveToDB {
 # Check from DB if old entry is found
 sub checkForPrevEntry {
 	my ($url, $newchannel, $md5hex, @rest) = @_;
-	dp(__LINE__.":checkForPrevEntry channel: $newchannel, url: $url, md5: $md5hex");
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", '', '', { RaiseError => 1 },) or die DBI::errstr;
-
-	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE (MD5HASH = ? or URL = ?) AND channel = ? order by rowid asc") or die DBI::errstr;
-	#my $sth = $dbh->prepare("SELECT * FROM LINKS WHERE URL = ? AND channel = ?") or die DBI::errstr;
 	my $sth = $dbh->prepare('SELECT * FROM LINKS WHERE MD5HASH = ? AND channel = ? order by rowid asc') or die DBI::errstr;
 
 	$sth->bind_param(1, $md5hex);
-	#$sth->bind_param(2, $url);
 	$sth->bind_param(2, $newchannel);
-
 	$sth->execute();
 
 	# build elements into array
@@ -610,62 +497,50 @@ sub checkForPrevEntry {
 	my $count = @elements;
 	dp(__LINE__.": $count previous elements found!") if $DEBUG1;
 	return @elements;		# return all rows
-	#return $elements[0];	# return first row
 }
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	#https://www.youtube.com/shorts/apSq3ZC3Sc8
-	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
-		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
-		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
-		#$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/ ||
-		$param =~ /watch\?v=([^\&]*)/ ||
-		$param =~ /youtube\.com\/shorts\/([^\?\&]*)/
-	) {
-		dp(__LINE__ . ' youtube url found! id: ' . $1);
-		# youtube api
-		my $videoid = $1;
-		
-		my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=".$videoid."&key=".$apikey;
-		my $ytubeapidata_json = KaaosRadioClass::getJSON($apiurl);
-		if ($ytubeapidata_json eq '-1' || $ytubeapidata_json eq '-2') {
-			dp(__LINE__ . ' youtube api failed!');
-			return 0;
-		}
-		#dp(__LINE__ . ' going strong');
-		#da($ytubeapidata_json->{items});
-		my $len = scalar $ytubeapidata_json->{items};
-		if (not defined $ytubeapidata_json->{items}[0]) {
-			dp(__LINE__ . ' video not found from API...');
-			$newUrlData->{title} = "Video not found from API...";
-			return 1;
-		}
-		
-		my $likes = '👍'.$ytubeapidata_json->{items}[0]->{statistics}->{likeCount};
-		my $commentcount = $ytubeapidata_json->{items}[0]->{statistics}->{commentCount};
-		my $title = $ytubeapidata_json->{items}[0]->{snippet}->{title};
-		my $description = $ytubeapidata_json->{items}[0]->{snippet}->{description};
-		my $chantitle = $ytubeapidata_json->{items}[0]->{snippet}->{channelTitle};
-		my $published = $ytubeapidata_json->{items}[0]->{snippet}->{publishedAt};
-		$published = format_time($published);
-		$newUrlData->{title} = "\0030,5 ▶ \003 " . $title .' ['.$chantitle.', '.$published.', '.$likes . ']';
-		$newUrlData->{desc} = $description;
-		dp(__LINE__ . ' video found from API... title: ' . $newUrlData->{title});
-		return 1;
-	}
+
 
 	# TODO: imgur API-conversion
 	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
 		my $image = $1;
 		prind("imgur-klick! img: $image");
+	} elsif ($param =~ /\:\/\/imgur\.com\/([\d\w\W]{2,8})/) {
+		my $image = $1;
+		prind("imgur-klick! img: $image");
+
+
+	} elsif ($param =~ /\:\/\/i\.imgur\.com\/([\d\w\W]{2,8})\.(jpg|png|gif|jpeg)/) {
+		my $image = $1;
+		prind("imgur direct image klick! img: $image");
+		my $apiurl = "https://api.imgur.com/3/image/" . $image;
+		my $h = HTTP::Headers->new;
+    	$h->header('Accept-Encoding' => 'gzip,deflate,br', 'Authorization' => 'Client-ID cf3bb7bb402c86e');
+    	my $jsondata = KaaosRadioClass::getJSON($apiurl, $h);
+		if ($jsondata eq '-1') {
+			print "FAK!";
+			return 0;
+		}
+		my $id = $jsondata->{data}->{id} || '';
+		my $title = $jsondata->{data}->{title} || '';
+		$title .= ' ' if $title ne '';
+		my $width = $jsondata->{data}->{width} || '';
+		my $height = $jsondata->{data}->{height} || '';
+		my $size = $jsondata->{data}->{size} || '';
+		my $views = $jsondata->{data}->{views} || '';
+
+		$newUrlData->{title} = "Imgur image: ${title}[${width}x${height}, size: ".sprintf("%.2f", $size / 1024)."KiB, views: $views]";
+		$newUrlData->{desc} = '';
+		return 1;
 	}
 
 	# google drive
 	if ($param =~ /\:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]*)/) {
 		# gdrive api
 		my $fileid = $1;
-		my $apiurl = "https://www.googleapis.com/drive/v3/files/".$fileid."?key=".$apikey;
+		my $apiurl = "https://www.googleapis.com/drive/v3/files/" . $fileid . "?key=" . $google_apikey;
 		prind("gdrive api! fileid: $fileid, apiurl: $apiurl");
 		my $gdriveapidata_json = KaaosRadioClass::getJSON($apiurl);
 		#dp($gdriveapidata_json);
@@ -697,6 +572,7 @@ sub api_conversion {
 	return 0;
 }
 
+# Emit signal for another script to handle
 sub signal_emitters {
 	my ($param, $server, $target, @rest) = @_;
 	return 0 if $dontprint == 1;
@@ -705,16 +581,15 @@ sub signal_emitters {
 		$param =~ /x.com(.*)\/status\/(.*)/i || 
 		$param =~ /fixupx.com(.*)\/status\/(.*)/i) {
 		# twitter status
-		Irssi::signal_emit('twitter_search_id', $server, $target, $2);
-		prind("Twitter signal emited!! $2");
-		# Irssi::signal_stop();
+		my $id = $2;
+		Irssi::signal_emit('twitter_search_id', $server, $target, $id);
+		prind("Twitter signal emited!! id: $id");
 		return 1;
 	}
 	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
 		prind("IMDB signal emited!! $1");
-		# Irssi::signal_stop();
 		return 1;
 	}
 
@@ -722,14 +597,28 @@ sub signal_emitters {
 	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
 		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
 		prind("Taivaanvahti signal emited!! $1");
-		# Irssi::signal_stop();
 		return 1;
 
+	# yle areena downloader
 	} elsif ($param =~ /(https?.*areena\.yle\.fi.*)/) {
 		Irssi::signal_emit('yle_url', $server, $target, $1);
 		prind("Yle_url signal emited!! $1");
 		return 1;
 	}
+
+	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
+		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
+		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
+		#$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/ ||
+		$param =~ /watch\?v=([^\&]*)/ ||
+		$param =~ /youtube\.com\/shorts\/([^\?\&]*)/
+	) {
+		my $videoid = $1;
+		Irssi::signal_emit('youtube_search_id', $server, $target, $videoid);
+		prind("Youtube signal emited!! $videoid");
+		return 1;
+	}
+
 	return 0;	# not emitting signal
 }
 
@@ -752,22 +641,6 @@ sub url_conversion {
 		$param =~ /google\.com\/maps/i || $param =~ /watch\?v=/) {
 		dp(__LINE__.": google service detected!");
 		set_useragent(3);
-		if ($param =~ /youtube\.com(.*)/i || $param =~ /(\/watch\?v=.*)/i) {
-			dp(__LINE__ . ": youtube.com detected!");
-			if (length $1 > 0) {
-				my $newurl = $invidiousUrl . $1;
-				#my $newurl = 'https://invidious.protokolla.fi' . $1;
-				#my $newurl = 'https://invidious.private.coffee' . $1;
-				$newUrlData->{extra} = " -- proxy: $newurl";
-			}
-		} elsif ($param =~ /youtu\.be\/(.*)/i) {
-			if (length $1 > 0) {
-				my $newurl = $invidiousUrl . '/watch?v=' . $1;
-				#my $newurl = 'https://invidious.protokolla.fi/watch?v=' . $1;
-				#my $newurl = 'https://invidious.private.coffee/watch?v=' . $1;
-				$newUrlData->{extra} = " -- proxy: $newurl";
-			}
-		}
 	}
 
 	# spotify conversion
@@ -785,11 +658,11 @@ sub url_conversion {
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
-	if ($param =~ /yle\.fi/i) {
+	#if ($param =~ /yle\.fi/i) {
 		# add header x-forwarded-for to circumvent geo-blocking
 		# print($IRSSI{'name'}.'> yle.fi detected!');
 		# does not seem to work yet.. add_header('X-Forwarded-For', '54.192.99.2');
-	}
+	#}
 
 	if ($param =~ /eitoimi.instagram\.com/i) {
 		$param =~ s/https\:\/\/(www\.)?instagram.com/$instaurl/i;
@@ -804,14 +677,8 @@ sub url_conversion {
 		$newUrlData->{extra} = " -- proxy: $proxyurl";
 		dp(__LINE__.": imgur.com detected! proxyurl: $proxyurl");
 		# needed for now:
-		$param =~ s/i\.imgur\.com/$imgurUrl/i;
-		$param =~ s/imgur\.com/$imgurUrl/i;
-
-		#if ($param =~ /i\.imgur\.com/i) {
-			# if direct link to a image/video, must use proxy
-		#	$param =~ s/i\.imgur\.com/$imgurUrl/i;
-		#}
-		
+		#$param =~ s/i\.imgur\.com/$imgurUrl/i;
+		#$param =~ s/imgur\.com/$imgurUrl/i;
 	}
 
 	if ($param =~ /reddit\.com/i) {
@@ -833,8 +700,6 @@ sub sig_msg_pub {
     my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
 	return if ($nick eq 'kaaosradio');
-	#return if ($nick eq 'mx');
-	#return if ($nick eq 'k-disco' || $nick eq 'kd' || $nick eq 'kd2');
 
 	$dontprint = 0;
 	# TODO if searching for old link..
@@ -842,13 +707,22 @@ sub sig_msg_pub {
 		return if KaaosRadioClass::floodCheck() > 0;
 		my $searchWord = $1;
 		my $sayline = findUrl($searchWord);
-		dp(__LINE__.": sig_msg_pub: Shortening sayline a bit...") if ($sayline =~ s/(.{260})(.*)/$1 .../);
 	
 		msg_to_channel($server, $target, $sayline);
 		#clearUrlData();
 		return;
 	}
-
+	if ($msg =~ /\!enable urltitle/) {
+		if (add_enabled_channel('urltitle_enabled_channels', $server->{tag}, $target) ) {
+			$server->command("msg $target URL title fetching ENABLED for this channel.");
+			return;
+		}
+	} elsif ($msg =~ /\!disable urltitle/) {
+		if (remove_enabled_channel('urltitle_enabled_channels', $server->{tag}, $target) ) {
+			$server->command("msg $target URL title fetching DISABLED for this channel.");
+			return;
+		}
+	}
 	# ttp://
 	if ($msg =~ /h?(ttps?:\/\/\S+)/i) {
 		$newUrlData->{url} = "h${1}";
@@ -857,7 +731,7 @@ sub sig_msg_pub {
 	} else {
 		return;
 	}
-	
+
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
 		clearUrlData();
@@ -893,12 +767,9 @@ sub sig_msg_pub {
 	my @short_raw = split / /, Irssi::settings_get_str('urltitle_shorten_url_channels');
 	if ($target ~~ @short_raw) {
 		$shorturlEnabled = 1;
-		dp(__LINE__.': shorten url enabled!');
 	} else {
 		$shorturlEnabled = 0;
 	}
-
-	#$newUrlData->{fetchurl} =  ($newUrlData->{url}, $server, $target);
 	
 	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
 
@@ -915,13 +786,12 @@ sub sig_msg_pub {
 	
 	my $newtitle = '';
 	$newtitle = $newUrlData->{title} if $newUrlData->{title};
-	dp(__LINE__ . ' newtitle: ' . $newtitle);
+
 	# if exact page was sent before on the same chan
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
 	# shorten output message
 	prind("Shortening url info a bit...") if ($newtitle =~ s/(.{260})(.*)/$1.../);
-	dp(__LINE__.": NOT JEE") if ($newtitle eq "0");
 	$title = $newtitle;
 	
 	# if description would suit better than title, use description instead
@@ -943,7 +813,6 @@ sub sig_msg_pub {
 			msg_to_channel($server, $target, 'tl;dr');
 			$howDrunk++;
 		} elsif ($isDrunk == 0 && $title ne '') {
-			dp(__LINE__ . ' congrts, title found!, title: ' . $title);
 			msg_to_channel($server, $target, $title);
 			$howDrunk = 0;
 		}
@@ -957,13 +826,12 @@ sub sig_msg_pub {
 sub msg_to_channel {
 	my ($server, $target, $title, @rest) = @_;
 	if ($dontprint == 1) {return;}
-	my $enabled_raw = Irssi::settings_get_str('urltitle_enabled_channels');
-	my @enabled = split / /, $enabled_raw;
+	return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $target, $server->{chatnet});
 
 	if ($title =~ /(.{260}).*$/s) {
 		$title = $1 . '...';
 	}
-	$server->command("msg -channel $target $title") if grep /$target/i, @enabled;	# poor mans check
+	$server->command("msg -channel $target $title");
 	return;
 }
 
@@ -992,22 +860,6 @@ sub checkIfOld {
 		return 1;
 	}
 	return 0;
-}
-
-# find with keywords comma-separated list
-sub find_keywords {
-	my ($keywords, @rest) = @_;
-	prind("find_keywords request: $keywords");
-	my $returnString;
-	my @words = split /, ?/, $keywords;
-	my $search_sql = 'SELECT rowid,* from links where ';
-	my $counter = 0;
-	foreach my $searchword (@words) {
-		if ($counter > 0) {
-			$search_sql += ' or ';
-		}
-		$search_sql += "(URL like ? or TITLE like ? or DESCRIPTION like ?)";
-	}
 }
 
 # find URL from database
@@ -1064,23 +916,12 @@ sub findUrl {
 # TODO: limit number of search results
 sub searchDB {
 	my ($searchWord, @rest) = @_;
-	dp(__LINE__.":searchDB: $searchWord");
+	dp(__LINE__ . ":searchDB: $searchWord");
+	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
-	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ? ORDER BY rowid desc';
-	my $sth = $dbh->prepare($sqlString) or die DBI::errstr;
-	$sth->bind_param(1, "%$searchWord%");
-	$sth->bind_param(2, "%$searchWord%");
-	$sth->bind_param(3, "%$searchWord%");
-	$sth->bind_param(4, "%$searchWord%");
-	$sth->execute();
-	my @resultarray = ();
-	my @line = ();
-	my $index = 0;
-	while(@line = $sth->fetchrow_array) {
-		push @{ $resultarray[$index]}, @line;
-		$index++;
-	}
-	return @resultarray;
+	my $sqlString = 'SELECT rowid,* from LINKS where rowid = ? or URL like ? or TITLE like ? or description LIKE ? ORDER BY rowid desc limit 10';
+	
+	return KaaosRadioClass::bindSQL($db, $sqlString, ("%$searchWord%", "%$searchWord%", "%$searchWord%", "%$searchWord%"));
 }
 
 # search rowid = url ID from database
@@ -1095,12 +936,6 @@ sub searchIDfromDB {
 	$sth->finish();
 	$dbh->disconnect();
 	return @result;
-}
-
-sub count_db {
-	my $sql = 'SELECT COUNT(*) from links';
-	my $dbh = KaaosRadioClass::connectSqlite($db);
-	return KaaosRadioClass::closeDB($dbh);
 }
 
 # param: resultset (line) from DB.
@@ -1162,7 +997,7 @@ sub createAnswerFromResults {
 	return $returnstring;
 }
 
-# Dont spam these domains.
+# Dont spam these, they dont' have meaningful titles.
 sub dontPrintThese {
 	my ($url, @rest) = @_;
 	#return 1 if $url =~ /aamulehti\.fi/i;
@@ -1219,16 +1054,15 @@ sub clearUrlData {
 	#KaaosRadioClass::floodCheck();	# write current timestamp to flood file
 }
 
-
 # debug print
 sub dp {
 	my ($string, @rest) = @_;
 	if ($DEBUG == 1) {
-		print($IRSSI{name}." debug> ".$string);
+		print($IRSSI{name} . " debug> " . $string);
 	}
 }
 
-# debug decode messages
+# debug character decode messages
 sub dd {
 	my ($string, @rest) = @_;
 	if ($DEBUG_decode == 1) {
@@ -1238,24 +1072,44 @@ sub dd {
 
 # debug print array
 sub da {
-	print($IRSSI{name}." debugarray> ");
-	print(Dumper(@_)) if ($DEBUG == 1 || $DEBUG_decode == 1);
-}
-
-sub sig_msg_pub_own {
-	my ($server, $msg, $target) = @_;
-	dp(__LINE__.':own public');
-	sig_msg_pub($server, $msg, $server->{nick}, '', $target);
+	if ($DEBUG == 1 || $DEBUG_decode == 1) {
+		print($IRSSI{name}." debugarray> ");
+		print(Dumper(@_));
+	}
 }
 
 sub prind {
 	my ($text, @test) = @_;
 	print("\0038" . $IRSSI{name} . ">\003 ". $text);
 }
+
 sub prindw {
 	my ($text, @test) = @_;
 	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
 }
+
+sub add_enabled_channel_command {
+	my ($text, $server, $channel, @rest) = @_;
+	prind('Add channel: text: ' . $text . ', server tag: ' . $server->{tag} . ', server chatnet: ' . $server->{chatnet} . ', channel: ' . $channel->{name});
+	my $rv = KaaosRadioClass::add_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $channel->{name});
+	prind("Enabled channels: " . Irssi::settings_get_str('urltitle_enabled_channels'));
+	return $rv;
+}
+
+sub remove_enabled_channel_command {
+	my ($text, $server, $channel, @rest) = @_;
+	prind('Remove channel: text: ' . $text . ', server tag: ' . $server->{tag} . ', server chatnet: ' . $server->{chatnet} . ', channel: ' . $channel->{name});
+	my $network = $server->{chatnet};
+	my $channel_name = $channel->{name};
+	my $rv = KaaosRadioClass::remove_enabled_channel('urltitle_enabled_channels', $network, $channel_name);
+
+	prind("Channel $channel_name\@$network removed from enabled channels.");
+	prind("Enabled channels: " . Irssi::settings_get_str('urltitle_enabled_channels'));
+	return $rv;
+}
+
+Irssi::command_bind('urltitle_add_channel', \&add_enabled_channel_command, 'urltitle');
+Irssi::command_bind('urltitle_remove_channel', \&remove_enabled_channel_command, 'urltitle');
 
 Irssi::settings_add_str('urltitle', 'urltitle_enabled_channels', '');
 Irssi::settings_add_str('urltitle', 'urltitle_wanha_channels', '');
@@ -1277,14 +1131,21 @@ Irssi::signal_register($signal_config_hash3);
 my $signal_config_hash4 = { 'twitter_search_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash4);
 
+my $signal_config_hash5 = { 'youtube_search_id' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash5);
+
 Irssi::signal_add('message public', 'sig_msg_pub');
-#Irssi::signal_add('message own_public', 'sig_msg_pub_own');
+
 prind("v. $VERSION loaded.");
 prind("New commands:");
-prind('/set urltitle_enabled_channels #channel1 #channel2');
+prind('/set urltitle_enabled_channels #channel1@network #channel2@network');
 prind('/set urltitle_wanha_channels #channel1 #channel2');
 prind('/set urltitle_wanha_disabled 0/1');
 prind('/set urltitle_dont_save_urls_channels #channel1 #channel2');
 prind('/set urltitle_shorten_url_channels #channel1 #channel2');
+prind('/urltitle_add_channel in #channel');
+prind('/urltitle_remove_channel in #channel');
+
 #prind('/set urltitle_enable_descriptions 0/1.');
 prind('Urltitle enabled channels: '. Irssi::settings_get_str('urltitle_enabled_channels'));
+prind('done.');
