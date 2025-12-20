@@ -39,12 +39,30 @@ sub sig_msg_pub {
 		$msg =~ /(https?:\/\/yle\.fi\S+)/i || 
 		$msg =~ /(https?:.*\.yle\.fi\S+)/i) {
 		my $count = 0;
+		my $url = $1;
 		if ($count = cmd_check_if_exist($1)) {
 			create_window('yle-dl');
 			#debu(__LINE__ . ": Found $count items. Starting download.");
 			cmd_start_dl($1, $count, find_window_refnum($server, $target));
+			msg_to_salamolo($1);
 		}
 	}
+}
+
+sub msg_to_salamolo {
+	my ($msg) = @_;
+	my @windows = Irssi::windows();
+	foreach my $window (@windows) {
+
+		next if $window->{name} eq '(status)';
+		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
+
+		if($window->{active}->{name} eq '#salamolo' && $window->{active_server}->{tag} eq 'Umbrellanet') {
+			debu("Found! $window->{active}->{name}");
+			$window->{active_server}->command("msg $window->{active}->{name} $msg");
+		}
+	}
+	return;
 }
 
 sub find_window_refnum {
@@ -126,7 +144,7 @@ sub create_window {
 sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
 	create_window('yle-dl');
-	prind('Checking YLE url for metadata: '. $url);
+	debu('Checking YLE url for metadata: '. $url);
 	my $temptime = time();
 	my $output = `yle-dl -V --showmetadata ${url} 2>${logfile}`;
 	if ($output eq '') { return; }
