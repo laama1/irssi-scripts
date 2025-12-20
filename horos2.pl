@@ -32,6 +32,12 @@ my $helpmessage2 = '!horoskooppi ohje: https://bot.8-b.fi/#h';
 my $debug = 0;
 
 my @weekdays = ('maanantai', 'tiistai', 'keskiviiko', 'torstai', 'perjantai', 'lauantai', 'sunnuntai', 'maanantai');
+
+# illatiivimuodot
+my @weekdays1 = ('maanantaihin', 'tiistaihin', 'keskiviikkoon', 'torstaihin', 'perjantaihin', 'lauantaihin', 'sunnuntaihin');
+#akkusatiivi
+my @weekdays2 = ('maanantaina', 'tiistaina', 'keskiviikkona', 'torstaina', 'perjantaina', 'lauantaina', 'sunnuntaina');
+
 my @moonarray = ('uusikuu', 'kuun kasvava sirppi', 'kuun ensimmäinen neljännes', 'kasvava kuperakuu', 'täysikuu', 'laskeva kuperakuu', 'kuun viimeinen neljännes', 'kuun vähenevä sirppi');
 
 my $irssidir = Irssi::get_irssi_dir() . '/scripts/';
@@ -164,6 +170,8 @@ sub grepKeyword {
 	#Irssi::print("test locale1 today: $weekday");
 	#Irssi::print("test locale2 today ". strftime "%A", localtime($currenttime));
 	my $weekdak = @weekdays[`date +%u` -1];				#genetiivi(?)muoto
+	my $weekdayil = @weekdays1[`date +%u` -1];			# illatiivimuoto
+	my $weekdayak = @weekdays2[`date +%u` -1];			# akkusatiivi muoto
 
 	my $tomorrow = strftime "%A", localtime ($currenttime + $dateseconds);
 	my $tomorrowak = '';
@@ -183,6 +191,8 @@ sub grepKeyword {
 	$rimpsu =~ s/\$weekday/$weekday/g;
 	$rimpsu =~ s/\$today/$weekday/g;
 	$rimpsu =~ s/\$weekdak/$weekdak/g;
+	$rimpsu =~ s/\$weekdayil/$weekdayil/g;
+	$rimpsu =~ s/\$weekdayak/$weekdayak/g;
 	$rimpsu =~ s/\$tomorrowak/$tomorrowak/g;
 	$rimpsu =~ s/\$month/$month/g;
 	$rimpsu =~ s/\$nextmonth/$nextmonth/g;
