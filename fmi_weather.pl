@@ -140,6 +140,7 @@ sub parse_extrainfo_from_link {
 		my $meteotext = $1;
 		$meteotext =~ s/<div(.*?)>(.*?)<\/div>//gis;		# div inside span
 		$meteotext =~ s/<!---->//gis;						# remove comments
+		$meteotext =~ s/<(.*?)>//gis;						# remove any other html tags
 		$meteotext = KaaosRadioClass::ktrim($meteotext);
 		$meteotext = "\002Meteorologin sääkatsaus ($date):\002 ".$meteotext;
 		DP(__LINE__.' meteotext: '. $meteotext);

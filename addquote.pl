@@ -11,10 +11,10 @@ binmode STDIN, ':utf8';
 use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 30.12.2016
 
-my $tiedosto = '/mnt/music/quotes.txt';
-my $vitsitiedosto = '/mnt/music/vitsit.txt';
-my $quoteurl = 'https://ul.8-b.fi/quotes.txt';
-my $vitsiurl = 'https://ul.8-b.fi/vitsit.txt';
+my $tiedosto = '/var/www/html/bot/quotes.txt';
+my $vitsitiedosto = '/var/www/html/bot/vitsit.txt';
+my $quoteurl = 'https://bot.8-b.fi/quotes.txt';
+my $vitsiurl = 'https://bot.8-b.fi/vitsit.txt';
 
 my $quotedb = Irssi::get_irssi_dir(). '/scripts/quotes.db';
 my $vitsidb = Irssi::get_irssi_dir(). '/scripts/vitsit.db';
@@ -150,11 +150,11 @@ sub event_pubmsg {
 
 sub createDB {
 	my $error = '';
-	if ($error = KaaosRadioClass::writeToDB($quotedb, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE,CHANNEL)')) {
+	if ($error = KaaosRadioClass::writeToDB($quotedb, 'CREATE VIRTUAL TABLE QUOTES using fts4(NICK, PVM, QUOTE, CHANNEL)')) {
 		prindw($error);
 		die;
 	}
-	prind('Table created successfully');
+	prind('Table QUOTES created successfully');
 	return;
 }
 
@@ -164,6 +164,7 @@ sub createVitsiDB {
 		prindw($error);
 		die;
 	}
+	prind('Table JOKES created successfully');
 	return;
 }
 
@@ -181,7 +182,7 @@ sub saveToDB {
 	$sth->execute;
 	$sth->finish();
 	$dbh->disconnect();
-	prind("Saved to database. $quote");
+	prind("Saved to $dbname database, msg: $quote");
 	return;
 }
 

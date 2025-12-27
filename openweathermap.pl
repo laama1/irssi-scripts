@@ -915,6 +915,10 @@ sub da {
 
 sub add_enabled_channel_command {
 	my ($text, $server, $channel, @rest) = @_;
+	#if (not defined $channel or $channel == '') {
+    #    prindw("No channel context found. Change to a channel window first.");
+    #    return -1;
+    #}
 	my $rv = KaaosRadioClass::add_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $channel->{name});
 	prind("Enabled channels: " . Irssi::settings_get_str('openweathermap_enabled_channels'));
 	return 0;
@@ -934,14 +938,14 @@ sub sig_msg_pub {
 	$nick = quotemeta $nick;
 	return if ($nick eq $mynick);   # self-test
 	return if $nick ~~ @ignorenicks;
-	return unless KaaosRadioClass::is_enabled_channel('openweathermap_enabled_channels', $target, $server->{chatnet});
+	return unless KaaosRadioClass::is_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
 
 	my $sayline = '';
 
 	if ($msg =~ /^\!enable openweathermap/) {
-		return KaaosRadioClass::add_enabled_channel('openweathermap_enabled_channels', $target, $server->{chatnet});
+		return KaaosRadioClass::add_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
 	} elsif ($msg =~ /^\!disable openweathermap/) {
-		return KaaosRadioClass::remove_enabled_channel('openweathermap_enabled_channels', $target, $server->{chatnet});
+		return KaaosRadioClass::remove_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
 	} elsif ($msg =~ /^\!help sää/) {
 		$sayline = $helptext;
 	} else {

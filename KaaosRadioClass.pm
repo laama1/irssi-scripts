@@ -650,6 +650,9 @@ sub is_enabled_channel {
 
 sub add_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
+	if ($channel eq '' || !defined $channel) {
+		return prindw("No channel context found. Change to a channel window first."), -1;
+	}
 	my $enabled_raw = Irssi::settings_get_str($setting_string);
 	my @enabled = split / /, $enabled_raw;
 	foreach my $item (@enabled) {

@@ -10,6 +10,9 @@ addquote.pl:
 fetch_areena.pl
 - JSON
 
+franklin3.pl
+- LWP::Simple
+
 openweathermap.pl:
 - Number::Format
 - Encode
@@ -38,6 +41,7 @@ msg_telegram.pl
 
 urltitle3.pl:
 - Encode
+- HTTP::CookieJar::LWP
 
 megahal2.pl (Perl Module: https://metacpan.org/pod/AI::MegaHAL, Sourcecode for the app and python + tcl interface, https://sourceforge.net/projects/megahal/)
 - AI::MegaHAL

@@ -1090,6 +1090,10 @@ sub prindw {
 
 sub add_enabled_channel_command {
 	my ($text, $server, $channel, @rest) = @_;
+    #if (not defined $channel or $channel == '') {
+    #    prindw("No channel context found. Change to a channel window first.");
+    #    return -1;
+    #}
 	prind('Add channel: text: ' . $text . ', server tag: ' . $server->{tag} . ', server chatnet: ' . $server->{chatnet} . ', channel: ' . $channel->{name});
 	my $rv = KaaosRadioClass::add_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $channel->{name});
 	prind("Enabled channels: " . Irssi::settings_get_str('urltitle_enabled_channels'));
