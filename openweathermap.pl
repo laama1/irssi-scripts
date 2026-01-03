@@ -25,7 +25,7 @@ $VERSION = '20251108';
 	name        => 'openweathermap.pl',
 	description => 'Fetches weather data from openweathermap.org',
 	license     => 'Fublic Domain',
-	url         => 'https://8-b.fi.fi',
+	url         => 'https://bot.8-b.fi/#s',
 	changed     => $VERSION,
 );
 
@@ -629,7 +629,7 @@ sub FIND_CITY {
 # save new city to database if it does not exist
 sub SAVE_CITY {
 	my ($json, @rest) = @_;
-	dp(__LINE__.': SAVE_CITY next..');
+	dp(__LINE__.': SAVE_CITY next.. ' . $json->{name});
 	my $now = time;
 	my $sql = "INSERT OR REPLACE INTO CITIES (CITYID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)";
 	return KaaosRadioClass::insertSQL($db_file, $sql, ($json->{id}, $json->{name}, $json->{sys}->{country}, $now, $json->{coord}->{lat}, $json->{coord}->{lon}, 'postnumber'));
@@ -801,8 +801,11 @@ sub filter_keyword {
 	if ($msg =~ /^\!(sää |saa |s )(.*)/ui) {
 		# !sää with a search word, always save new city to user
 
-		my $searchword = $2;
-		dp(__LINE__ . ', searchword: ' . $searchword);
+		my $searchword = KaaosRadioClass::ktrim($2);
+		if (!$searchword) {
+			return 'Kirjoita kaupunki, esim: !sää Kuopio';
+		}
+		dp(__LINE__ . ', searchword: ' . $searchword . '<');
 
 		my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
 

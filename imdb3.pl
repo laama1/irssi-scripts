@@ -77,11 +77,8 @@ sub do_imdb {
 		return;
 	}
 
-    #my $enabled_raw = Irssi::settings_get_str('imdb_enabled_channels');
-    #my @enabled = split / /, $enabled_raw;
-	#my $is_enabled = grep /^$target$/i, @enabled;
 	my $is_enabled = KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
-	#dp(__LINE__.": isenabled: $is_enabled");
+	dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
 	if ($msg eq "!enable imdb") {
@@ -100,10 +97,7 @@ sub do_imdb {
 			sayit($server, $target, 'IMDB-skripti on Deaktivoitu jo! (kanavalla: '.$target.')');
 			return;
 		} else {
-			#my $index = 0;
-			#$index++ until $enabled[$index] eq $target;
-			#splice(@enabled, $index, 1);
-			#Irssi::settings_set_str('imdb_enabled_channels', join(' ', @enabled));
+
 			KaaosRadioClass::remove_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
 			Irssi::print('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
@@ -130,7 +124,6 @@ sub do_imdb {
 		# FIXME: if movie has year in it's name
 		$query .= "&y=".$1.$2;
 		$request =~ s/$1$2//;	#remove year from title query
-		$request = KaaosRadioClass::ktrim($request);
 	}
 	if ($request =~ /(\s?search\s)/i) {
 		$param = 's';
@@ -150,7 +143,6 @@ sub do_imdb {
 	}
 	$request = KaaosRadioClass::ktrim($request);
 
-	#dp(__LINE__.": request: $request, query: $query, param: $param");
 	if ($request) {
 		return imdb_fetch($server, $target, $request, $query, $param);
 	} else {
@@ -163,7 +155,7 @@ sub do_imdb {
 sub sig_imdb_search {
 	my ($server, $searchparam, $target, $searchword) = @_;
 
-	return unless is_enabled_channel('imdb_enabled_channels', $target, $server->{chatnet});
+	return unless KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 
 	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
 	my $param = 'i';

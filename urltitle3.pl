@@ -454,7 +454,7 @@ sub saveToDB {
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
 	
-	dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{description}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
+	dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{desc}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
@@ -809,6 +809,7 @@ sub sig_msg_pub {
 	$title .= $newUrlData->{extra};
 	# increase $howDrunk if necessary
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
+		prind("Printing title to channel... howDrunk: $howDrunk, isDrunk: $isDrunk");
 		if ($isDrunk && $howDrunk < 1) {
 			msg_to_channel($server, $target, 'tl;dr');
 			$howDrunk++;
@@ -1044,7 +1045,7 @@ sub clearUrlData {
 	$newUrlData->{date} = 0;		# date
 	$newUrlData->{url} = '';		# url
 	$newUrlData->{title} = '';		# title
-	$newUrlData->{desc} = '';		# desc
+	$newUrlData->{desc} = '';		# description
 	$newUrlData->{chan} = '';		# channel
 	$newUrlData->{md5} = '';		# md5hash
 	$newUrlData->{fetchurl} = '';	# url to fetch
@@ -1083,6 +1084,7 @@ sub prind {
 	print("\0038" . $IRSSI{name} . ">\003 ". $text);
 }
 
+# print warning
 sub prindw {
 	my ($text, @test) = @_;
 	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
@@ -1107,7 +1109,7 @@ sub remove_enabled_channel_command {
 	my $channel_name = $channel->{name};
 	my $rv = KaaosRadioClass::remove_enabled_channel('urltitle_enabled_channels', $network, $channel_name);
 
-	prind("Channel $channel_name\@$network removed from enabled channels.");
+	prind("Channel $channel_name\@$network removed from enabled channels.") if $rv == 1;
 	prind("Enabled channels: " . Irssi::settings_get_str('urltitle_enabled_channels'));
 	return $rv;
 }

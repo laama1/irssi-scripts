@@ -229,7 +229,7 @@ sub writeArrayToFile {
 	return 0;
 }
 
-# check if people are flooding two or more commands too soon
+# check if people are flooding two or more commands too fast
 sub floodCheck {
 	my ($timedifference, @rest) = @_ || 3;
 	my $last = 0;
@@ -238,6 +238,7 @@ sub floodCheck {
 	$last = readLastLineFromFilename($tsfile);
 	writeToFile($tsfile, $cur);
 	if ($cur - $last < $timedifference) {
+		prind("Flood protection: Command ignored, last command was " . ($cur - $last) . " seconds ago.");
 		return 1;									# return 1, means "flooding"
 	}
 	return 0;
@@ -249,6 +250,7 @@ sub Drunk {
 	if ($nick eq $floodernick) {
 		$floodertimes++;
 		if ($floodertimes > 5 && (time - $flooderdate <= 600)) {
+			prind("Flood protection: $nick is drunk! ($floodertimes times in " . (time - $flooderdate) . " seconds)");
 			return 1;
 		} elsif ($floodertimes > 5 && (time - $flooderdate > 600)) {	#10min
 			$flooderdate = time;
@@ -635,7 +637,7 @@ sub conway {
 # Check we have an enabled channel@network, todo: split by @
 sub is_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
-	return 0 unless defined $setting_string && defined $network && defined $channel;
+	return 0 unless (defined $setting_string && defined $network && defined $channel);
 	my $enabled_raw = Irssi::settings_get_str($setting_string);
 	my @enabled = split / /, $enabled_raw;
 	foreach my $item (@enabled) {
