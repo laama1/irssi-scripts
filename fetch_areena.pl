@@ -52,6 +52,7 @@ sub sig_msg_pub {
 sub msg_to_salamolo {
 	my ($msg) = @_;
 	my @windows = Irssi::windows();
+	debu(__LINE__ . ' msg_to_salamolo: ' . $msg);
 	foreach my $window (@windows) {
 
 		next if $window->{name} eq '(status)';
@@ -248,6 +249,12 @@ sub exec_remove {
 # Data the process will output (errores, when errors redirected to stdout)
 sub exec_input {
 	my ($res, $text, @rest) = @_;
+
+	my $process_name = $res->{name};
+	if ($process_name !~ /^yle-dl/) {
+		return;
+	}
+
 	$text =~ s/\t/  /;
 	prind('exec_input text: ' . $text);
 	debu(Dumper(__LINE__, $res));
