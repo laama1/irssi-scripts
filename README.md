@@ -48,3 +48,6 @@
 
 ### megahal2.pl (Perl Module: https://metacpan.org/pod/AI::MegaHAL, Sourcecode for the app and python + tcl interface, https://sourceforge.net/projects/megahal/)
 - AI::MegaHAL
+
+### fmi_weather.pl
+- pip install fmi-weather fmi-weather-client
