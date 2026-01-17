@@ -34,7 +34,8 @@ my @ignorenicks = (
 	'ryokas',
 	'KD_Butt',
 	'KD_Bat',
-	'micdrop'
+	'micdrop',
+	'swapdisk'
 );
 
 my $apikeyfile = Irssi::get_irssi_dir(). '/scripts/openweathermap_apikey';
@@ -118,6 +119,7 @@ https://emojipedia.org/moon-viewing-ceremony/
 =cut
 
 
+# when script is loaded, create the database if not exists
 unless (-e $db_file) {
 	unless(open FILE, '>:utf8',$db_file) {
 		prindw("Unable to create or write DB file: $db_file");
@@ -129,6 +131,7 @@ unless (-e $db_file) {
 	}
 }
 
+# replace weather description with emoji
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, $tz, @rest) = @_;
 	$sunrise += $tz;
@@ -239,7 +242,8 @@ sub GET_WEATHER {
 		$newurl = $api_url . 'q=';
 	}
 	my $json = request_api($newurl.$urltail);
-	da(__LINE__.': GET_WEATHER json', $json);
+	#da(__LINE__.': GET_WEATHER json', $json);
+	dp(__LINE__.': GET_WEATHER json done');
 	#my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
 
 	#if ($json eq '-1') {
@@ -260,7 +264,7 @@ sub GET_WEATHER {
 	#	$json->{uvindex} = $fi->format_number(FINDUVINDEX($lat, $lon), 0);
 	#}
 
-	SAVE_CITY($json);
+	SAVE_CITY($searchword, $json);
 	SAVEDATA($json);
 	return $json;
 }
@@ -626,13 +630,13 @@ sub FIND_CITY {
 	return $results[0][0], $results[0][1], $results[0][2], decode('UTF-8', $results[0][3]);
 }
 
-# save new city to database if it does not exist
+# save new city to database if it does not exist. openweathermap does not return "Jyväskylä" with umlauts, so we save also the searchword used.
 sub SAVE_CITY {
-	my ($json, @rest) = @_;
-	dp(__LINE__.': SAVE_CITY next.. ' . $json->{name});
+	my ($searchword, $json, @rest) = @_;
+	dp(__LINE__.': SAVE_CITY next.. ' . $searchword);
 	my $now = time;
 	my $sql = "INSERT OR REPLACE INTO CITIES (CITYID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)";
-	return KaaosRadioClass::insertSQL($db_file, $sql, ($json->{id}, $json->{name}, $json->{sys}->{country}, $now, $json->{coord}->{lat}, $json->{coord}->{lon}, 'postnumber'));
+	return KaaosRadioClass::insertSQL($db_file, $sql, ($json->{id}, $searchword, $json->{sys}->{country}, $now, $json->{coord}->{lat}, $json->{coord}->{lon}, 'postnumber'));
 }
 
 # save weather data to database
@@ -729,11 +733,9 @@ sub CREATEDB {
 # Check if user has saved city, if not save new city. Return undef if no city found or city name.
 sub check_user_city {
 	my ($checkcity, $nick, @rest) = @_;
-	#return undef if KaaosRadioClass::floodCheck();
 	$checkcity = KaaosRadioClass::ktrim($checkcity);
 	if (!$checkcity) {
 		if (defined $users_cache->{$nick}) {
-			#dp(__LINE__.', ei löytynyt cityä käyttäjän syötteestä, vanha tallessa oleva löytyi: '.$users_cache->{$nick});
 			return $users_cache->{$nick};
 		} else {
 			read_user_city_from_database($nick);
@@ -745,7 +747,7 @@ sub check_user_city {
 		}
 	} else {
 		# save new city
-
+		dp(__LINE__.', käyttäjän '.$nick.' uusi kaupunki: ' . $checkcity);
 		if (save_user_city_to_database($nick, $checkcity)) {
 			dp(__LINE__.', tallennettu käyttäjän ' . $nick . ' uusi kaupunki: ' . $users_cache->{$nick});
 		}
@@ -765,10 +767,10 @@ sub read_user_city_from_database {
 	da(__LINE__, Dumper(@results));
 	if (defined $results[0][0]) {
 		$users_cache->{$nick} = decode('UTF-8', $results[0][0]);
-		dp(__LINE__.', luettu käyttäjän '.$nick.' kaupunki tietokannasta: '.$users_cache->{$nick});
+		dp(__LINE__.', found '.$nick.' city from database: '.$users_cache->{$nick});
 		return $users_cache->{$nick};
 	}
-	dp(__LINE__.', käyttäjälle '.$nick.' ei löytynyt kaupunkia tietokannasta.');
+	dp(__LINE__.', no city found for user '.$nick.' in database.');
 	return undef;
 }
 
@@ -776,7 +778,7 @@ sub save_user_city_to_database {
 	my ($nick, $city, @rest) = @_;
 	dp(__LINE__.', save_user_city_to_database next, nick: '.$nick.', city: '.$city);
 	return 1 if (defined $users_cache->{$nick} && $city eq $users_cache->{$nick});
-	dp (__LINE__.', tarkistetaan kaupungin olemassaolo tietokannasta: '.$city);
+	dp (__LINE__.', tarkistetaan kaupungin olemassaolo tietokannasta: ' . $city);
 
 	my $sql = 'SELECT CITYID FROM CITIES WHERE NAME = ? LIMIT 1;';
 	my @results = KaaosRadioClass::bindSQL($db_file, $sql, ($city));
@@ -785,8 +787,8 @@ sub save_user_city_to_database {
 	if (defined $results[0][0]) {
 		$city_id = $results[0][0];
 		my $sql = 'INSERT OR REPLACE INTO USERS (NICK, CITY) VALUES (?, ?);';
-		if (KaaosRadioClass::insertSQL($db_file, $sql, ($nick, $city_id))) {
-			dp(__LINE__.', tallennettu käyttäjän '.$nick.' kaupunki tietokantaan, id: '.$city_id);
+		if (my $result = KaaosRadioClass::insertSQL($db_file, $sql, ($nick, $city_id))) {
+			dp(__LINE__.', tallennettu käyttäjän '.$nick.' kaupunki tietokantaan, cityid: '.$city_id . ', result: ' . $result);
 			$users_cache->{$nick} = $city;
 			return 1;
 		}
@@ -826,9 +828,7 @@ sub filter_keyword {
 		$returnstring = FINDFORECAST($city);
 	} elsif ($msg =~ /^(\!sa )(.*)$/i) {
 		$city = check_user_city($2, $nick);
-		#$dbh = KaaosRadioClass::connectSqlite($db_file);
 		$returnstring = FINDAREAWEATHER($city);
-		#$dbh = KaaosRadioClass::closeDB($dbh);
 	} elsif ($msg =~ /^(\!se5 )(.*)/) {
 		$city = check_user_city($2, $nick);
 		$returnstring = FINDFORECAST($city, 5);
@@ -851,23 +851,16 @@ sub filter_keyword {
 			$returnstring = FINDAREAWEATHER($user_city);
 			#$dbh = KaaosRadioClass::closeDB($dbh);
 		}
-	} elsif (($msg eq '!s' || $msg eq '!sa') && defined $users_cache->{$nick}) {
-		# when user's city is allready saved and user writes the short command only
-		dp(__LINE__.', herecy, msg: ' . $msg . ', city: '.$users_cache->{$nick});
-		my $user_city = check_user_city('', $nick);
-		if (not defined $user_city) {
-			dp(__LINE__ . ', no user city found for nick: ' . $nick . ', city: ' . $user_city);
-			$returnstring = 'Unohdin, missä asuitkaan.. Kirjoita: !s kaupunni';
-		}
-		my $tempstring = GET_WEATHER($user_city);
+	} elsif ((defined $users_cache->{$nick}) && ($msg eq '!s' || $msg eq '!sää')) {
+		# when user city is allready saved in the script variable and user wrote the short command
+		my $tempstring = GET_WEATHER($users_cache->{$nick});
 		if ($tempstring) {
-			dp(__LINE__ . ', weather found for user: ' . $nick . ' city: ' . $user_city);
 			$returnstring = getSayLine($tempstring);
 		} else {
-			$returnstring = 'Paikkaa ei löytynyt.. (' . $user_city . ')';
+			$returnstring = 'Paikkaa ei löytynyt.. (' . $users_cache->{$nick} . ')';
 		}
-		#return filter_keyword($msg . ' ' . $users_cache->{$nick}, $nick);
-	} elsif (($msg eq '!s' || $msg =~ /^!se\d?$/ || $msg eq '!se5' || $msg eq '!sa') && not defined $users_cache->{$nick}) {
+	} elsif ((not defined $users_cache->{$nick}) && ($msg eq '!s' || $msg =~ /^!se\d?$/ || $msg eq '!se5' || $msg eq '!sa' || $msg eq '!sää')) {
+		# when user city is not saved yet
 		read_user_city_from_database($nick);
 		if (defined $users_cache->{$nick}) {
 			my $tempstring = GET_WEATHER($users_cache->{$nick});
@@ -880,7 +873,6 @@ sub filter_keyword {
 		} else {
 			$returnstring = 'Unohdin, missä asuitkaan.. Kirjoita: !s kaupunki';
 		}
-		
 	}
 	return $returnstring;
 }
@@ -915,7 +907,6 @@ sub da {
 	return;
 }
 
-
 sub add_enabled_channel_command {
 	my ($text, $server, $channel, @rest) = @_;
 	#if (not defined $channel or $channel == '') {
@@ -941,21 +932,31 @@ sub sig_msg_pub {
 	$nick = quotemeta $nick;
 	return if ($nick eq $mynick);   # self-test
 	return if $nick ~~ @ignorenicks;
-	return unless KaaosRadioClass::is_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
-
 	my $sayline = '';
 
 	if ($msg =~ /^\!enable openweathermap/) {
-		return KaaosRadioClass::add_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
+		dp(__LINE__ . ': enabling channel ' . $target . '@' . $server->{chatnet});
+		if (KaaosRadioClass::add_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target)) {
+			$sayline = "OpenWeatherMap enabled on $target\@$server->{chatnet}";
+		} else {
+			$sayline = "OpenWeatherMap was already enabled on $target\@$server->{chatnet}";
+		}
+		$server->command("msg -channel $target $sayline") if $sayline;
 	} elsif ($msg =~ /^\!disable openweathermap/) {
-		return KaaosRadioClass::remove_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
+		if (KaaosRadioClass::remove_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target)) {
+			$sayline = "OpenWeatherMap disabled on $target\@$server->{chatnet}";
+		} else {
+			$sayline = "OpenWeatherMap was not enabled on $target\@$server->{chatnet}";
+		}
+		$server->command("msg -channel $target $sayline") if $sayline;
 	} elsif ($msg =~ /^\!help sää/) {
 		$sayline = $helptext;
-	} else {
-		$msg = Encode::decode('UTF-8', $msg);
-		$sayline = filter_keyword(stripc($msg), $nick);
+		$server->command("msg -channel $target $sayline") if $sayline;
 	}
-
+	return unless KaaosRadioClass::is_enabled_channel('openweathermap_enabled_channels', $server->{chatnet}, $target);
+	$msg = Encode::decode('UTF-8', $msg);
+	$sayline = filter_keyword(stripc($msg), $nick);
+	
 	$server->command("msg -channel $target $sayline") if $sayline;
 }
 
