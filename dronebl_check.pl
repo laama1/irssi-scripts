@@ -24,11 +24,12 @@ my $statsfile = Irssi::get_irssi_dir() . '/scripts/dronebl.log';
 my $scriptfile = Irssi::get_irssi_dir() . '/scripts/checkdnsbl.sh';
 my $ipinfo_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/python/ip_info.py';
 my $nicks = {};
-
+my $memory = {};
 # TODO: 
 # - add stats-command
 # - add option to auto-kick users found in dronebl
 # - close channel when too many proxy users join
+# - save ip-addresses and check if same ip subnet has many joins in short time, possible proxy farm and then auto ban
 
 my $DEBUG = 1;
 
@@ -93,68 +94,92 @@ sub dronebl_check {
     } else {
         Irssi::active_win()->print("No data from checkdns script for ip: " . $ip);
     }
-    Irssi::active_win()->print("------ end of dronebl check ------") if $DEBUG;
+    #Irssi::active_win()->print("------ end of dronebl check ------") if $DEBUG;
 
     return $data;
 }
 
 # when a user joined your channel
+# "message join", SERVER_REC, char *channel, char *nick, char *address, char *account, char *realname
+# "notifylist joined", SERVER_REC, char *nick, char *user, char *host, char *realname, char *awaymsg
 sub event_msg_joined {
     my ($server, $channel, $nick, $address, $account, $realname) = @_;
     create_window('dronebl_check');
-    prind("User joined channel signal received: " . $channel . " $nick, address: $address");
-    my @ip_parts = split '@', $address;
-    $server->send_raw("whois $nick");
+    Irssi::active_win()->print("------------------------------------------>");
+    Irssi::active_win()->print("User joined channel signal received, channel:  $channel, nick: $nick, address: $address, account: $account, realname: $realname. Do /whois $nick next...");
+    my @ip_parts = split('@', $address);
+
+    $memory->{$nick}->{'host'} = $address;
+    $memory->{$nick}->{'channel'} = $channel;
+    $server->send_raw("whois $nick");   # whois will trigger event_311 signal later
 
     my $host = $ip_parts[1];
     my $ident = $ip_parts[0];
-    my $converted_ip = '';
-    # TODO: if ident has hex chars only, then it is probably a cloaked ident
-    if (is_hex_ident($ident)) {
-        $converted_ip = is_hex_ident($ident);
-        prindd(__LINE__ . " converted ip from hex ident: " . $converted_ip) if $DEBUG;
-        #if ($converted_ip ne 0) {
-        #    $ident = $converted_ip;
-        #}
-    }
+    my $real_ip = '';
 
-    if (is_ipaddress($host) > 0) {
-        dronebl_check($host);
-    } elsif (is_ipaddress($converted_ip) > 0) {
-        dronebl_check($converted_ip);
+    my $is_hex_ident = is_hex_ident($ident);
+    if ($is_hex_ident) {
+        $real_ip = $is_hex_ident;
+        Irssi::active_win()->print(__LINE__ . " converted cloaked ip from hex ident: " . $real_ip) if $DEBUG;
+    }
+    my $is_ip_addr = is_ipaddress($host);
+    if ($is_ip_addr ne 0) {
+        $memory->{$nick}->{'real_ip'} = $is_ip_addr;
+        dronebl_check($is_ip_addr);
+    } elsif (is_ipaddress($real_ip) > 0) {
+        $memory->{$nick}->{'real_ip'} = $real_ip;
+        dronebl_check($real_ip);
     } else {
         # do reverse dns here if needed
-        $converted_ip = do_resolve($host);
-        if ($converted_ip ne '') {
-            dronebl_check($converted_ip);
+        Irssi::active_win()->print(__LINE__ . " do reverse dns for host: " . $host) if $DEBUG;
+        $real_ip = do_resolve($host);
+        if ($real_ip ne '') {
+            $memory->{$nick}->{'real_ip'} = $real_ip;
+            dronebl_check($real_ip);
         }
     }
-    Irssi::active_win()->print("User joined channel: " . $channel . ", nick: $nick, ident: $ident, host: $host, full address: $address, converted ip: " . $converted_ip);
-    save_stuff($nick, $ident, $host, $converted_ip);
+    save_stuff($nick, $ident, $host, $real_ip);
 }
 
 sub is_hex_ident {
     my ($ident, @rest) = @_;
     if ($ident =~ /^[0-9a-fA-F]{8}+$/) {
-        prind(__LINE__ . " hex ident detected: " . $ident) if $DEBUG;
+        #prind(__LINE__ . " hex ident detected: " . $ident) if $DEBUG;
         my @bytes = ($ident =~ /../g);
-        prind(__LINE__ . " bytes: " . Dumper \@bytes) if $DEBUG;
+        #prind(__LINE__ . " bytes: " . Dumper \@bytes) if $DEBUG;
         my @decimals = map { hex($_) } @bytes;
-        prind(__LINE__ . " decimals: " . Dumper \@decimals) if $DEBUG;
+        #prind(__LINE__ . " decimals: " . Dumper \@decimals) if $DEBUG;
         my $ip = join('.', @decimals);
         prind(__LINE__ . " converted ip: " . $ip) if $DEBUG;
         return $ip;
-        #return 1;
     }
     return 0;
 }
 
 sub event_whois {
-    my ($server, $data, $srv_addr, @rest) = @_;
-    my ($me, $nick, $user, $host, $something) = split(" ", $data);
+    #print __LINE__ . ": whois event received. Dump:";
+    #print Dumper \@_;
+    my ($server, $data, $srv_addr, $undef, @rest) = @_;     # undef is undef, but what does it present
+    my ($mynick, $nick, $ident, $host, $something, @realname) = split(" ", $data);
 
-    Irssi::active_win()->print("Nick: $nick, user: $user, host: $host, server address: $srv_addr, something: $something");
-    #Irssi::active_win()->print(Dumper \@rest);
+    Irssi::active_win()->print("Event whois nick: $nick, ident: $ident, host: $host, server address: $srv_addr, something: $something, real name: " . join(' ', @realname));
+    if (join(' ', @realname) =~ /\:Python IRC Client/) {
+        my $user_channel = get_channel_for_user($nick, $host);
+        Irssi::active_win()->print("Python detected in whois rest data for nick: $nick on channel: $user_channel. Kick and ban!");
+        $server->command("kick $user_channel $nick *Script detected*");
+        #$server->send_raw("ban #kaaosradio $nick :*Script detected*");
+        $server->command("mode $user_channel +b *!*@".$host);
+    }
+}
+
+sub get_channel_for_user {
+    my ($nick, $address, @rest) = @_;
+    foreach my $nick (keys %$memory) {
+        if (defined $memory->{$nick}->{'channel'}) {
+            prind(__LINE__ . " get_channel_for_user: found channel " . $memory->{$nick}->{'channel'} . " for nick: " . $nick);
+            return $memory->{$nick}->{'channel'};
+        }
+    }
 }
 
 sub do_the_kick {
@@ -166,32 +191,30 @@ sub is_ipaddress {
     my ($value, @rest) = @_;
     if ($value =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/) {
         prind(__LINE__ . " ipv4 address detected: " . $value) if $DEBUG;
-        return 1;
+        return $value;
     }
     # check if it is ipv6
     if ($value =~ /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/) {
         prind(__LINE__ . " ipv6 address detected: " . $value) if $DEBUG;
-        return 1;
+        return $value;
     }
+    # value is exactly 8 hex chars, probably hex cloaked ident
     if ($value =~ /^[0-9a-fA-F]{8}$/) {
         my $converted_ip = is_hex_ident($value);
         if ($converted_ip ne 0) {
             prind(__LINE__ . " converted hex ident to ip: " . $converted_ip) if $DEBUG;
-            return 1;
+            return $converted_ip;
         }
     }
-
+    # value has hex chars in the middle, probably part of a hex cloaked ident
     if ($value =~ /[0-9a-fA-F]{8}/) {
         my $converted_ip2 = is_hex_ident($value);
         if ($converted_ip2 ne 0) {
             prind(__LINE__ . " found hex from the middle part: " . $converted_ip2) if $DEBUG;
-            return 1;
+            return $converted_ip2;
         }
     }
 
-    # do reverse dns here if needed
-    #my @data = rr($value);
-    #prind(__LINE__ . ': ' . Dumper \@data) if $DEBUG;
     prind(__LINE__ . " not an ip address: " . $value) if $DEBUG;
     return 0;
 }
@@ -205,7 +228,7 @@ sub do_resolve {
     if ($query) {
         foreach my $rr ($query->answer) {
             next unless ($rr->type eq "A" or $rr->type eq "AAAA");
-            prind("address: " . $rr->address) if $DEBUG;
+            Irssi::active_win()->print(__LINE__ . " address: " . $rr->address) if $DEBUG;
             return $rr->address;
         }
     } else {
@@ -217,8 +240,9 @@ sub do_resolve {
 sub save_stuff {
     my ($nick, $ident, $ip, $converted_ip, @channels) = @_;
     my $iso_time = strftime("%Y-%m-%dT%H:%M:%S%z", localtime);
-    Irssi::active_win()->print("Saving to file $statsfile: $nick, $ident, $ip");
+    Irssi::active_win()->print("Saving to statsfile: $statsfile. nick: $nick, ident: $ident, ip: $ip, converted_ip: $converted_ip");
     KaaosRadioClass::addLineToFile($statsfile, $iso_time . ';' . $nick . ';' . $ident . ';' . $ip . ';' . $converted_ip . ';');
+    prind("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^") if $DEBUG;
 }
 
 sub add_enabled_channel_command {
@@ -260,6 +284,8 @@ Irssi::signal_add('channel joined', 'event_chan_joined');
 Irssi::signal_add('message join', 'event_msg_joined');
 Irssi::signal_add_first('event 311', 'event_whois');
 Irssi::signal_add('message public', 'sig_msg_pub');
+#Irssi::signal_add_first('message join');
+Irssi::signal_add_first('notifylist joined', 'event_msg_joined');
 
 Irssi::command_bind('dronebl_add_channel', \&add_enabled_channel_command, 'dronebl_check');
 Irssi::command_bind('dronebl_remove_channel', \&remove_enabled_channel_command, 'dronebl_check');
