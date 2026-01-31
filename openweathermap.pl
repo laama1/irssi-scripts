@@ -817,7 +817,7 @@ sub filter_keyword {
 		my $tempstring = GET_WEATHER($city);
 
 		if ($tempstring) {
-			dp(__LINE__ . ', weather found for searchword/city: ' . $city);
+			dp(__LINE__ . ', weather found for searchword/city: ' . $city . ', tempstring: ' . Dumper($tempstring));
 			$returnstring = getSayLine($tempstring);
 			save_user_city_to_database($nick, $city);
 		} else {

@@ -238,7 +238,7 @@ sub floodCheck {
 	$last = readLastLineFromFilename($tsfile);
 	writeToFile($tsfile, $cur);
 	if ($cur - $last < $timedifference) {
-		prind("Flood protection: Command ignored, last command was " . ($cur - $last) . " seconds ago.");
+		print("Flood protection: Command ignored, last command was " . ($cur - $last) . " seconds ago.");
 		return 1;									# return 1, means "flooding"
 	}
 	return 0;
@@ -250,7 +250,7 @@ sub Drunk {
 	if ($nick eq $floodernick) {
 		$floodertimes++;
 		if ($floodertimes > 5 && (time - $flooderdate <= 600)) {
-			prind("Flood protection: $nick is drunk! ($floodertimes times in " . (time - $flooderdate) . " seconds)");
+			print("Flood protection: $nick is drunk! ($floodertimes times in " . (time - $flooderdate) . " seconds)");
 			return 1;
 		} elsif ($floodertimes > 5 && (time - $flooderdate > 600)) {	#10min
 			$flooderdate = time;
@@ -653,7 +653,7 @@ sub is_enabled_channel {
 sub add_enabled_channel {
 	my ($setting_string, $network, $channel, @rest) = @_;
 	if ($channel eq '' || !defined $channel) {
-		return prindw("No channel context found. Change to a channel window first."), -1;
+		return print("No channel context found. Change to a channel window first."), -1;
 	}
 	my $enabled_raw = Irssi::settings_get_str($setting_string);
 	my @enabled = split / /, $enabled_raw;

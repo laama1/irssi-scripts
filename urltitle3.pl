@@ -53,7 +53,17 @@ $VERSION = '2024-06-12';
 	changed     => $VERSION
 );
 
-print __LINE__;
+#print __LINE__;
+
+# TODO: read these from filename
+my @ignorenicks = (
+	'kaaosradio',
+	#'ryokas',
+	'KD_Butt',
+	'micdrop',
+	'infoangel',
+	'cloudbot'
+);
 
 my $DEBUG = 1;
 my $DEBUG1 = 1;
@@ -579,6 +589,8 @@ sub signal_emitters {
 
 	if ($param =~ /twitter.com(.*)\/status\/(.*)/i ||
 		$param =~ /x.com(.*)\/status\/(.*)/i || 
+		$param =~ /xcancel.com(.*)\/status\/(.*)/i || 
+		$param =~ /nitter.poast.org(.*)\/status\/(.*)/i ||
 		$param =~ /fixupx.com(.*)\/status\/(.*)/i) {
 		# twitter status
 		my $id = $2;
@@ -698,8 +710,12 @@ sub url_conversion {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
     my $mynick = quotemeta $server->{nick};
+	$nick = quotemeta $nick;
 	return if ($nick eq $mynick);   #self-test
 	return if ($nick eq 'kaaosradio');
+	return if ($nick =~ /infoangel/i);	# bot
+	return if ($nick =~ /cloudbot/i);	# bot
+	return if ($nick ~~ @ignorenicks);
 
 	$dontprint = 0;
 	# TODO if searching for old link..
@@ -826,8 +842,9 @@ sub sig_msg_pub {
 
 sub msg_to_channel {
 	my ($server, $target, $title, @rest) = @_;
-	if ($dontprint == 1) {return;}
-	return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $target, $server->{chatnet});
+	if ($dontprint == 1) { return; }
+	prind("msg_to_channel: $title" . " to $target on server " . $server->{tag} . " dontprint: $dontprint");
+	return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
 
 	if ($title =~ /(.{260}).*$/s) {
 		$title = $1 . '...';
@@ -1007,6 +1024,7 @@ sub dontPrintThese {
 	return 1 if $url =~ /apina\.biz/i;
 	return 1 if $url =~ /ircz\.de/i;
 	return 1 if $url =~ /explosm\.net\/comics/i;
+	return 1 if $url =~ /finelite/i;
 	return 0;
 }
 

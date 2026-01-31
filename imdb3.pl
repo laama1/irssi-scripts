@@ -78,7 +78,6 @@ sub do_imdb {
 	}
 
 	my $is_enabled = KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
-	dp(__LINE__.": isenabled: $is_enabled");
 	return if KaaosRadioClass::floodCheck() == 1;
 
 	if ($msg eq "!enable imdb") {
@@ -86,10 +85,9 @@ sub do_imdb {
 			sayit($server, $target, 'IMDB-skripti on jo Aktivoitu! (kanavalla: '. $target.')');
 			return;
 		} else {
-			#Irssi::settings_set_str('imdb_enabled_channels', $enabled_raw . ' '. $target);
 			KaaosRadioClass::add_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 			sayit($server, $target, 'Aktivoitiin IMDB-skripti kanavalla: ' . $target);
-			Irssi::print('Aktivoitiin IMDB-skripti kanavalla: ' . $target);
+			prind('Aktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
 		}
 	} elsif ($msg eq "!disable imdb") {
@@ -97,10 +95,9 @@ sub do_imdb {
 			sayit($server, $target, 'IMDB-skripti on Deaktivoitu jo! (kanavalla: '.$target.')');
 			return;
 		} else {
-
 			KaaosRadioClass::remove_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 			sayit($server, $target, 'Deaktivoitiin IMDB-skripti kanavalla: '.$target);
-			Irssi::print('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
+			prind('Deaktivoitiin IMDB-skripti kanavalla: ' . $target);
 			return;
 		}
 	}
@@ -118,7 +115,7 @@ sub do_imdb {
 		return 0;
 	}
 	
-	Irssi::print("!imdb request on $target from nick $nick: request: $request");
+	prind("!imdb request on $target from nick $nick: request: $request");
 
 	if ($request =~ /\b(19|20)(\d{2})\b/) {
 		# FIXME: if movie has year in it's name
@@ -157,13 +154,13 @@ sub sig_imdb_search {
 
 	return unless KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
 
-	Irssi::print($IRSSI{name}.", signal received: $searchparam, $searchword");
+	prind("signal received: $searchparam, $searchword");
 	my $param = 'i';
-	imdb_fetch($server, $target, '', $searchword, $param);
+	imdb_fetch($server, $target, '', $searchword, $param, 1);
 }
 
 sub imdb_fetch {
-	my ($server, $target, $request, $query, $param, @rest) = @_;
+	my ($server, $target, $request, $query, $param, $short, @rest) = @_;
 	if ($query eq '' && $request eq '') {
 		sayit($server, $target, 'En älynnyt..');
 		return 0;
@@ -189,7 +186,7 @@ sub imdb_fetch {
 	# OMDB-API koodia
 	if ($imdb->{Response} =~ /True/ ) {
 		dp(__LINE__.": imdb->Response = TRUE");
-		my $saystring = print_line_from_search_result($imdb);
+		my $saystring = print_line_from_search_result($imdb, $short);
 		sayit($server, $target, $saystring);
 		return 0;
 	}
@@ -239,7 +236,7 @@ sub search_omdb {
 			dp("Search ${i}:");
 			dp(Dumper $imdb->{'Search'}[$i]);
 			#$sayline .= $imdb->{"Search"}[$i]->{Title}. " ".$imdb->{"Search"}[$i]->{Year}." (".$imdb->{"Search"}[$i]->{Type}."), ";
-			print_line_from_search_result($imdb->{'Search'}[$i]);
+			print_line_from_search_result($imdb->{'Search'}[$i], 0);
 			$i++;
 		}
 		return $sayline ." <$manyfound found>";
@@ -267,10 +264,14 @@ sub print_short_line_from_multiple_results {
 
 # OMDB-api
 sub print_line_from_search_result {
-	my ($param, @rest) = @_;
+	my ($param, $short, @rest) = @_;
 	my ($link, $title, $title2, $actor, $plot, $rating) = "";
 
-	$link = "http://www.imdb.com/title/" . $param->{imdbID};
+	if ($short != 1) {
+		# dont print url when short = 1
+		$link = "http://www.imdb.com/title/" . $param->{imdbID};
+	}
+	
 	$title = "\002".$param->{Title}." [".$param->{Year}."]\002";
 	$title2 = $param->{Genre};
 	$title2 .= " \002Directed by\002 ".$param->{Director} if ($param->{Director} ne 'N/A');
@@ -293,7 +294,7 @@ sub do_search {
 
 	my $imdb = eval {$json->utf8->decode($got)};
 	return if $@;
-	Irssi::print "do_search IMDB: ".Dumper $imdb if $DEBUG1;
+	prind("do_search IMDB: ".Dumper $imdb) if $DEBUG1;
 	return $imdb;
 }
 
@@ -302,6 +303,11 @@ sub strip_extra_chars {
 	$string =~ s/,//g;	# remove commas
 	$string =~ s/&//g;	# remove ampersands
 	return $string;
+}
+
+sub prind {
+	my ($text, @test) = @_;
+	print("\0038" . $IRSSI{name} . ">\003 ". $text);
 }
 
 sub dp {
