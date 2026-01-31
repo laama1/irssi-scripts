@@ -73,7 +73,7 @@ sub event_priv_msg {
 	# elsif ($msg =~ /!help$/) {
 	#	$server->command("msg -nick $nick $helpmessage1");
 	#}
-	return unless ($msg =~ /\!h!(a|e|u)/i);
+	return unless ($msg =~ /^\!h!(a|e|u)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -82,7 +82,7 @@ sub event_pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return unless ($target ~~ @channels);
 	return if $nick ~~ @ignorenicks;
-	if ($msg =~ /\!help hor/i) {
+	if ($msg =~ /^\!help hor/i) {
 		$serverrec->command("msg -channel $target $helpmessage2");
 		return;
 	}
@@ -91,7 +91,7 @@ sub event_pub_msg {
 	#	return;
 	#}
 
-	return unless ($msg =~ /\!h/i);
+	return unless ($msg =~ /^\!h/i);
 	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/);
 	return if (KaaosRadioClass::floodCheck() == 1);
 
