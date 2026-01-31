@@ -103,10 +103,10 @@ sub dronebl_check {
 # "message join", SERVER_REC, char *channel, char *nick, char *address, char *account, char *realname
 # "notifylist joined", SERVER_REC, char *nick, char *user, char *host, char *realname, char *awaymsg
 sub event_msg_joined {
-    my ($server, $channel, $nick, $address, $account, $realname) = @_;
+    my ($server, $channel, $nick, $address, $account, $realname, @rest) = @_;
     create_window('dronebl_check');
     Irssi::active_win()->print("------------------------------------------>");
-    Irssi::active_win()->print("User joined channel signal received, channel:  $channel, nick: $nick, address: $address, account: $account, realname: $realname. Do /whois $nick next...");
+    Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next... rest: " . Dumper \@rest);
     my @ip_parts = split('@', $address);
 
     $memory->{$nick}->{'host'} = $address;
@@ -131,7 +131,7 @@ sub event_msg_joined {
         dronebl_check($real_ip);
     } else {
         # do reverse dns here if needed
-        Irssi::active_win()->print(__LINE__ . " do reverse dns for host: " . $host) if $DEBUG;
+        Irssi::active_win()->print(__LINE__ . ": do reverse dns for host: " . $host) if $DEBUG;
         $real_ip = do_resolve($host);
         if ($real_ip ne '') {
             $memory->{$nick}->{'real_ip'} = $real_ip;
@@ -150,7 +150,7 @@ sub is_hex_ident {
         my @decimals = map { hex($_) } @bytes;
         #prind(__LINE__ . " decimals: " . Dumper \@decimals) if $DEBUG;
         my $ip = join('.', @decimals);
-        prind(__LINE__ . " converted ip: " . $ip) if $DEBUG;
+        prind(__LINE__ . ": converted ip: " . $ip) if $DEBUG;
         return $ip;
     }
     return 0;
@@ -176,7 +176,7 @@ sub get_channel_for_user {
     my ($nick, $address, @rest) = @_;
     foreach my $nick (keys %$memory) {
         if (defined $memory->{$nick}->{'channel'}) {
-            prind(__LINE__ . " get_channel_for_user: found channel " . $memory->{$nick}->{'channel'} . " for nick: " . $nick);
+            prind(__LINE__ . ": get_channel_for_user: found channel " . $memory->{$nick}->{'channel'} . " for nick: " . $nick);
             return $memory->{$nick}->{'channel'};
         }
     }
@@ -190,19 +190,19 @@ sub do_the_kick {
 sub is_ipaddress {
     my ($value, @rest) = @_;
     if ($value =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/) {
-        prind(__LINE__ . " ipv4 address detected: " . $value) if $DEBUG;
+        prind(__LINE__ . ": ipv4 address detected: " . $value) if $DEBUG;
         return $value;
     }
     # check if it is ipv6
     if ($value =~ /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/) {
-        prind(__LINE__ . " ipv6 address detected: " . $value) if $DEBUG;
+        prind(__LINE__ . ": ipv6 address detected: " . $value) if $DEBUG;
         return $value;
     }
     # value is exactly 8 hex chars, probably hex cloaked ident
     if ($value =~ /^[0-9a-fA-F]{8}$/) {
         my $converted_ip = is_hex_ident($value);
         if ($converted_ip ne 0) {
-            prind(__LINE__ . " converted hex ident to ip: " . $converted_ip) if $DEBUG;
+            prind(__LINE__ . ": converted hex ident to ip: " . $converted_ip) if $DEBUG;
             return $converted_ip;
         }
     }
@@ -210,12 +210,12 @@ sub is_ipaddress {
     if ($value =~ /[0-9a-fA-F]{8}/) {
         my $converted_ip2 = is_hex_ident($value);
         if ($converted_ip2 ne 0) {
-            prind(__LINE__ . " found hex from the middle part: " . $converted_ip2) if $DEBUG;
+            prind(__LINE__ . ": found hex from the middle part: " . $converted_ip2) if $DEBUG;
             return $converted_ip2;
         }
     }
 
-    prind(__LINE__ . " not an ip address: " . $value) if $DEBUG;
+    prind(__LINE__ . ": this not an ip address: " . $value) if ($value && $DEBUG);
     return 0;
 }
 
@@ -228,11 +228,12 @@ sub do_resolve {
     if ($query) {
         foreach my $rr ($query->answer) {
             next unless ($rr->type eq "A" or $rr->type eq "AAAA");
-            Irssi::active_win()->print(__LINE__ . " address: " . $rr->address) if $DEBUG;
+            Irssi::active_win()->print(__LINE__ . ": ip-address found: " . $rr->address) if $DEBUG;
             return $rr->address;
         }
     } else {
-        warn "Query failed: ", $res->errorstring, "\n";
+        #warn "Query failed: ", $res->errorstring, "\n";
+        Irssi::active_win()->print(__LINE__ . ": DNS query failed for host: " . $host . ", error: " . $res->errorstring) if $DEBUG;
     }
     return '';
 }
@@ -242,7 +243,7 @@ sub save_stuff {
     my $iso_time = strftime("%Y-%m-%dT%H:%M:%S%z", localtime);
     Irssi::active_win()->print("Saving to statsfile: $statsfile. nick: $nick, ident: $ident, ip: $ip, converted_ip: $converted_ip");
     KaaosRadioClass::addLineToFile($statsfile, $iso_time . ';' . $nick . ';' . $ident . ';' . $ip . ';' . $converted_ip . ';');
-    prind("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^") if $DEBUG;
+    Irssi::active_win()->print("^^^^^^^^^^^^^^^^^^^ END ^^^^^^^^^^^^^^^^^^^^^^^^") if $DEBUG;
 }
 
 sub add_enabled_channel_command {
