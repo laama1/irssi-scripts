@@ -14,6 +14,8 @@ use HTML::Entities qw(decode_entities);
 use Encode;
 use URI::Escape;
 use JSON;
+use POSIX;
+use Time::Piece;
 
 use Data::Dumper;
 
@@ -231,7 +233,7 @@ sub writeArrayToFile {
 
 # check if people are flooding two or more commands too fast
 sub floodCheck {
-	my ($timedifference, @rest) = @_ || 3;
+	my ($timedifference, @rest) = @_ || 1;
 	my $last = 0;
 	my $cur = time;
 
@@ -364,18 +366,18 @@ sub replace_non_url_chars {
 	$row =~ s/Ä/a/ug;
 	$row =~ s/ö/o/ug;
 	$row =~ s/Ö/o/ug;
-	$row =~ s/Ã¤/a/g;
-	$row =~ s/Ã¶/o/g;
+	$row =~ s/Ã¤/a/ug;
+	$row =~ s/Ã¶/o/ug;
 
-	$row =~ s/\(/ /g;
-	$row =~ s/\)/ /g;
-	$row =~ s/"/ /g;
-	$row =~ s/'/ /g;		# you're
-	$row =~ s/\!//g;		# !
+	$row =~ s/\(/ /ug;
+	$row =~ s/\)/ /ug;
+	$row =~ s/"/ /ug;
+	$row =~ s/'/ /ug;		# you're
+	$row =~ s/\!//ug;		# !
 
-	$row =~ s/ / /g;		# no-break space nbsp
-	$row =~ s/\*//g;		# * char
-	$row =~ s/—/ /g;		# long dash to normal dash
+	$row =~ s/ / /ug;		# no-break space nbsp
+	$row =~ s/\*/ /ug;		# * char
+	$row =~ s/—/ /ug;		# long dash to space
 
 	return $row;
 }
@@ -464,7 +466,7 @@ sub quickfetch {
 	my ($url, $headers) = @_;
 	my $starttime = time;
 	my $ua = LWP::UserAgent->new();
-	$ua->timeout(5);				# 5 seconds
+	$ua->timeout(6);				# 6 seconds
 	#dp(__LINE__ . ' url: ' . $url . ' time: ' . (time - $starttime));
 	my $request = HTTP::Request->new('GET', $url, $headers);
 	#dp(__LINE__ . ' ua request next .. time: ' . (time - $starttime));
@@ -521,7 +523,6 @@ sub fetchUrl {
 	my $page = '';
 	my $finalURI = '';
 	if ($response->is_success) {
-		dp(__LINE__ . ' response is success');
 		$page = $response->decoded_content();		# $page = $response->decoded_content(charset => 'none');
 		$size = $response->content_length || 0;		# or content_size?
 		if ($size / (1024*1024) > 1) {
@@ -550,25 +551,25 @@ sub getJSON {
 	my $comparetime = time;
 	#my $response = fetchUrl($url, 0, $headers);
 	my $response = quickfetch($url, $headers);
-	df(__LINE__. ' response: ' . $response);
+	df(__LINE__. ' krc: url: ' . $url . ', response: ' . $response);
 	if ($response && $response eq '-1') {
-		df(__LINE__.': error fetching url! time: ' . (time - $comparetime));
+		df(__LINE__.' krc: error fetching url: ' . $url . ' time: ' . (time - $comparetime));
 		return -1;
 	}
 	return -2 unless $response;
-	df(__LINE__ . ' getJSON success, time: ' . (time - $comparetime));
+	df(__LINE__ . ' krc: getJSON success! time: ' . (time - $comparetime));
 	my $json = JSON->new->utf8;
 	$json->convert_blessed(1);
-	#dp (__LINE__);
+
 	eval {
 		$json = decode_json($response);
 	};
 	if ($@) {
-		df(__LINE__.': JSON decode error: '. $@  . ' time: ' . (time - $comparetime));
+		df(__LINE__.' krc: JSON decode error: '. $@  . ' time: ' . (time - $comparetime));
 		return -3;
 	}
 
-	df(__LINE__ . ' json decoded succesfully, time: ' . (time - $comparetime));
+	df(__LINE__ . ' krc: json decoded succesfully, time: ' . (time - $comparetime));
 	return $json;
 }
 
@@ -595,6 +596,8 @@ sub da {
 # write to log file
 sub df {
 	my ($text, @rest) = @_;
+	my $timestring = strftime("%Y-%m-%d %H:%M:%S", localtime);
+	$text = "[$timestring] $text";
 	my $logfile = $currentDir . '/kaaosradio_debug.log';
 	addLineToFile($logfile, $text);
 	return;
@@ -685,6 +688,34 @@ sub remove_enabled_channel {
 		}
 	}
 	return 0;	# not found, return 0
+}
+
+# format youtube/imgur etc timestamp
+sub format_time_ago {
+	my ($value, @rest) = @_;
+	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
+	my $local_time = localtime;
+
+	my $diff = ($local_time - $time_object);
+
+	my $result = '';
+	if ($diff >= 29030400) {
+    	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
+	} elsif ($diff >= 2419200) {
+		$result = sprintf("%.1f", ($diff / 2419200)) . 'mon';
+	} elsif ($diff >= 604800) {
+		$result = sprintf("%.1f", ($diff / 604800)) . 'wk';
+	} elsif ($diff > 86400) {
+		$result = sprintf("%.1f", ($diff / 86400)) . 'days';
+	} elsif ($diff > 3600) {
+		$result = sprintf("%.1f", ($diff / 3600)) . 'h';
+	} elsif($diff > 60) {
+		$result = sprintf("%.f", $diff / 60) . 'mins';
+	} else {
+		$result = $diff . 's';
+	}
+	$result .= ' ago';
+	return $result;
 }
 
 
