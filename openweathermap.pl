@@ -47,8 +47,8 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 1;
-my $DEBUG1 = 1;
+my $DEBUG = 0;
+my $DEBUG1 = 0;
 my $db_file = Irssi::get_irssi_dir(). '/scripts/openweathermap3.db';
 my $dbh;	# database handle
 
@@ -243,7 +243,7 @@ sub GET_WEATHER {
 	}
 	my $json = request_api($newurl.$urltail);
 	#da(__LINE__.': GET_WEATHER json', $json);
-	dp(__LINE__.': GET_WEATHER json done');
+
 	#my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
 
 	#if ($json eq '-1') {
@@ -633,7 +633,6 @@ sub FIND_CITY {
 # save new city to database if it does not exist. openweathermap does not return "Jyväskylä" with umlauts, so we save also the searchword used.
 sub SAVE_CITY {
 	my ($searchword, $json, @rest) = @_;
-	dp(__LINE__.': SAVE_CITY next.. ' . $searchword);
 	my $now = time;
 	my $sql = "INSERT OR REPLACE INTO CITIES (CITYID, NAME, COUNTRY, PVM, LAT, LON, POSTNUMBER) VALUES (?, ?, ?, ?, ?, ?, ?)";
 	return KaaosRadioClass::insertSQL($db_file, $sql, ($json->{id}, $searchword, $json->{sys}->{country}, $now, $json->{coord}->{lat}, $json->{coord}->{lon}, 'postnumber'));
@@ -642,7 +641,6 @@ sub SAVE_CITY {
 # save weather data to database
 sub SAVEDATA {
 	my ($json, @rest) = @_;
-	dp(__LINE__.': SAVEDATA next..');
 	my $now = time;
 	my $name = $json->{name};
 	my $country = $json->{sys}->{country} || '';
@@ -807,7 +805,6 @@ sub filter_keyword {
 		if (!$searchword) {
 			return 'Kirjoita kaupunki, esim: !sää Kuopio';
 		}
-		dp(__LINE__ . ', searchword: ' . $searchword . '<');
 
 		my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
 
@@ -817,7 +814,6 @@ sub filter_keyword {
 		my $tempstring = GET_WEATHER($city);
 
 		if ($tempstring) {
-			dp(__LINE__ . ', weather found for searchword/city: ' . $city . ', tempstring: ' . Dumper($tempstring));
 			$returnstring = getSayLine($tempstring);
 			save_user_city_to_database($nick, $city);
 		} else {
