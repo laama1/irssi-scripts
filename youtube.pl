@@ -23,7 +23,7 @@ $VERSION = '2025-11-22';
         changed     => $VERSION
 );
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $localdir = Irssi::get_irssi_dir() . '/scripts/';
 my $apikeyfile = $localdir . 'youtube_apikey';
@@ -44,7 +44,6 @@ sub sig_youtube {
     my $newUrlData = {};
     my $url = $apiurl . "&id=" . $videoid;
     my $jsondata = KaaosRadioClass::getJSON($url);
-    #print Dumper $jsondata if ($DEBUG);
 
     if ($jsondata eq '-1' || $jsondata eq '-2') {
         prind('youtube api failed!');
@@ -59,7 +58,6 @@ sub sig_youtube {
     }
 
     my $searchresult = $jsondata->{items}[0];
-    #print Dumper $searchresult if ($DEBUG);
 
     my $likes = '👍'.$searchresult->{statistics}->{likeCount};
     my $commentcount = $searchresult->{statistics}->{commentCount};
@@ -69,7 +67,8 @@ sub sig_youtube {
     my $published = $searchresult->{snippet}->{publishedAt};
     my $duration = $searchresult->{contentDetails}->{duration};
     $duration = format_duration($duration);
-    $published = format_time($published);
+    $published = KaaosRadioClass::format_time_ago($published);
+    #$published = format_time($published);
     $newUrlData->{title} = "\0030,5 ▶ \003 " . $title . ' ['.$duration.'] [' . $chantitle . ', ' . $published . ', ' . $likes . ']';
     $newUrlData->{desc} = $description;
 
@@ -78,10 +77,9 @@ sub sig_youtube {
     $server->command("msg $target " . $newUrlData->{title} . $newUrlData->{extra});
 }
 
-# format youtube timestamp
+# format youtube timestamp TODO: use KaaosRadioClass::format_time_ago instead
 sub format_time {
 	my ($value, @rest) = @_;
-    #print Dumper $value if $DEBUG;
 	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
 	my $local_time = localtime;
 
@@ -102,7 +100,7 @@ sub format_time {
 	} elsif($diff > 60) {
 		$result = sprintf("%.f", $diff / 60) . 'mins';
 	} else {
-		$result .= 's';
+		$result = $diff . 's';
 	}
 	$result .= ' ago';
 	return $result;
@@ -129,4 +127,4 @@ sub prind {
 }
 
 prind($IRSSI{name}." v. $VERSION loaded.");
-Irssi::signal_add('youtube_search_id', 'sig_youtube');
+Irssi::signal_add('sig_youtube_search_id', 'sig_youtube');
