@@ -27,6 +27,8 @@ use HTTP::CookieJar::LWP;
 use HTTP::Response;
 use HTML::Entities qw(decode_entities);
 use utf8;
+binmode STDOUT, ':utf8';
+binmode STDIN, ':utf8';
 use Date::Parse;
 use DBI;
 use DBI qw(:sql_types);
@@ -65,9 +67,9 @@ my @ignorenicks = (
 	'cloudbot'
 );
 
-my $DEBUG = 1;
-my $DEBUG1 = 1;
-my $DEBUG_decode = 0;
+my $DEBUG = 0;
+my $DEBUG1 = 0;
+my $DEBUG_decode = 1;
 my $irssidir = '/home/laama/.irssi';
 my $logfile = $irssidir.'/scripts/urllog_v2.txt';
 my $cookie_file = $irssidir . '/scripts/urltitle3_cookies.dat';
@@ -77,7 +79,6 @@ my $google_apikeyfile = $irssidir. '/scripts/youtube_apikey';
 my $google_apikey = KaaosRadioClass::readLastLineFromFilename($google_apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
-my $imgurUrl = 'farside.link/rimgo';
 
 #my $twitterurl = 'https://xcancel.com';
 my $twitterurl = 'https://farside.link/nitter';
@@ -111,7 +112,7 @@ unless (-e $db) {
 		die;
 	}
 	close FILE;
-	createFstDB();
+	createFtsDB();
 	prind("Database file created.");
 }
 
@@ -190,9 +191,9 @@ sub fetch_title {
 		$page = $response->decoded_content(charset => 'UTF-8');
 		my $datasize = length $page;
 		if ($page ne $diffpage) {
-			dd(__LINE__.':fetch_title: Different charsets presumably not UTF-8!') if $DEBUG1;
+			dd(__LINE__.': fetch_title: Different charsets presumably not UTF-8!');
 		} else {
-			dd(__LINE__.':fetch_title: Same charset / content as reported!') if $DEBUG1;
+			dd(__LINE__.': fetch_title: based on page size in bytes, Same charset / content as reported!');
 		}
 
 		if ($datasize > $max_size) {
@@ -207,17 +208,8 @@ sub fetch_title {
 		} else {
 			prindw("Couldn't get size of the document!");
 		}
+		$size = format_kibibytes($size);
 		
-		if ($size / (1024*1024) > 1) {
-			$size = 'size: ' .sprintf("%.2f", $size / (1024*1024)) . 'MiB';
-		} elsif ($size / 1024 > 1) {
-			$size = 'size: ' .sprintf("%.2f", $size / 1024) . 'KiB';
-		} elsif ($size > 0) {
-			$size = "size: ${size}B";
-		} elsif ($size == 0) {
-			$size = '';
-		}
-
 	} else {
 		prindw("Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);
 		$newUrlData->{responsecode} = $response->code();
@@ -236,7 +228,7 @@ sub fetch_title {
 	my ($titteli, $description, $titleInUrl) = getTitle($response, $url);
 
 	if (length $titteli > 0) {
-		return 'Title: '.$titteli, $description, $titleInUrl, $md5hex;
+		return "\002Title:\002 " . $titteli, $description, $titleInUrl, $md5hex;
 	} else {
 		return '', $description, $titleInUrl, $md5hex;
 	}
@@ -248,10 +240,11 @@ sub getTitle {
 	my $countWordsUrl = $url;
 	$countWordsUrl =~ s/^http(s)?\:\/\/(www\.)?//g;		# strip https://www. # FIXME 2024-02-13
 	#$countWordsUrl =~ s/\.[\w\d]{1.5}$//g;				# strip .html or .net from the end (dangerous)
-	
+
 	# get Charset
 	my $headercharset = $response->header('charset') || '';
 	my $contentcharset = $response->content_charset || '';
+	dd(__LINE__ . ': getTitle: header charset: ' . $headercharset . ', content charset: ' . $contentcharset);
 
 	my $ogtitle = ''; #$response->header('og:title') || '';		# open graph title
 	
@@ -260,6 +253,11 @@ sub getTitle {
 	# get Title and Description
 	my $newtitle = $response->header('title') || '';
 	my $newdescription = $response->header('x-meta-description') || $response->header('Description') || $ogtitle || '';
+	dd(__LINE__ . ' getTitle: title from header: ' . $newtitle . ', description from header: ' . $newdescription . ', test charset: ' . $testcharset);
+	if ($newtitle ne '' && $newdescription ne '') {
+		dd(__LINE__ . ' getTitle: title and description found from headers, skipping source parsing!');
+		return decode_entities($newtitle), decode_entities($newdescription), 0;
+	}
 
 	# HACK:
 	my $temppage = KaaosRadioClass::ktrim($response->decoded_content);
@@ -278,19 +276,21 @@ sub getTitle {
 	if ($temppage =~ /property="og\:description" content="(.*?)"/si) {
 		# open graph title, high priority
 		$newdescription = $1;
-		dd(__LINE__.' og description found! '. $newdescription);
+		dd(__LINE__ . ' getTitle: og:description found! '. $newdescription);
 	}
 
 	if ($temppage =~ /charset="utf-8"/i && falseUtf8Pages($url)) {
+		dd(__LINE__ . ' getTitle: utf-8 meta charset tag found manually from source! and false utf8 page!');
 		$newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
 		$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
 	} elsif ($temppage =~ /charset="utf-8"/i) {
-		dd(__LINE__.':getTitle utf-8 meta charset tag found manually from source!');
-		# LAama 29.12.2017 $newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
-		#$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
+		dd(__LINE__ . ' getTitle: utf-8 meta charset tag found manually from source!');
+		# LAama 29.12.2017, 2026-03-14
+		$newtitle = checkAndEncode($newtitle, $testcharset) if $newtitle;
+		$newdescription = checkAndEncode($newdescription, $testcharset) if $newdescription;
 
 	} elsif ($testcharset !~ /UTF8/i && $testcharset !~ /UTF-8/i) {
-
+		dd(__LINE__ . ' getTitle: not utf8 charset found manually from source!');
 		$newtitle = checkAndEncode($newtitle, $testcharset);
 		$newdescription = checkAndEncode($newdescription, $testcharset);
 	}
@@ -298,19 +298,20 @@ sub getTitle {
 	my $title = '';
 	
 	if ($newtitle eq '') {
+		dd(__LINE__ . ' getTitle: newtitle was empty, trying to fetch title from source');
 		if ($temppage =~ /<title\s?.*?>(.*?)<\/title>/si) {
-			$title = decode_entities($1);
+			$title = $1;
 		}
 
 	} elsif ($newtitle) {
-		$title = decode_entities($newtitle);
+		$title = $newtitle;
 	}
 
 	my $titleInUrl = 0;
 	if ($title ne '') {
 		$titleInUrl = checkIfTitleInUrl($countWordsUrl, $title);
 	}
-	return $title, decode_entities($newdescription), $titleInUrl;
+	return decode_entities($title), decode_entities($newdescription), $titleInUrl;
 }
 
 sub get_channel_topic {
@@ -333,11 +334,12 @@ sub e2U {
 ### Check if charset is utf8. if not, convert to utf8. Params: 1) String to convert 2) source charset.
 sub checkAndEncode {
 	my ($string, $charset, @rest) = @_;
-	dd(__LINE__.": checkAndEncode, charset given: $charset, string given: $string");
+	return $string;
+	dd(__LINE__.": check And Encode, charset given: $charset, string given: $string");
 	my $returnString = "";
 	if ($charset !~ /utf-8/i && $charset !~ /utf8/i) {
 		dd(__LINE__.": charset was not reported at utf8");
-		if ($string =~ /Ã/) {
+		if ($string =~ /[Ã]/) {
 			dd(__LINE__.": most likely ISO CHARS INSTEAD OF UTF8, converting from ${charset}");
 			$returnString = e2U($string, $charset);
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
@@ -349,7 +351,7 @@ sub checkAndEncode {
 		}
 	} elsif ($charset =~ /utf-8/i || $charset =~ /utf8/i) {
 		dd(__LINE__.": charset was reported as utf8");
-		if ($string =~ /Ã/) {
+		if ($string =~ /[Ã]/) {
 			dd(__LINE__.": ISO CHARS FOUND, INCORRECT! (reported as $charset)");
 			$returnString = e2U($string, $charset) || "";		
 		} elsif ($string =~ /[ÄäÖöÅå]/u) {
@@ -377,6 +379,7 @@ sub checkIfTitleInUrl {
 }
 
 sub count_same_words {
+	# count how many words in title are found in url
 	my ($url, $title, @rest) = @_;
 	my @rows1 = split_row_to_array($url);	# url
 	my @rows2 = split_row_to_array($title);	# title
@@ -386,9 +389,11 @@ sub count_same_words {
 		if ($item ~~ @rows1) {
 			$count1++;
 		} elsif (length $item > 1 && $url =~ /\Q$item\E/g) {
+			# quote meta characters
 			$count1++;
 		}
         if ($count1 == $titlewordCount) {
+			#when enough same words are found, return immediately without counting the rest of the title words
     	    return $count1, $titlewordCount;
         }
 	}
@@ -400,15 +405,11 @@ sub split_row_to_array {
 	my ($row, @rest) = @_;
 
 	$row = KaaosRadioClass::replace_non_url_chars($row);
-	#$row =~ s/[^\w\s\-\.\/\+\#]//g;
 	$row =~ s/\s+/ /g;
-	#$row = KaaosRadioClass::ktrim($row);
 	$row = lc($row);
 
-	dd(__LINE__.": split_row_to_array after: $row");
 	my @returnArray = split(/[\s\&\|\+\-\–\–\_\.\/\=\?\#,]+/, $row);
-	dd('split_row_to_array word count: ' . ($#returnArray+1));
-	da(@returnArray) if $DEBUG_decode;
+	dp(__LINE__.": split row to array word count: " . ($#returnArray+1) . ", returnArray: " . join(', ', @returnArray));
 	return @returnArray;
 }
 
@@ -435,7 +436,7 @@ sub shortenURL {
 }
 
 # Create FTS4 table (full text search)
-sub createFstDB {
+sub createFtsDB {
 	my $dbh = KaaosRadioClass::connectSqlite($db);
 
 	# Using FTS (full-text search)
@@ -464,7 +465,7 @@ sub saveToDB {
     
 	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
 	
-	dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{desc}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
+	#dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{desc}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$db", "", "", { RaiseError => 1 },) or die DBI::errstr;
 	my $sth = $dbh->prepare("INSERT INTO links VALUES(?,?,?,?,?,?,?)") or die DBI::errstr;
@@ -505,46 +506,12 @@ sub checkForPrevEntry {
 	$sth->finish();
 	$dbh->disconnect();
 	my $count = @elements;
-	dp(__LINE__.": $count previous elements found!") if $DEBUG1;
+	#dp(__LINE__.": $count previous elements found!") if $DEBUG1;
 	return @elements;		# return all rows
 }
 
 sub api_conversion {
 	my ($param, $server, $target, @rest) = @_;
-
-
-	# TODO: imgur API-conversion
-	if ($param =~ /\:\/\/imgur\.com\/gallery\/([\d\w\W]{2,8})/) {
-		my $image = $1;
-		prind("imgur-klick! img: $image");
-	} elsif ($param =~ /\:\/\/imgur\.com\/([\d\w\W]{2,8})/) {
-		my $image = $1;
-		prind("imgur-klick! img: $image");
-
-
-	} elsif ($param =~ /\:\/\/i\.imgur\.com\/([\d\w\W]{2,8})\.(jpg|png|gif|jpeg)/) {
-		my $image = $1;
-		prind("imgur direct image klick! img: $image");
-		my $apiurl = "https://api.imgur.com/3/image/" . $image;
-		my $h = HTTP::Headers->new;
-    	$h->header('Accept-Encoding' => 'gzip,deflate,br', 'Authorization' => 'Client-ID cf3bb7bb402c86e');
-    	my $jsondata = KaaosRadioClass::getJSON($apiurl, $h);
-		if ($jsondata eq '-1') {
-			print "FAK!";
-			return 0;
-		}
-		my $id = $jsondata->{data}->{id} || '';
-		my $title = $jsondata->{data}->{title} || '';
-		$title .= ' ' if $title ne '';
-		my $width = $jsondata->{data}->{width} || '';
-		my $height = $jsondata->{data}->{height} || '';
-		my $size = $jsondata->{data}->{size} || '';
-		my $views = $jsondata->{data}->{views} || '';
-
-		$newUrlData->{title} = "Imgur image: ${title}[${width}x${height}, size: ".sprintf("%.2f", $size / 1024)."KiB, views: $views]";
-		$newUrlData->{desc} = '';
-		return 1;
-	}
 
 	# google drive
 	if ($param =~ /\:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]*)/) {
@@ -582,23 +549,23 @@ sub api_conversion {
 	return 0;
 }
 
-# Emit signal for another script to handle
 sub signal_emitters {
-	my ($param, $server, $target, @rest) = @_;
+	# Emit signal for another script to handle
+	my ($server, $target, $url, @rest) = @_;
 	return 0 if $dontprint == 1;
 
-	if ($param =~ /twitter.com(.*)\/status\/(.*)/i ||
-		$param =~ /x.com(.*)\/status\/(.*)/i || 
-		$param =~ /xcancel.com(.*)\/status\/(.*)/i || 
-		$param =~ /nitter.poast.org(.*)\/status\/(.*)/i ||
-		$param =~ /fixupx.com(.*)\/status\/(.*)/i) {
+	if ($url =~ /twitter.com(.*)\/status\/(.*)/i ||
+		$url =~ /x.com(.*)\/status\/(.*)/i || 
+		$url =~ /xcancel.com(.*)\/status\/(.*)/i || 
+		$url =~ /nitter.poast.org(.*)\/status\/(.*)/i ||
+		$url =~ /fixupx.com(.*)\/status\/(.*)/i) {
 		# twitter status
 		my $id = $2;
 		Irssi::signal_emit('twitter_search_id', $server, $target, $id);
 		prind("Twitter signal emited!! id: $id");
 		return 1;
 	}
-	if ($param =~ /imdb\.com\/title\/(tt[\d]+)/i) {
+	if ($url =~ /imdb\.com\/title\/(tt[\d]+)/i) {
 		# sample: https://www.imdb.com/title/tt2562232/
 		Irssi::signal_emit('imdb_search_id', $server, 'tt-search', $target, $1);
 		prind("IMDB signal emited!! $1");
@@ -606,28 +573,35 @@ sub signal_emitters {
 	}
 
 	# taivaanvahti id
-	if ($param =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
+	if ($url =~ /www.taivaanvahti.fi\/observations\/show\/(\d+)/gi) {
 		Irssi::signal_emit('taivaanvahti_search_id', $server, 'HAVAINTOID', $target, $1);
 		prind("Taivaanvahti signal emited!! $1");
 		return 1;
 
 	# yle areena downloader
-	} elsif ($param =~ /(https?.*areena\.yle\.fi.*)/) {
+	} elsif ($url =~ /(https?.*areena\.yle\.fi.*)/) {
 		Irssi::signal_emit('yle_url', $server, $target, $1);
 		prind("Yle_url signal emited!! $1");
 		return 1;
 	}
 
-	if ($param =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
-		$param =~ /youtu\.be\/([^\?\&]*)\b/ || 
-		#$param =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
-		#$param =~ /invidious.*\/.*[\?\&]v=([^\&]*)/ ||
-		$param =~ /watch\?v=([^\&]*)/ ||
-		$param =~ /youtube\.com\/shorts\/([^\?\&]*)/
+	if ($url =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
+		$url =~ /youtu\.be\/([^\?\&]*)\b/ || 
+		#$url =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
+		#$url =~ /invidious.*\/.*[\?\&]v=([^\&]*)/ ||
+		$url =~ /watch\?v=([^\&]*)/ ||
+		$url =~ /youtube\.com\/shorts\/([^\?\&]*)/
 	) {
 		my $videoid = $1;
-		Irssi::signal_emit('youtube_search_id', $server, $target, $videoid);
+		Irssi::signal_emit('sig_youtube_search_id', $server, $target, $videoid);
 		prind("Youtube signal emited!! $videoid");
+		return 1;
+	}
+
+	if ($url =~ /imgur\.com/) {
+		# imgur url, emit signal for another script to handle
+		Irssi::signal_emit('sig_imgur_api', $server, $target, $url);
+		prind("Imgur signal emited!! url: $url");
 		return 1;
 	}
 
@@ -636,7 +610,7 @@ sub signal_emitters {
 
 sub url_conversion {
 	my ($param, $server, $target, @rest) = @_;
-	dp(__LINE__.": url_conversion, param: $param") if $DEBUG1;
+	#dp(__LINE__.": url_conversion, param: $param") if $DEBUG1;
 	
 	# soundcloud conversion, example: https://soundcloud.com/oembed?url=https://soundcloud.com/shatterling/shatterling-different-meanings-preview
 	$param =~ s/\:\/\/soundcloud.com/\:\/\/soundcloud.com\/oembed\?url\=http\:\/\/soundcloud\.com/;
@@ -681,18 +655,6 @@ sub url_conversion {
 		$newUrlData->{extra} = " -- proxy: $param";
 	}
 
-	if ($param =~ /imgur\.com\/(.*)/i) {
-		
-		my $proxyurl = $param;
-		$proxyurl =~ s/i\.imgur\.com/$imgurUrl/i;
-		$proxyurl =~ s/imgur\.com/$imgurUrl/i;
-		$newUrlData->{extra} = " -- proxy: $proxyurl";
-		dp(__LINE__.": imgur.com detected! proxyurl: $proxyurl");
-		# needed for now:
-		#$param =~ s/i\.imgur\.com/$imgurUrl/i;
-		#$param =~ s/imgur\.com/$imgurUrl/i;
-	}
-
 	if ($param =~ /reddit\.com/i) {
 		$param =~ s/reddit\.com/$redditUrl/i;
 		$newUrlData->{extra} = " -- proxy: $param";
@@ -700,8 +662,8 @@ sub url_conversion {
 	}
 
 	if ($param =~ /hs.fi/i) {
-		my $proxyurl = $hsUrl. $param;
-		$newUrlData->{extra} = " -- proxy: $proxyurl";
+		#my $proxyurl = $hsUrl. $param;
+		#$newUrlData->{extra} = " -- proxy: $proxyurl";
 	}
 
 	return $param;
@@ -787,7 +749,7 @@ sub sig_msg_pub {
 		$shorturlEnabled = 0;
 	}
 	
-	return if signal_emitters($newUrlData->{fetchurl}, $server, $target);
+	return if signal_emitters($server, $target, $newUrlData->{fetchurl});
 
 	if (api_conversion($newUrlData->{fetchurl})) {
 	} else {
@@ -807,12 +769,16 @@ sub sig_msg_pub {
 	my $oldOrNot = checkIfOld($server, $newUrlData->{url}, $newUrlData->{chan}, $newUrlData->{md5});
 
 	# shorten output message
-	prind("Shortening url info a bit...") if ($newtitle =~ s/(.{260})(.*)/$1.../);
+	prind("Shortening url info a bit...") if ($newtitle =~ s/(.{280})(.*)/$1.../);
 	$title = $newtitle;
 	
 	# if description would suit better than title, use description instead
 	if ($newUrlData->{desc} && $newUrlData->{desc} ne '' && $newUrlData->{desc} ne '0' && length($newUrlData->{desc}) > length($newUrlData->{title})) {
-		$title = 'Desc: '.$newUrlData->{desc} unless noDescForThese($newUrlData->{url});
+		if ($isTitleInUrl == 1) {
+			$title = "\002Desc:\002 " . $newUrlData->{desc};
+		} else {
+			$title .= ", \002Desc:\002 " . $newUrlData->{desc} unless noDescForThese($newUrlData->{url});
+		}
 	}
 
 	# if original url longer than 70 characters, do "shorturl"
@@ -821,7 +787,6 @@ sub sig_msg_pub {
 		$title .= " -> $newUrlData->{shorturl}" if ($newUrlData->{shorturl} ne '');
 	}
 
-	# imgur stuff
 	$title .= $newUrlData->{extra};
 	# increase $howDrunk if necessary
 	if ($dontprint == 0 && $isTitleInUrl == 0 && $title ne '') {
@@ -846,7 +811,7 @@ sub msg_to_channel {
 	prind("msg_to_channel: $title" . " to $target on server " . $server->{tag} . " dontprint: $dontprint");
 	return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
 
-	if ($title =~ /(.{260}).*$/s) {
+	if ($title =~ /(.{280}).*$/s) {
 		$title = $1 . '...';
 	}
 	$server->command("msg -channel $target $title");
@@ -868,7 +833,7 @@ sub checkIfOld {
 
 	my @prevUrls = checkForPrevEntry($url, $target, $md5hex);
 	my $count = @prevUrls;
-	dp(__LINE__.":checkIfOld count: $count, howDrunk: $howDrunk");
+	#dp(__LINE__.":checkIfOld count: $count, howDrunk: $howDrunk");
 	if ($count != 0 && $howDrunk == 0) {
 		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime $prevUrls[0][1];
 		$year += 1900;
@@ -1070,7 +1035,6 @@ sub clearUrlData {
 	$newUrlData->{shorturl} = '';	# short url
 	$newUrlData->{responsecode} = '';	# response code if error
 	$newUrlData->{extra} = '';
-	#KaaosRadioClass::floodCheck();	# write current timestamp to flood file
 }
 
 # debug print
@@ -1155,8 +1119,11 @@ Irssi::signal_register($signal_config_hash3);
 my $signal_config_hash4 = { 'twitter_search_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash4);
 
-my $signal_config_hash5 = { 'youtube_search_id' => [ qw/iobject string string/ ] };
+my $signal_config_hash5 = { 'sig_youtube_search_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash5);
+
+my $signal_config_hash6 = { 'sig_imgur_api' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash6);
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 

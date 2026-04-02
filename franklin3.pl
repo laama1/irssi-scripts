@@ -6,6 +6,7 @@ use warnings;
 use LWP::UserAgent;
 use LWP::Simple;
 use HTTP::Headers;
+use IO::Socket::UNIX;
 use utf8;                             # Source code is encoded using UTF-8
 use open ':std', ':encoding(UTF-8)';  # Terminal expects UTF-8
 use URI;
@@ -28,8 +29,11 @@ my $howManyImages = 1;        # how many images we want to generate
 my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 my $processes = {};
+my $fetch_dalle_processes = {};
+my $fetch_dalle_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fetch_dalle.sh';
 my $DEBUG = 1;
 my $runningnumber = 0;
+my $socket_path = '/tmp/franklin3.sock';
 
 #my $systemsg_start = 'Answer at most in 40 words. ';
 my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
@@ -473,7 +477,7 @@ sub tts {
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
 
-    if ($msg =~ /^!tts$/u ) {
+    if ($msg =~ /^!tts$/u || $msg =~ /^!tts help$/u) {
         # print help
         my $answer = "\002OpenAI TTS voices:\002 ";
         $answer .= join(', ', @tts_voices);
@@ -517,7 +521,8 @@ sub tts {
             $vibe = lcfirst($vibe);
         }
 
-        $answer = "voice: $voicemodel, vibe: $vibe, query: $query, ";
+        #$answer = "\002Voice:\002 $voicemodel, \002Vibe:\002 $vibe, \002Query:\002 $query, ";
+        $answer = "\002Voice:\002 $voicemodel, \002Vibe:\002 $vibe, ";
         prindd(__LINE__ . ": voicemodel: $voicemodel, vibe: $vibe, query: $query");
 
         my $data = { model => "tts-1-hd", voice => $voicemodel, vibe => $vibe,  input => $query, response_format => "mp3"};
@@ -526,10 +531,10 @@ sub tts {
         if ($res->is_success) {
             my $data = $res->content;
             my $time = time;
-            my $filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
-            if (save_file_blob($data, $filename)) {
+            my $audio_filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
+            if (save_file_blob($data, $audio_filename)) {
                 $answer .= "\002OpenAI TTS result:\002 ";
-                $answer .= "https://bot.8-b.fi/dale/$filename (" .length($data). 'b)';
+                $answer .= "https://bot.8-b.fi/dale/$audio_filename (" .length($data). 'b)';
                 $server->command("msg -channel $channel $answer");
             }
 
@@ -554,10 +559,10 @@ sub tts {
                 my $time = time;
                 my $index = 0;
                 
-                my $filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
-                if (save_file_blob($data, $filename)) {
+                my $tts_filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
+                if (save_file_blob($data, $tts_filename)) {
                     $answer .= "\002" . $voicemodel . ":\002 ";
-                    $answer .= "https://bot.8-b.fi/dale/$filename (" .length($data). 'b), ';
+                    $answer .= "https://bot.8-b.fi/dale/$tts_filename (" .length($data). 'b), ';
                 }
 
             } else {
@@ -626,10 +631,13 @@ sub dalle {
                 while ($index < $howManyImages) {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
                     my $imageurl = $json_decd->{data}[$index]->{url};
-                    my $result = `wget -q -O ${outputdir}${filename} "$imageurl"`;
+                    my $result = `${fetch_dalle}${filename} "$imageurl"`;
+
                     debu(__LINE__ . ": wget output file: " . $outputdir.$filename);
-                    my $dallecmd = make_dalle_curl_cmd($query, $filename);
-                    start_cmd($dallecmd, find_window_refnum($server, $channel), $nick);
+                    my $window_refnum = find_window_refnum($server, $channel);
+                    #my $dallecmd = make_dalle_curl_cmd($query, $filename);
+                    #start_cmd($dallecmd, find_window_refnum($server, $channel), $nick);
+                    create_dalle_process($nick, $window_refnum, $filename, $query);
 
                     #if (save_file_blob(decode_base64($json_decd->{data}[$index]->{b64_json}), $filename) >= 0) {
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
@@ -661,20 +669,19 @@ sub start_cmd {
     my $fullcmd = $execscript . $window_number . '_' . $nick . ' ' . $cmd;
     debu(__LINE__ . ": starting command: $fullcmd");
     Irssi::command($fullcmd);
-    
 }
 
 sub make_dalle_curl_cmd {
     my ($prompt, $filename, @rest) = @_;
-    my $curlcmd = 'curl ' . $dalleurl . ' ' .
+    my $image_filename = $filename . '_2.png';
+    my $curlcmd = 'curl -s ' . $dalleurl . ' ' .
         '-H "Authorization: Bearer ' . $apikey . '" ' .
         '-H "Content-Type: application/json" ' .
         '-d \'{"model": "' . $visionmodel . '", "prompt": "' . $prompt . '", "size": "1024x1024"}\' ' .
         '| jq -r \'.data[0].url\' ' .
-        '| xargs -I {} curl -L "{}" -o ' . $outputdir . '2_' . $filename;
+        '| xargs -I {} curl -s -L "{}" -o ' . $outputdir . '2_' . $image_filename;
     #debu(__LINE__ . ": DALL-e curl command: $curlcmd");
     return $curlcmd;
-
 }
 
 sub save_file_blob {
@@ -741,13 +748,14 @@ sub event_privmsg {
         return;
     }
     return if ($msg =~ /^\!/);              # other !commands
-    return if KaaosRadioClass::floodCheck(3);
+    #return if KaaosRadioClass::floodCheck(3);
 
     # simple make_call_private, no retries
     #if (my $text = make_call_private($msg, $nick)) {
     if (my $text = make_call_public($msg, $nick, $nick, 'private')) {
         $text = format_markdown($text);
         $text = format_formula($text);
+        prind(__LINE__ . ": private call answer: $text");
         $server->command("msg $nick $text");
     } else {
         $server->command("msg $nick *pier*");
@@ -1020,9 +1028,9 @@ sub exec_new {
 		$winnum = $1;
 		#$itemcount = $2;
 		$nick = $2;
-        Irssi::print(__LINE__ . ': exec_new process_name: ' . $process_name . ', winnum: ' . $winnum . ', nick: ' . $nick);
+        prind('exec_new process_name: ' . $process_name . ', winnum: ' . $winnum . ', nick: ' . $nick);
 		my $target_window = Irssi::window_find_refnum($winnum);
-        print(__LINE__ . ': exec_new winnum: ' . $winnum . ', nick: ' . $nick . ', target_window: ' . Dumper($target_window));
+        #print(__LINE__ . ': exec_new winnum: ' . $winnum . ', nick: ' . $nick . ', target_window: ' . Dumper($target_window));
 		if (defined $target_window) {
 			$server = $target_window->{active}->{server}->{tag};
 			$channel = $target_window->{active}->{visible_name};
@@ -1042,7 +1050,7 @@ sub exec_new {
 
 sub exec_input {
 	my ($res, $text, @rest) = @_;
-    print __LINE__ . ': ' . Dumper($res);
+    #print __LINE__ . ': ' . Dumper($res);
 	my $process_name = $res->{name};
 	if ($process_name !~ /^franklin3/) {
 		return;
@@ -1114,6 +1122,52 @@ sub find_window_refnum {
 	}
 	return -1;
 }
+
+my $handle;
+sub start_socket_server {
+    my ($socket_path) = @_;
+    unlink $socket_path if -e $socket_path; # remove existing socket file
+    my $server = IO::Socket::UNIX->new(
+        Type => SOCK_STREAM(),
+        Local => $socket_path,
+        Listen => 1,
+    ) or die "Can't create socket server: $!";
+    prind("Socket server started at $socket_path");
+    $handle = Irssi::input_add(fileno($server), Irssi::INPUT_READ, \&handle_socket_connection, $server);
+    return $server;
+}
+
+sub handle_socket_connection {
+    my ($server) = @_;
+    my $client = $server->accept();
+    if ($client) {
+        prind("Client connected to socket server.");
+        while (my $line = <$client>) {
+            chomp $line;
+            prind("Received from socket client: $line");
+            # Here you can add code to handle the received line, e.g., trigger commands or responses in Irssi}
+            if ($fetch_dalle_processes->{$line}) {
+                my $window_refnum = $fetch_dalle_processes->{$line};
+                my $filesize = -s "/var/www/html/bot/dalle/" . $line;
+                Irssi::window_find_refnum($window_refnum)->print("DALL-e result image: https://bot.8-b.fi/dale/$line ($filesize bytes)") if $window_refnum != -1;
+                prind("Marking DALL-e process as completed for: $line, and marking as completed.");
+                delete $fetch_dalle_processes->{$line}; # mark as completed
+            }
+        }
+        close $client;
+        prind("Client disconnected from socket server.");
+    }
+}
+
+sub create_dalle_process {
+    my ($nick, $window_refnum, $image_filename, $prompt,@rest) = @_;
+    $fetch_dalle_processes->{$image_filename} = $window_refnum; # mark as running
+    debu(__LINE__ . ": starting command: $fetch_dalle_script $image_filename \"$prompt\"");
+    Irssi::command($fetch_dalle_script . ' ' . $image_filename . ' "' . $prompt . '"');
+    debu(__LINE__ . ': command started...');
+}
+
+start_socket_server($socket_path);
 
 Irssi::signal_add("exec new", 'exec_new');
 Irssi::signal_add("exec remove", 'exec_remove');
