@@ -5,7 +5,7 @@ use LWP::UserAgent;
 #use URI::Escape qw( uri_escape );
 #use URI::Encode;
 use Data::Dumper;
-use JSON; 
+use JSON;
 use vars qw($VERSION %IRSSI);
 use Data::Dumper;
 use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
@@ -36,7 +36,7 @@ open(AK, '<', $localdir . "omdb_api.key") or die('Define OMDB api key.');
 while (<AK>) {
     $apikey = $_;
 }
-#$apikey =~ s/\n//g;
+
 chomp($apikey);
 close(AK);
 
@@ -54,12 +54,12 @@ sub print_help {
 	return 0;
 }
 
+# in private mode, print only helpmessage, for now
 sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 	my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
-	#return unless ($msg =~ /^!imdb/i);
-	return if KaaosRadioClass::floodCheck() == 1;
+	#return if KaaosRadioClass::floodCheck() == 1;
 	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
 		sayit($server, $nick, $helpmessage);
 		return;
@@ -78,7 +78,7 @@ sub do_imdb {
 	}
 
 	my $is_enabled = KaaosRadioClass::is_enabled_channel('imdb_enabled_channels', $server->{chatnet}, $target);
-	return if KaaosRadioClass::floodCheck() == 1;
+	#return if KaaosRadioClass::floodCheck() == 1;
 
 	if ($msg eq "!enable imdb") {
 		if ($is_enabled) {

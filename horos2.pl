@@ -73,7 +73,7 @@ sub event_priv_msg {
 	# elsif ($msg =~ /!help$/) {
 	#	$server->command("msg -nick $nick $helpmessage1");
 	#}
-	return unless ($msg =~ /^\!h!(a|e|u)/i);
+	return unless ($msg =~ /^\!h!(a|e|u|o)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
 }
@@ -92,7 +92,7 @@ sub event_pub_msg {
 	#}
 
 	return unless ($msg =~ /^\!h/i);
-	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/);
+	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/ || $msg =~ /!hol/);	# ignore !huomen, !help, !ha, !hold commands
 	return if (KaaosRadioClass::floodCheck() == 1);
 
 	# if string: 'np:' found in channel topic

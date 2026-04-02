@@ -12,7 +12,7 @@ $VERSION = '2026-03-21';
 %IRSSI = (
     authors     => 'GitHub Copilot',
     contact     => 'local',
-    name        => 'rss_reader',
+    name        => 'rss_reader.pl',
     description => 'Read RSS feed from configured URL and post new items to configured channels',
     license     => 'Public Domain',
     changed     => $VERSION,
@@ -29,12 +29,12 @@ my $ua = LWP::UserAgent->new(
 );
 
 sub print_help {
-    Irssi::print("$SCRIPT_NAME commands:");
-    Irssi::print('/rss_reader_seturl <url>         - set RSS feed URL');
-    Irssi::print('/rss_reader_addchan <#channel>    - add channel for announcements');
-    Irssi::print('/rss_reader_delchan <#channel>    - remove channel from announcements');
-    Irssi::print('/rss_reader_list                  - show current settings');
-    Irssi::print('/rss_reader_update                - fetch feed now and announce latest/new items');
+    prind("$SCRIPT_NAME commands:");
+    prind('/rss_reader_seturl <url>         - set RSS feed URL');
+    prind('/rss_reader_addchan <#channel>    - add channel for announcements');
+    prind('/rss_reader_delchan <#channel>    - remove channel from announcements');
+    prind('/rss_reader_list                  - show current settings');
+    prind('/rss_reader_update                - fetch feed now and announce latest/new items');
 }
 
 sub normalize_channel {
@@ -73,7 +73,7 @@ sub broadcast_message {
     }
 
     if ($sent == 0) {
-        Irssi::print("$SCRIPT_NAME: no enabled channels are currently joined.");
+        prind("no enabled channels are currently joined.");
     }
 }
 
@@ -93,13 +93,13 @@ sub fetch_and_process_feed {
     my $url = Irssi::settings_get_str('rss_reader_url');
 
     unless (defined $url && $url =~ m{^https?://}i) {
-        Irssi::print("$SCRIPT_NAME: set URL first with /rss_reader_seturl <url>");
+        prind("set URL first with /rss_reader_seturl <url>");
         return;
     }
 
     my $response = $ua->get($url);
     unless ($response->is_success) {
-        Irssi::print("$SCRIPT_NAME: failed to fetch feed ($url): " . $response->status_line);
+        prind("failed to fetch feed ($url): " . $response->status_line);
         return;
     }
 
@@ -108,7 +108,7 @@ sub fetch_and_process_feed {
         $rss->parse($response->decoded_content);
     };
     if ($@) {
-        Irssi::print("$SCRIPT_NAME: failed to parse RSS feed: $@");
+        prind("failed to parse RSS feed: $@");
         return;
     }
 
@@ -154,7 +154,7 @@ sub fetch_and_process_feed {
     $first_poll = 0;
 
     if ($manual_request) {
-        Irssi::print("$SCRIPT_NAME: announced " . scalar(@to_announce) . " item(s).");
+        prind("announced " . scalar(@to_announce) . " item(s).");
     }
 }
 
@@ -175,12 +175,12 @@ sub cmd_seturl {
     $data =~ s/^\s+|\s+$//g;
 
     unless ($data =~ m{^https?://}i) {
-        Irssi::print("$SCRIPT_NAME: usage: /rss_reader_seturl <http(s)://...>");
+        prind("usage: /rss_reader_seturl <http(s)://...>");
         return;
     }
 
     Irssi::settings_set_str('rss_reader_url', $data);
-    Irssi::print("$SCRIPT_NAME: URL set to $data");
+    prind("URL set to $data");
 }
 
 sub cmd_addchan {
@@ -188,14 +188,14 @@ sub cmd_addchan {
     my $channel = normalize_channel($data);
 
     unless ($channel =~ /^#\S+/) {
-        Irssi::print("$SCRIPT_NAME: usage: /rss_reader_addchan <#channel>");
+        prind("usage: /rss_reader_addchan <#channel>");
         return;
     }
 
     my @channels = get_enabled_channels();
     push @channels, $channel;
     save_enabled_channels(@channels);
-    Irssi::print("$SCRIPT_NAME: channel added: $channel");
+    prind("channel added: $channel");
 }
 
 sub cmd_delchan {
@@ -203,13 +203,13 @@ sub cmd_delchan {
     my $channel = normalize_channel($data);
 
     unless ($channel =~ /^#\S+/) {
-        Irssi::print("$SCRIPT_NAME: usage: /rss_reader_delchan <#channel>");
+        prind("usage: /rss_reader_delchan <#channel>");
         return;
     }
 
     my @channels = grep { $_ ne $channel } get_enabled_channels();
     save_enabled_channels(@channels);
-    Irssi::print("$SCRIPT_NAME: channel removed: $channel");
+    prind("channel removed: $channel");
 }
 
 sub cmd_list {
@@ -218,15 +218,20 @@ sub cmd_list {
     my $interval = Irssi::settings_get_int('rss_reader_interval');
     my $max_items = Irssi::settings_get_int('rss_reader_max_items');
 
-    Irssi::print("$SCRIPT_NAME settings:");
-    Irssi::print("  URL: $url");
-    Irssi::print("  Interval: $interval sec");
-    Irssi::print("  Manual update max items: $max_items");
-    Irssi::print('  Channels: ' . (@channels ? join(', ', @channels) : '(none)'));
+    prind("$SCRIPT_NAME settings:");
+    prind("  URL: $url");
+    prind("  Interval: $interval sec");
+    prind("  Manual update max items: $max_items");
+    prind('  Channels: ' . (@channels ? join(', ', @channels) : '(none)'));
 }
 
 sub cmd_update {
     fetch_and_process_feed(1);
+}
+
+sub prind {
+	my ($text, @rest) = @_;
+	print "\0039" . $IRSSI{name} . ">\003 " . $text;
 }
 
 Irssi::settings_add_str('rss_reader', 'rss_reader_url', '');
@@ -243,4 +248,4 @@ Irssi::command_bind('rss_reader_update', \&cmd_update);
 
 Irssi::timeout_add(60_000, 'timer_tick', undef);
 
-Irssi::print("$SCRIPT_NAME v$VERSION loaded. Use /rss_reader_help for commands.");
+prind("$VERSION loaded. Use /rss_reader_help for commands.");

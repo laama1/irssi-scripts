@@ -29,7 +29,7 @@ my $apiurl_gallery = $baseurl . "gallery/album/";
 my $apiurl_album = $baseurl . "album/";
 my $clientid_file = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/imgur_client_id';
 
-my $clientid = KaaosRadioClass::readLastLineFromFilename($clientid_file) || '';
+my $clientid = readLastLineFromFilename($clientid_file) || '';
 my $h = HTTP::Headers->new;
 $h->header('Accept-Encoding' => 'gzip,deflate,br', 'Authorization' => "Client-ID $clientid");
 
@@ -44,7 +44,7 @@ sub imgur_api  {
 		prind("Imgur gallery: $gallery");
 		my $apiurl = $apiurl_gallery . $gallery;
 
-		my $jsondata = KaaosRadioClass::getJSON($apiurl, $h);
+		my $jsondata = getJSON($apiurl, $h);
 		if ($jsondata eq '-1') {
 			prindw("FAK gallery!");
 			return 0;
@@ -67,7 +67,7 @@ sub imgur_api  {
             $title .= ' 👍' . $upvotes;
         }
         $title .= ']';
-		$url =~ s/https?:\/\/imgur\.com\/gallery\//https:\/\/$imgur_proxy_url\//;
+		$url =~ s/https?:\/\/imgur\.com\//https:\/\/$imgur_proxy_url\//;
 		$server->command("MSG $target $title -> $url");
 		return 1;
  	} elsif ($url =~ /\:\/\/imgur\.com\/a\/([\d\w\W]{2,8})$/) {
@@ -76,7 +76,7 @@ sub imgur_api  {
 		prind("Imgur album: $album");
 		my $apiurl = $apiurl_album . $album;
 
-		my $jsondata = KaaosRadioClass::getJSON($apiurl, $h);
+		my $jsondata = getJSON($apiurl, $h);
 		if ($jsondata eq '-1') {
 			prindw("FAKa!");
 			return 0;
@@ -96,20 +96,21 @@ sub imgur_api  {
 			$title .= " views: $views";
 		}
 		$title .= ']';
-		$url =~ s/https?:\/\/imgur\.com\/a\//https:\/\/$imgur_proxy_url\//;
+		$url =~ s/https?:\/\/imgur\.com\//https:\/\/$imgur_proxy_url\//;
 		$server->command("MSG $target $title -> $url");
 		return 1;
-	} elsif ($url =~ /\:\/\/imgur\.com\/([\d\w\W]{2,8})/ || $url =~ /\:\/\/i\.imgur\.com\/([\d\w\W]{2,8})\.(jpg|png|gif|jpeg)/) {
+	} elsif ($url =~ /\:\/\/imgur\.com\/([\d\w\W]{2,8})/ || $url =~ /\:\/\/i\.imgur\.com\/([\d\w\W]{2,8})\.(jpg|png|gif|jpeg|mp4)/) {
+		# example https://i.imgur.com/VEPMTkD.jpg
 		my $image = $1;
 		prind("Imgur direct image: $image");
 		my $apiurl = $apiurl_image . $image;
 
-    	my $jsondata = KaaosRadioClass::getJSON($apiurl, $h);
+    	my $jsondata = getJSON($apiurl, $h);
 		if ($jsondata eq '-1') {
 			prindw("FAK!");
 			return 0;
 		}
-		KaaosRadioClass::df(__LINE__ . ' urltitle imgurdata: ' . Dumper($jsondata));
+		df(__LINE__ . ' urltitle imgurdata: ' . Dumper($jsondata)) if $DEBUG;
 		my $id = $jsondata->{data}->{id} || '';
 		my $title = $jsondata->{data}->{title} || '';
 		$title .= ' ' if $title ne '';
@@ -137,7 +138,8 @@ sub imgur_api  {
 		}
 		$title .= ']';
 
-		$url =~ s/https?:\/\/imgur\.com\/([\d\w\W]{2,8})/https:\/\/$imgur_proxy_url\//;
+		$url =~ s/https?:\/\/imgur\.com\//https:\/\/$imgur_proxy_url\//;
+		$url =~ s/https?:\/\/i\.imgur\.com\//https:\/\/$imgur_proxy_url\//;
 		$server->command("MSG $target $title -> $url");
 		return 1;
 	}

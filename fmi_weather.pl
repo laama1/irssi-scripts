@@ -36,7 +36,7 @@ my $last_time;
 
 my $users = {};
 #my $fmi_script = "/home/laama/code/python/fmi1.py";
-my $fmi_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fmi1.py';"";
+my $fmi_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fmi1.py';
 # create the socket
 unlink $socket_file;
 my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
@@ -296,10 +296,10 @@ Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_priv');
-Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '');
+Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
 
 timeout_start();
 
 prind("v. $VERSION Loaded!");
 prind("/set fmi_enabled_channels #channel1 #channel2");
-prind("Enabled on: ". Irssi::settings_get_str('fmi_enabled_channels'));
+prind("Enabled on: " . Irssi::settings_get_str('fmi_enabled_channels'));

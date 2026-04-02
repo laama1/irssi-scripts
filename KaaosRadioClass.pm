@@ -35,16 +35,16 @@ $VERSION = 1.03;
 @ISA = qw(Exporter);
 @EXPORT_OK = ();
 @EXPORT = qw(readLastLineFromFilename readFromDB 
-readLinesFromDataBase connectSqlite closeDB readLineFromDataBase bindSQL bindSQL_nc insertSQL 
+readLinesFromDataBase connectSqlite closeDB readLineFromDataBase readLineFromOpenDB bindSQL bindSQL_nc insertSQL writeToOpenDB
 readTextFile addLineToFile writeToFile writeArrayToFile getNytsoi24h replaceWeird stripLinks writeToDB getMonthString
-is_enabled_channeö add_enabled_channel remove_enabled_channel);
+is_enabled_channe add_enabled_channel remove_enabled_channel format_time_ago format_kibibytes getJSON df);
 
-#$currentDir = cwd();
-my $currentDir = $ENV{HOME}.'/.irssi/scripts';
+#$scriptDir = cwd();
+our $scriptDir = $ENV{HOME}.'/.irssi/scripts';
 
 # tsfile, time span.. save value of current time there. For flood protect.
-my $tsfile = "$currentDir/ts";
-my $djlist = "$currentDir/dj_list.txt";
+my $tsfile = "$scriptDir/ts";
+my $djlist = "$scriptDir/dj_list.txt";
 
 my $DEBUG = 1;
 
@@ -105,6 +105,7 @@ sub readLinesFromDataBase {
 	return @returnArray;
 }
 
+# connect to sqlite and return database handle
 sub connectSqlite {
 	my ($dbfile, @rest) = @_;
 	unless (-e $dbfile) {
@@ -122,12 +123,12 @@ sub closeDB {
 }
 
 sub readLineFromDataBase {
-	my ($db, $string, @rest) = @_;
+	my ($db, $string, @params) = @_;
 	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);
 	return undef unless $dbh;
 	my $sth = $dbh->prepare($string) or return $dbh->errstr;
-	$sth->execute();
+	$sth->execute(@params) or return $sth->errstr;
 
 	if(my @line = $sth->fetchrow_array) {
 		$sth->finish();
@@ -183,6 +184,61 @@ sub insertSQL {
 	$sth->finish();
 	$dbh->disconnect();
 	return $rv	# $rv contains number of rows affected
+}
+
+sub writeToDB {
+	my ($db, $string) = @_;
+	my $dbh = connectSqlite($db);
+	return undef unless $dbh;
+
+	my $rv = $dbh->do($string);
+	if ($rv < 0){
+		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+   		return $dbh->errstr;
+	}
+	$dbh->disconnect();
+	return 0;
+}
+
+sub writeToOpenDB {
+	my ($dbh, $string, @params, @rest) = @_;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	my $rv = $sth->execute(@params) or return $dbh->errstr;
+	$sth->finish();
+	if ($rv < 0) {
+		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
+	  	return $dbh->errstr;
+	}
+	return 0;
+}
+
+# return first line, https://metacpan.org/pod/DBI#execute
+sub readLineFromOpenDB {
+	my ($dbh, $string, @params, @rest) = @_;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	my $rv = $sth->execute(@params) or return $dbh->errstr;
+
+	if(my @line = $sth->fetchrow_array) {
+		dp(__LINE__.': --fetched a result--');
+		dp(Dumper @line);
+		return @line;
+	}
+	$sth->finish();
+	return;
+}
+
+sub readArrayFromOpenDB {
+	my ($dbh, $string, @params, @rest) = @_;
+	my $sth = $dbh->prepare($string) or return $dbh->errstr;
+	$sth->execute(@params) or return $sth->errstr;
+	my @elements = ();
+	while(my @line = $sth->fetchrow_array) {
+		dp(__LINE__.': --fetched a result--');
+		dp(Dumper @line);
+		push @elements, [@line];
+	}
+	$sth->finish();
+	return @elements;
 }
 
 # give param filename, read textfile, return as array
@@ -392,57 +448,6 @@ sub stripLinks {
 	return $string;
 }
 
-sub writeToDB {
-	my ($db, $string) = @_;
-	my $dbh = connectSqlite($db);
-	return undef unless $dbh;
-
-	my $rv = $dbh->do($string);
-	if ($rv < 0){
-		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
-   		return $dbh->errstr;
-	}
-	$dbh->disconnect();
-	return 0;
-}
-
-sub writeToOpenDB {
-	my ($dbh, $string) = @_;
-	my $rv = $dbh->do($string);
-	if ($rv < 0) {
-		dp(__LINE__.': KaaosRadioClass.pm, DBI Error: '.$dbh->errstr);
-   		return $dbh->errstr;
-	}
-	return 0;
-}
-
-sub readLineFromOpenDB {
-	my ($dbh, $string, @params, @rest) = @_;
-	my $sth = $dbh->prepare($string) or return $dbh->errstr;
-	$sth->execute();
-
-	if(my @line = $sth->fetchrow_array) {
-		dp(__LINE__.': --fetched a result--');
-		dp(Dumper @line);
-		#$sth->finish();
-		#$dbh->disconnect();
-		return @line;
-	}
-	return;
-}
-
-sub readArrayFromOpenDB {
-	my ($dbh, $string, @params, @rest) = @_;
-	my $sth = $dbh->prepare($string) or return $dbh->errstr;
-	$sth->execute();
-	my @elements = ();
-	while(my @line = $sth->fetchrow_array) {
-		dp(__LINE__.': --fetched a result--');
-		dp(Dumper @line);
-		push @elements, [@line];
-	}
-	return @elements;
-}
 
 # get month based on integer 1-12. Optional parameter: lowercase enabled or not
 sub getMonthString {
@@ -483,7 +488,7 @@ sub quickfetch {
 sub fetchResponse {
 	my ($url, @rest) = @_;
 	#my $useragent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6';
-	my $cookie_file = $currentDir .'/KRCcookies.dat';
+	my $cookie_file = $scriptDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,
@@ -504,7 +509,7 @@ sub fetchUrl {
 	($url, $getsize, $headers) = @_;
 	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers));
 
-	my $cookie_file = $currentDir .'/KRCcookies.dat';
+	my $cookie_file = $scriptDir .'/KRCcookies.dat';
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,
@@ -598,7 +603,7 @@ sub df {
 	my ($text, @rest) = @_;
 	my $timestring = strftime("%Y-%m-%d %H:%M:%S", localtime);
 	$text = "[$timestring] $text";
-	my $logfile = $currentDir . '/kaaosradio_debug.log';
+	my $logfile = $scriptDir . '/kaaosradio_debug.log';
 	addLineToFile($logfile, $text);
 	return;
 }
@@ -718,6 +723,16 @@ sub format_time_ago {
 	return $result;
 }
 
-
+sub format_kibibytes {
+	my $size_in_bytes = shift;
+	if ($size_in_bytes / (1024*1024) > 1) {
+		$size_in_bytes = sprintf("%.2f", $size_in_bytes / (1024*1024)).'MiB';
+	} elsif ($size_in_bytes / 1024 > 1) {
+		$size_in_bytes = sprintf("%.2f", $size_in_bytes / 1024) . 'KiB';
+	} else {
+		$size_in_bytes = $size_in_bytes.'B';
+	}
+	return $size_in_bytes;
+}
 print ">>>> using .irssi/scripts/KaaosRadioClass.pm";
 1;		# loaded OK
