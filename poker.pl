@@ -1,7 +1,7 @@
 use strict;
 use vars qw($VERSION %IRSSI);
 
-use Irssi qw(command_bind signal_add);
+use Irssi;
 use IO::File;
 $VERSION = '0.00.05';
 %IRSSI = (
@@ -16,34 +16,83 @@ $VERSION = '0.00.05';
 my $used_cards = {};
 my @deck = ();
 my $players = {};
+my $DEBUG = 1;
+
+=pod
+
+Poker hand ranking (highest to lowest)
+
+1. Royal Flush
+    A, K, Q, J, 10 of the same suit.
+
+2. Straight Flush
+    Five consecutive cards of the same suit.
+
+3. Four of a Kind
+    Four cards of the same rank.
+
+4. Full House
+    Three of a kind plus a pair.
+
+5. Flush
+    Five cards of the same suit, not consecutive.
+
+6. Straight
+    Five consecutive cards, not all the same suit.
+
+7. Three of a Kind
+    Three cards of the same rank.
+
+8. Two Pair
+    Two different pairs.
+
+9. One Pair
+    Two cards of the same rank.
+
+10. High Card
+     None of the above; highest card wins.
+
+Tie-break notes:
+- If two hands are the same type, compare the highest relevant card(s).
+- If still tied, compare next highest card(s) (kickers).
+- If all ranks are equal, the hand is a tie.
+
+
+=cut
+
 
 # Generate a standard deck of 52 cards
 my @suits  = ('♠', '♥', '♦', '♣');
 my @values = ('A', 2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K');
-@deck = ();
+
+# initialize the deck
 for my $suit (@suits) {
     for my $value (@values) {
         push @deck, "$value$suit";
     }
 }
-push @deck, "Joker🃏";   # add joker
+
+push @deck, "Joker🃏";   # add one joker
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
-	question($server, $msg, $nick, $target);
+	ask_question($server, $msg, $nick, $target);
 }
 
-sub question($server, $msg, $nick, $target) {
+sub ask_question {
 	my ($server, $msg, $nick, $target) = @_;
 	$_ = $msg;
 	my $answer = "";
 	
 	if (/^!poker/i) {
         my @hand = get_five_random_cards($nick);
-        my $hand_str = join(", ", @hand);
+        #my $hand_str = join(", ", @hand);
         # remove space after commas
-        $hand_str =~ s/,\s+(\0034)/,$1/g;
-        $server->command("msg $target $nick, Your hand:$hand_str");
+        
+        my $hand_str = format_hand_with_colors(@hand);
+        my ($is_winning, $hand_name) = check_player_winning_hand($nick);
+        my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
+        $server->command("msg $target $nick, Your hand:$hand_str - $result_text");
         return;
     } elsif (/^!shuffle/i) {
         %$used_cards = ();
@@ -53,10 +102,10 @@ sub question($server, $msg, $nick, $target) {
     } elsif (/^!hold\s+((?:\d+\s*)+)$/i) {
         my @hold_numbers = split /\s+/, $1;
         my @new_hand = hold_cards_by_number($nick, @hold_numbers);
-        my $hand_str = join(", ", @new_hand);
-        # remove space after commas
-        $hand_str =~ s/,\s+(\0034)/,$1/g;
-        $server->command("msg $target $nick, Your new hand:$hand_str");
+        my $hand_str = format_hand_with_colors(@new_hand);
+        my ($is_winning, $hand_name) = check_player_winning_hand($nick);
+        my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
+        $server->command("msg $target $nick, Your new hand:$hand_str - $result_text");
         return;
     } else {
         return;
@@ -74,16 +123,24 @@ sub get_five_random_cards {
     while (scalar(@hand) < 5) {
         $index++;
         my $card = get_one_random_card();
-        my $colored_card = '';
-        if ($card =~ /(♦|♥)$/) {
-            $colored_card = "\0034 " . ${card} . "\003";  # \0034 is red in IRC color codes
-        } else {
-            $colored_card = $card;  # \0031 is blue in IRC color codes
-        }
-        push @hand, $colored_card || $card;
+        push @hand, $card;
         $players->{$nick}->{$index} = $card;
     }
     return @hand;
+}
+
+sub format_hand_with_colors {
+    my (@hand) = @_;
+    for my $i (0..$#hand) {
+        if ($hand[$i] =~ /(♦|♥)$/) {
+            # red cards. add space because otherwise the card number will mix with color code.
+            $hand[$i] = "\0034 " . $hand[$i] . "\003";  # \0034 is red in IRC color codes
+        }
+    }
+    my $return_str = join(", ", @hand);
+    # double space when red card
+    $return_str =~ s/,\s+(\0034)/,$1/g;
+    return $return_str;
 }
 
 sub get_one_random_card {
@@ -103,29 +160,114 @@ sub hold_cards_by_number {
     my @held_cards = ();
     foreach my $card_index (1..5) {
         if (grep { $_ == $card_index } @hold_numbers) {
-            my $colored_card = '';
-            if ($player_cards->{$card_index} && $player_cards->{$card_index} =~ /(♦|♥)$/) {
-                #$colored_card = "\0034 " . ${$player_cards->{$card_index}} . "\003";  # \0034 is red in IRC color codes
-                $colored_card = "\0034 " . $player_cards->{$card_index} . "\003";  # \0034 is red in IRC color codes
-            } else {
-                $colored_card = $player_cards->{$card_index} || "Unknown Card";  # \0031 is blue in IRC color codes
-            }
-            push @held_cards, $colored_card || $player_cards->{$card_index} || "Unknown Card";
+            push @held_cards, $player_cards->{$card_index} || "Unknown Card";
         } else {
             my $new_card = get_one_random_card();
-            my $colored_card = '';
-            if ($new_card =~ /(♦|♥)$/) {
-                $colored_card = "\0034 " . ${new_card} . "\003";  # \0034 is red in IRC color codes
-            } else {
-                $colored_card = $new_card;  # \0031 is blue in IRC color codes
-            }
             $player_cards->{$card_index} = $new_card;
-            push @held_cards, $colored_card || $new_card;
+            push @held_cards, $new_card;
         }
     }
     return @held_cards;
 }
 
+sub check_player_winning_hand {
+    my ($nick) = @_;
+    my $player_cards = $players->{$nick} || {};
+    my @cards = map { $player_cards->{$_} } (1..5);
+    return (0, "Incomplete Hand") if grep { !defined $_ } @cards;
 
-signal_add("message public", "sig_msg_pub");
+    my $hand_name = evaluate_poker_hand(@cards);
+    my $is_winning = ($hand_name ne "High Card") ? 1 : 0;
+    return ($is_winning, $hand_name);
+}
+
+sub evaluate_poker_hand {
+    my @cards = @_;
+
+    # Treat joker as a wild card marker for now.
+    if (grep { defined $_ && $_ =~ /^Joker/ } @cards) {
+        return "Joker Wild";
+    }
+
+    my %rank_map = (
+        '2'  => 2,  '3'  => 3,  '4'  => 4,  '5'  => 5,
+        '6'  => 6,  '7'  => 7,  '8'  => 8,  '9'  => 9,
+        '10' => 10, 'J'  => 11, 'Q'  => 12, 'K'  => 13, 'A' => 14,
+    );
+
+    my %rank_counts = ();
+    my %suit_counts = ();
+    my @values = ();
+
+    foreach my $card (@cards) {
+        next if !defined $card;
+        $card =~ s/\\003\d?//g;  # remove IRC color codes
+        print(__LINE__ . ': card: >' . $card . '<') if $DEBUG;
+        if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
+            my ($rank, $suit) = ($1, $2);
+            my $value = $rank_map{$rank};
+            print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
+            $rank_counts{$value}++;
+            $suit_counts{$suit}++;
+            push @values, $value;
+        }
+    }
+
+    return "High Card" if scalar(@values) != 5;
+    print(__LINE__ . ": Values: " . join(", ", @values)) if $DEBUG;
+    @values = sort { $a <=> $b } @values;
+    my $is_flush = (scalar(keys %suit_counts) == 1) ? 1 : 0;
+
+    my $is_straight = 0;
+    my %unique = map { $_ => 1 } @values;
+    if (scalar(keys %unique) == 5) {
+        my $consecutive = 1;
+        for my $i (1..4) {
+            print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
+            if ($values[$i] != $values[$i - 1] + 1) {
+                $consecutive = 0;
+                last;
+            }
+        }
+        $is_straight = $consecutive;
+        # Ace-low straight: A,2,3,4,5
+        if (!$is_straight && join(',', @values) eq '2,3,4,5,14') {
+            $is_straight = 1;
+        }
+    }
+
+    my @count_values = sort { $b <=> $a } values %rank_counts;
+
+    if ($is_straight && $is_flush && join(',', @values) eq '10,11,12,13,14') {
+        return "Royal Flush";
+    }
+    if ($is_straight && $is_flush) {
+        return "Straight Flush";
+    }
+    if ($count_values[0] == 4) {
+        return "Four of a Kind";
+    }
+    if ($count_values[0] == 3 && $count_values[1] == 2) {
+        return "Full House";
+    }
+    if ($is_flush) {
+        return "Flush";
+    }
+    if ($is_straight) {
+        return "Straight";
+    }
+    if ($count_values[0] == 3) {
+        return "Three of a Kind";
+    }
+    if ($count_values[0] == 2 && $count_values[1] == 2) {
+        return "Two Pair";
+    }
+    if ($count_values[0] == 2) {
+        return "One Pair";
+    }
+    return "High Card";
+}
+
+
+Irssi::signal_add("message public", "sig_msg_pub");
 
