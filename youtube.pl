@@ -30,6 +30,8 @@ my $apikeyfile = $localdir . 'youtube_apikey';
 my $apikey = KaaosRadioClass::readLastLineFromFilename($apikeyfile);
 
 my $apiurl = "https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&key=" . $apikey;
+my $apiurl_playlist_items = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&key=" . $apikey;
+my $apiurl_playlist = "https://www.googleapis.com/youtube/v3/playlists?part=snippet%2CcontentDetails%2Cstatus&key=" . $apikey;
 
 #my $invidiousUrl = 'https://invidious.private.coffee';
 my $invidiousUrl = 'https://farside.link/invidious';
@@ -46,13 +48,13 @@ sub sig_youtube {
     my $jsondata = KaaosRadioClass::getJSON($url);
 
     if ($jsondata eq '-1' || $jsondata eq '-2') {
-        prind('youtube api failed!');
+        prindw('youtube api failed!');
         return 0;
     }
 
     my $len = scalar $jsondata->{items};
     if (not defined $jsondata->{items}[0]) {
-        prind('video not found from API...');
+        prindw('video not found from API...');
         $newUrlData->{title} = "Video not found from API...";
         return 1;
     }
@@ -67,7 +69,7 @@ sub sig_youtube {
     my $published = $searchresult->{snippet}->{publishedAt};
     my $duration = $searchresult->{contentDetails}->{duration};
     $duration = format_duration($duration);
-    $published = KaaosRadioClass::format_time_ago($published);
+    $published = format_time_ago($published);
     #$published = format_time($published);
     $newUrlData->{title} = "\0030,5 ▶ \003 " . $title . ' ['.$duration.'] [' . $chantitle . ', ' . $published . ', ' . $likes . ']';
     $newUrlData->{desc} = $description;
@@ -77,33 +79,33 @@ sub sig_youtube {
     $server->command("msg $target " . $newUrlData->{title} . $newUrlData->{extra});
 }
 
-# format youtube timestamp TODO: use KaaosRadioClass::format_time_ago instead
-sub format_time {
-	my ($value, @rest) = @_;
-	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
-	my $local_time = localtime;
+sub sig_youtube_playlist {
+    my ($server, $target, $playlist_id) = @_;
+    return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
+    prind("got signal: Target: $target, chatnet: $server->{chatnet}, playlist: $playlist_id");
+    my $url = $apiurl_playlist . "&id=" . $playlist_id;
+    my $jsondata = KaaosRadioClass::getJSON($url);
 
-	my $diff = ($local_time - $time_object);
+    if ($jsondata eq '-1' || $jsondata eq '-2') {
+        prindw('youtube api failed!');
+        return 0;
+    }
 
-	prind(__LINE__ . ': diff in seconds: ' . $diff . ', years: ' . floor($diff / 29030400) . 'y, months: ' . floor($diff / 2419200) . 'mon, weeks: ' . floor($diff / 604800) . 'wk, days: ' . floor($diff / 86400) . 'days, hours: ' . floor($diff / 3600) . 'h, minutes: ' . floor($diff / 60) . 'min') if $DEBUG;	# debug
-	my $result = '';
-	if ($diff >= 29030400) {
-    	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
-	} elsif ($diff >= 2419200) {
-		$result = sprintf("%.1f", ($diff / 2419200)) . 'mon';
-	} elsif ($diff >= 604800) {
-		$result = sprintf("%.1f", ($diff / 604800)) . 'wk';
-	} elsif ($diff > 86400) {
-		$result = sprintf("%.1f", ($diff / 86400)) . 'days';
-	} elsif ($diff > 3600) {
-		$result = sprintf("%.1f", ($diff / 3600)) . 'h';
-	} elsif($diff > 60) {
-		$result = sprintf("%.f", $diff / 60) . 'mins';
-	} else {
-		$result = $diff . 's';
-	}
-	$result .= ' ago';
-	return $result;
+    if (not defined $jsondata->{items}[0]) {
+        prindw('playlist not found from API...');
+        return 1;
+    }
+    print Dumper($jsondata);
+    my $itemcount = $jsondata->{items}[0]->{contentDetails}->{itemCount};
+    my $title = $jsondata->{items}[0]->{snippet}->{title};
+    my $chantitle = $jsondata->{items}[0]->{snippet}->{channelTitle};
+    my $published = $jsondata->{items}[0]->{snippet}->{publishedAt};
+    $published = format_time_ago($published);
+    my $newUrlData = {};
+    $newUrlData->{title} = "\0030,5 ▶ \003 " . $title . ' [' . $chantitle . ', ' . $published . ', ' . $itemcount . ' videos]';
+    my $invidious_url = $invidiousUrl . '/playlist?list=' . $playlist_id;
+    $newUrlData->{extra} = " -- proxy: $invidious_url";
+    $server->command("msg $target " . $newUrlData->{title} . $newUrlData->{extra});
 }
 
 sub format_duration {
@@ -126,5 +128,11 @@ sub prind {
 	print("\0038" . $IRSSI{name} . ">\003 ". $text);
 }
 
+sub prindw {
+    my ($text, @test) = @_;
+    print("\0034" . $IRSSI{name} . ">\003 ". $text);
+}
+
 prind($IRSSI{name}." v. $VERSION loaded.");
 Irssi::signal_add('sig_youtube_search_id', 'sig_youtube');
+Irssi::signal_add('sig_youtube_playlist_id', 'sig_youtube_playlist');

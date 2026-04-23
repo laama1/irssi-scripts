@@ -53,7 +53,7 @@ sub pubmsg {
 		return if KaaosRadioClass::floodCheck() == 1;
 		my $outputstring = KaaosRadioClass::conway();
 		Irssi::print("auroras.pl> $keyword request from $nick on channel $target. Answer: $outputstring");
-		$serverrec->command("MSG $target Kuun vaihe: $outputstring") if $outputstring;
+		$serverrec->command("MSG $target \002Kuun vaihe:\002 $outputstring") if $outputstring;
 	}
 }
 

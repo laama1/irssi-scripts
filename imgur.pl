@@ -14,7 +14,7 @@ $VERSION = '2026-02-21';
         authors     => 'laama',
         contact     => "laama #irc-galleriaa",
         name        => "Imgur-API-script",
-        description => "Fetch info from omdbapi or theimdbapi.org",
+        description => "Fetch info from imgur api",
         license     => "Public Domain",
         url         => "http://8-b.fi",
         changed     => $VERSION
@@ -88,7 +88,7 @@ sub imgur_api  {
 		my $datetime = $jsondata->{data}->{datetime} || '';
 		my $datetime_formatted = strftime('%Y-%m-%d %H:%M:%S', localtime($datetime)) if $datetime;
 		my $views = $jsondata->{data}->{views} || '';
-		$title = "Imgur album: ${title}[";
+		$title = "\0033Imgur album:\003 ${title}[";
 		if ($datetime_formatted) {
 			$title .= "uploaded: $datetime_formatted";
 		}
@@ -126,7 +126,7 @@ sub imgur_api  {
 			$tags = "Tags: ${tags}" if $tags ne '';
 			$tags = '' if $tags eq '';
 
-		$title .= "Imgur image: ${title}[${width}x${height}, " . sprintf("%.2f", $size / 1024) . "KiB";
+		$title .= "\0033Imgur image:\003 ${title}[${width}x${height}, " . sprintf("%.2f", $size / 1024) . "KiB";
 		if ($views) {
 			$title .= ", views: $views";
 		}

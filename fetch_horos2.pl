@@ -1,10 +1,11 @@
 ﻿#!/usr/bin/perl
 use strict;
 #use warnings;
+#use Irssi;
 use utf8;
 use Data::Dumper;
-#use lib $ENV{HOME}.'/.irssi/scripts';
-use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
+use lib $ENV{HOME}.'/.irssi/scripts/irssi-scripts';
+#use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 16.2.2017
 #use Getopt::Long;
 use vars qw($VERSION);
@@ -44,7 +45,6 @@ my $iltisUrl = 'https://www.iltalehti.fi/horoskooppi';
 my $menaisetUrl = 'https://www.menaiset.fi/artikkeli/horoskooppi/paivan-horoskooppi/paivan-horoskooppi-';
 $menaisetUrl .= $mday.$month;
 dp("menaiset url: $menaisetUrl");
-#print $menaisetUrl . "\n";
 
 
 my $logfile = $mydir.'/logs/fetch_horos2.log';
@@ -109,7 +109,7 @@ sub grepAstro {
 	$dbh = KaaosRadioClass::connectSqlite($db);
 	
 	foreach my $currentURl (@astrourls) {
-		dp("\n\ngrepAstro index: ". $index);
+		dp("grepAstro index: ". $index);
 		dp("grepAstro current url: $currentURl");
 		my $page = KaaosRadioClass::fetchUrl($currentURl, 0);
 		my $sign;
@@ -127,7 +127,7 @@ sub grepAstro {
 		grepAstroHoro($page, $currentURl);
 		$index++;
 	}
-	$logtext = "grep astro horo done. ($index)";
+	$logtext = __LINE__ . ": grep astro horo done. ($index)";
 	logmsg($logtext);
 }
 
@@ -139,23 +139,22 @@ sub grepAstroHoro {
 	while ($page =~ m/<h2>(.*?)<\/h2>\n\s+<p>.*?<em>(.*?)<\/em>/sgi && $index < 100) {
 		my $sign = $1;
 		my $horo = $2;
-		dp("grepAstroHoro sign: ".$sign) if $DEBUG1;
-		dp("grepAstroHoro horo: ".$horo) if $DEBUG1;
+		dp(__LINE__ . ": grepAstroHoro sign: ".$sign . ', horo: ' . $horo) if $DEBUG1;
 		
 		if (defined($horo)) {
 			saveHoroToDB($horo, $url, $sign);
 			$horo = filterKeyword($horo);
 			$skoopit .= $horo . "\n" if $horo;
 		} else {
-			dp('grepAstroHoro: no horo found!');
+			dp(__LINE__ . ": grepAstroHoro: no horo found!");
 		}
 		$index++;
 	}
 	if ($index == 0) {
-		dp('grepAstroHoro regex failed!');
+		dp(__LINE__ . ": grepAstroHoro regex failed!");
 	} else {
 		saveHoroToFile($skoopit);
-		logmsg("astroHORO done ($index)");
+		logmsg(__LINE__ . ": astroHORO done ($index)");
 	}
 }
 
@@ -185,9 +184,9 @@ sub grepAstrosaa {
 	}
 
 	if ($index == 0) {
-		dp('grepAstrosaa regex failed!');
+		dp(__LINE__ . ": grepAstrosaa regex failed!");
 	} else {
-		logmsg("astroSää done ($index)");
+		logmsg(__LINE__ . ": astroSää done ($index)");
 		saveHoroToFile($astrosaas);
 	}
 
@@ -227,11 +226,11 @@ sub grepIltis {
 		}
 
 		dp("grepIltis allhoros ($index): ".$allHoros);
-		$logtext = "iltis horo done. ($index)";
+		$logtext = __LINE__ . ": iltis horo done. ($index)";
 		saveHoroToFile($allHoros);
 	} else {
 		#warn("Can't parse $iltisUrl");
-		$logtext = "Can't parse $iltisUrl";
+		$logtext = __LINE__ . ": Can't parse $iltisUrl";
 		#return;
 	}
 	logmsg($logtext);
@@ -278,11 +277,11 @@ sub grepMenaiset {
 	}
 
 	if ($index == 0) {
-		$logtext .= 'grepMenaiset regex failed!';
+		$logtext .= __LINE__ . ": grepMenaiset regex failed!";
 	} else {
 		saveHoroToFile($allHoros);
 		#logmsg("allhoros: $allHoros");
-		$logtext .= "grepMenaiset regex success! ($index)";
+		$logtext .= __LINE__ . ": grepMenaiset regex success! ($index)";
 	}
 	logmsg($logtext);
 }
@@ -315,11 +314,11 @@ sub filterKeyword {
 	#else 									{$infofile = $mydir . "horoskooppeja.txt";}
 	
 	if ($infofile ne '' && $infofile ne $horofile) {
-		dp("fetch_horos2.pl: $& matched infofile: $infofile \n");
+		dp(__LINE__ . ": fetch_horos2.pl: $& matched infofile: $infofile \n\n");
 		KaaosRadioClass::addLineToFile($infofile, $msg);
 		return;
 	} else {
-		print("filterKeyword: no match!\n") if $DEBUG1;
+		dp(__LINE__ . ": filterKeyword: no match!\n\n");
 	}
 	
 	return $msg;
@@ -441,8 +440,10 @@ sub parseComments {
 
 sub logmsg {
 	my ($logdata,@rest) = @_;
+	my $timestamp = DateTime->now(time_zone => 'Europe/Helsinki');
+	my $timestring = $timestamp->strftime('%Y-%m-%d %H:%M:%S');
 	dp("logdata: $logdata");
-	return KaaosRadioClass::addLineToFile($logfile, localtime . '; '.$logdata);
+	return KaaosRadioClass::addLineToFile($logfile, $timestring . '; '.$logdata);
 }
 
 sub dw {

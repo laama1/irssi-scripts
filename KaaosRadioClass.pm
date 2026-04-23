@@ -46,7 +46,7 @@ our $scriptDir = $ENV{HOME}.'/.irssi/scripts';
 my $tsfile = "$scriptDir/ts";
 my $djlist = "$scriptDir/dj_list.txt";
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 my $floodernick = '';
 my $floodertimes = 0;
@@ -77,10 +77,10 @@ sub readFromDB {
 	my ($db, $querystring, $key, @rest) = @_;
 	my $dbh = connectSqlite($db);
 	return -1 unless defined  $dbh;
-	my $sth = $dbh->prepare($querystring) 
+	my $sth = $dbh->prepare($querystring)
 		or 
 			return $dbh->errstr;
-	$sth->execute() 
+	$sth->execute()
 		or 
 			return $sth->errstr;
 	return $sth->fetchall_hashref($key);
@@ -123,6 +123,7 @@ sub closeDB {
 }
 
 sub readLineFromDataBase {
+	# read first line from database, return as array
 	my ($db, $string, @params) = @_;
 	dp(__LINE__.": Reading lines from DB $db.");
 	my $dbh = connectSqlite($db);

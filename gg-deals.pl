@@ -6,7 +6,7 @@ use LWP::UserAgent;
 use XML::RSS;
 use HTML::Entities qw(decode_entities);
 use KaaosRadioClass;
-use vars qw($VERSION %IRSSI);
+use vars qw($VERSION %IRSSI @LATEST_GG_DEALS);
 
 $VERSION = '2026-03-21';
 %IRSSI = (
@@ -24,6 +24,7 @@ my $first_poll = 1;
 my $last_poll = 0;
 my $free_only = 1;
 my $url = 'https://gg.deals/fi/news/feed/';
+@LATEST_GG_DEALS = ();
 
 my $ua = LWP::UserAgent->new(
     timeout => 10,
@@ -51,6 +52,15 @@ sub sig_msg_pub {
             $server->command("msg $target gg.deals DISABLED for this channel.");
             return;
         }
+    } elsif ($msg =~ /\!gg-deals\b/i) {
+        if (@LATEST_GG_DEALS) {
+            foreach my $deal (@LATEST_GG_DEALS) {
+                $server->command("msg $target $deal");
+            }
+        } else {
+            $server->command("msg $target No cached gg.deals yet. Try again after next update.");
+        }
+        return;
     }
 }
 
@@ -136,13 +146,21 @@ sub fetch_and_process_feed {
     $max_items = 3 if $max_items < 1;
 
     my @to_announce;
+    my @latest_candidates;
     foreach my $item (@items) {
         my $id = $item->{guid} || $item->{link} || $item->{title};
         next unless defined $id && length $id;
         if ($free_only) {
             my $desc = $item->{description} // '';
-            next unless $desc =~ /free/i;
+            my $title = $item->{title} // '';
+            my $link = $item->{link} // '';
+            next unless ($desc =~ /freebie/i or $link =~ /freebie/i);
         }
+
+        my $latest_title = decode_entities($item->{title} // '(no title)');
+        my $latest_link = $item->{link} // '';
+        my $latest_line = $latest_link ne '' ? "$latest_title -> $latest_link" : $latest_title;
+        push @latest_candidates, $latest_line;
 
         my $is_new = !$seen_ids{$id};
         $seen_ids{$id} = 1;
@@ -157,6 +175,12 @@ sub fetch_and_process_feed {
         }
 
         push @to_announce, $item if $is_new;
+    }
+
+    if (@latest_candidates > 5) {
+        @LATEST_GG_DEALS = @latest_candidates[-5 .. -1];
+    } else {
+        @LATEST_GG_DEALS = @latest_candidates;
     }
 
     trim_seen_cache();
@@ -264,12 +288,12 @@ Irssi::settings_add_str('gg_deals', 'gg_deals_channels', '');
 Irssi::settings_add_int('gg_deals', 'gg_deals_interval', 300);
 Irssi::settings_add_int('gg_deals', 'gg_deals_max_items', 3);
 
-Irssi::command_bind('gg_deals_help', \&print_help);
-Irssi::command_bind('gg_deals_seturl', \&cmd_seturl);
-Irssi::command_bind('gg_deals_addchan', \&cmd_addchan);
-Irssi::command_bind('gg_deals_delchan', \&cmd_delchan);
-Irssi::command_bind('gg_deals_list', \&cmd_list);
-Irssi::command_bind('gg_deals_update', \&cmd_update);
+Irssi::command_bind('gg_deals_help', \&print_help, 'gg_deals');
+Irssi::command_bind('gg_deals_seturl', \&cmd_seturl, 'gg_deals');
+Irssi::command_bind('gg_deals_addchan', \&cmd_addchan, 'gg_deals');
+Irssi::command_bind('gg_deals_delchan', \&cmd_delchan, 'gg_deals');
+Irssi::command_bind('gg_deals_list', \&cmd_list, 'gg_deals');
+Irssi::command_bind('gg_deals_update', \&cmd_update, 'gg_deals');
 
 Irssi::timeout_add(60_000, 'timer_tick', undef);
 Irssi::signal_add('message public', 'sig_msg_pub');

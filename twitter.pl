@@ -29,8 +29,10 @@ $VERSION = '2025-11-23';
 
 my $localdir = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/';
 my $bearer_token = KaaosRadioClass::readLastLineFromFilename($localdir . 'twitter_bearer_token.key');
+# https://elfsight.com/blog/how-to-get-x-twitter-api-key-in-2026/
 
 my $url = 'https://api.twitter.com/2/tweets/';
+my $fields = '?tweet.fields=created_at&expansions=author_id&user.fields=username';
 my $headers = HTTP::Headers->new;
 $headers->header('Authorization' => 'Bearer ' . $bearer_token);
 
@@ -39,13 +41,16 @@ sub sig_twitter {
     prind("got signal: Target: $target, tweet-id: $id");
     return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
 
-    my $twitter_url = $url . $id;
+    my $twitter_url = $url . $id . $fields;
     my $jsondata = KaaosRadioClass::getJSON($twitter_url, $headers);
     if ($jsondata eq '-1') {
         #$server->command("MSG $target 🐦 error..");
     } else {
         print Dumper($jsondata);
-        $server->command("MSG $target 🐦 " . $jsondata->{data}->{text});
+        my $text = $jsondata->{data}->{text};
+        $text = substr($text, 0, 250) . '...' if length($text) > 250;
+        my $author_name = $jsondata->{includes}->{users}[0]->{name};
+        $server->command("MSG $target 🐦 " . $text . ' (by ' . $author_name . ')');
     }
 }
 

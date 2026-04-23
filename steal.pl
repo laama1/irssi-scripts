@@ -21,7 +21,7 @@ $VERSION = '2025-09-13';
     changed     => $VERSION
 );
 
-my $helptext = 'Usage: !steal, set steal target with !steal set <unit> <target>';
+my $helptext = 'Usage: !steal, !steal top, !steal set <unit> <target>';
 # default values:
 my $steal_target = 'Putin';
 my $monetary_unit = 'rubles';
@@ -69,7 +69,7 @@ sub event_pubmsg {
         sayit($server, $target, "$nick stole $amount $monetary_unit from $steal_target! Total stolen: $total $monetary_unit");
     } elsif ($msg =~ /^!steal top$/) {
         my @top = get_top_ten();
-        my $response = "Top 10 steal victims: ";
+        my $response = "\002Top 10 steal victims:\002 ";
         foreach my $entry (@top) {
             $response .= "$entry->[1] ($entry->[2] $entry->[3]), ";
         }

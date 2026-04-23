@@ -794,9 +794,17 @@ sub save_user_city_to_database {
 	return 0;
 }
 
+sub trim {
+	my ($s) = @_;
+	$s =~ s/^\s+//;
+	$s =~ s/\s+$//;
+	return $s;
+}
+
 sub filter_keyword {
 	my ($msg, $nick, @rest) = @_;
 	my ($returnstring, $city);
+	$msg = trim($msg);
 
 	if ($msg =~ /^\!(sää |saa |s )(.*)/ui) {
 		# !sää with a search word, always save new city to user

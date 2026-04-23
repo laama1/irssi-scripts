@@ -462,8 +462,14 @@ sub createFtsDB {
 sub saveToDB {
 	my (@rest) = @_;
 	my $pvm = time;
-    
-	KaaosRadioClass::addLineToFile($logfile, $pvm.'; '.$newUrlData->{nick}.'; '.$newUrlData->{chan}.'; '.$newUrlData->{url}.'; '.$newUrlData->{title}.'; '.$newUrlData->{desc});
+    my $pvm_formatted = localtime($pvm)->strftime('%Y-%m-%d %H:%M:%S');
+	KaaosRadioClass::addLineToFile($logfile, $pvm_formatted . '; ' . 
+		$newUrlData->{nick}.'; ' . 
+		$newUrlData->{chan} . '; ' . 
+		$newUrlData->{url} . '; ' . 
+		$newUrlData->{title} . '; ' . 
+		$newUrlData->{desc} . ';'
+	);
 	
 	#dp(__LINE__.": saveToDB: $db, timestamp: $pvm, nick: $newUrlData->{nick}, url: $newUrlData->{url}, title: $newUrlData->{title}, description: $newUrlData->{desc}, channel: $newUrlData->{chan}, md5: $newUrlData->{md5}") if $DEBUG1;
 	
@@ -595,6 +601,13 @@ sub signal_emitters {
 		my $videoid = $1;
 		Irssi::signal_emit('sig_youtube_search_id', $server, $target, $videoid);
 		prind("Youtube signal emited!! $videoid");
+		return 1;
+	}
+
+	if ($url =~ /youtube\.com\/playlist\?list=([^\&]*)/) {
+		my $playlistid = $1;
+		Irssi::signal_emit('sig_youtube_playlist_id', $server, $target, $playlistid);
+		prind("Youtube playlist signal emited!! $playlistid");
 		return 1;
 	}
 
@@ -1121,6 +1134,9 @@ Irssi::signal_register($signal_config_hash4);
 
 my $signal_config_hash5 = { 'sig_youtube_search_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash5);
+
+my $signal_config_hash51 = { 'sig_youtube_playlist_id' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash51);
 
 my $signal_config_hash6 = { 'sig_imgur_api' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash6);
