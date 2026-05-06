@@ -233,34 +233,23 @@ sub GET_WEATHER {
 	if ($searchword eq '') {
 		return undef;
 	}
-	my $newurl;
-	my $urltail = $searchword;
-	if ($searchword =~ /(\d{5})/) {
-		$newurl = $api_url . 'zip=';
-		$urltail = $1 . ',fi';		# Search post numbers from finland only
-	} else {
-		$newurl = $api_url . 'q=';
-	}
-	my $json = request_api($newurl.$urltail);
-	#da(__LINE__.': GET_WEATHER json', $json);
-
-	#my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
-
-	#if ($json eq '-1') {
-		# searchword not found from API
-		#dp(__LINE__.' city not found from API, searchword: '.$searchword) if $DEBUG1;
-		#return undef unless defined $city;
-		#$urltail = $city;
-		#$json = request_api($newurl.$urltail) if $urltail;
-		#if ($json eq '-1') {
-			#return "Paikkaa ei löydy!";
-			#dp(__LINE__.' city not available, city name: '.$city) if $DEBUG1;
-		#}
-		return undef if (!defined $json || $json eq '-1');
+	my $newurl = $api_url . createUrlTailFromSearchword($searchword);
+	#my $newurl = $apiurl;
+	#my $urltail = $searchword;
+	#if ($searchword =~ /(\d{5})/) {
+	#	$newurl = 'zip=';
+	#	$urltail = $1 . ',fi';		# Search post numbers from finland only
+	#} else {
+	#	$newurl = 'q=';
 	#}
+	#my $json = request_api($newurl.$urltail);
+	my $json = request_api($newurl);
+
+	return undef if (!defined $json || $json eq '-1');
 
 	$json->{uvindex} = 0;
 	#if ($lat && $lon) {
+	# no need to format we dont want decimal number
 	#	$json->{uvindex} = $fi->format_number(FINDUVINDEX($lat, $lon), 0);
 	#}
 
@@ -273,29 +262,39 @@ sub FINDFORECAST {
 	my ($searchword, $days, @rest) = @_;
 	my $json;
 	#dp(__LINE__ . ', searchword: ' . $searchword);
-	if ($searchword =~ /(\d{5})/) {
-		dp(__LINE__);
-		my $urltail = 'zip='.$1.',fi';		# Search postcode numbers only from finland
-		$json = request_api($forecastUrl.$urltail);
-	} else {
-		dp(__LINE__);
-		$json = request_api($forecastUrl.'q='.$searchword);
-	}
-	dp(__LINE__);
+	my $newurl = $forecastUrl . createUrlTailFromSearchword($searchword);
+	#if ($searchword =~ /(\d{5})/) {
+		# postinumerohaku
+	#	my $urltail = 'zip='.$1.',fi';		# Search postcode numbers only from finland
+	#	$json = request_api($forecastUrl.$urltail);
+	#} else {
+	#	$json = request_api($forecastUrl.'q='.$searchword);
+	#}
+	#dp(__LINE__);
+	$json = request_api($newurl);
 	if ($json eq '-1') {
-		dp(__LINE__ . ' no match from api, try searching city from DB');
-		#$dbh = KaaosRadioClass::connectSqlite($db_file);
+		dp(__LINE__ . ' no match from api, try searching city from DB next');
+
 		my ($id, $lat, $lon, $city) = FIND_CITY($searchword);
-		#$dbh = KaaosRadioClass::closeDB($dbh);
+
 		dp (__LINE__ . ', city: ' . $city);
 		$json = request_api($forecastUrl.'q='.$city) if defined $city;
 		return 0 if ($json eq '-1');
 	}
-	dp(__LINE__ . ', got json from api');
+	dp(__LINE__ . ', got json from api...');
 	if (defined $days && $days == 5) {
 		return forecastloop5($json);
 	} else {
 		return forecastloop1($json);
+	}
+}
+
+sub createUrlTailFromSearchword {
+	my ($searchword, @rest) = @_;
+	if ($searchword =~ /(\d{5})/) {
+		return 'zip='.$1.',fi';		# Search post numbers from finland only
+	} else {
+		return 'q='.$searchword;
 	}
 }
 
@@ -310,12 +309,12 @@ sub forecastloop1 {
 			last;
 		}
 		if ($index == 0) {
-			my $use_this_city = $json->{city}->{name};
+			my $city = $json->{city}->{name};
 			my $timezone = ($json->{city}->{timezone} / 3600);
-			if ($timezone > 0) {$timezone = '+'.$timezone};
+			if ($timezone > 0) { $timezone = '+'.$timezone };
 			$timezone = '(UTC' . $timezone . ')';
 			#print ("Timezone: " . $timezone) if $DEBUG;
-			$returnstring = "\002" . $use_this_city . ','.$json->{city}->{country} . " $timezone klo:\002 ";
+			$returnstring = "\002" . $city . ','.$json->{city}->{country} . " $timezone klo:\002 ";
 		}
 		dp(__LINE__);
 		my $weathericon = replace_with_emoji($item->{weather}[0]->{main},
@@ -548,9 +547,7 @@ sub getSayLine {
 	$wind .= " $winddir";
 	my $city = changeCity($json->{name});
 	my $timezone = ($json->{timezone} / 3600);
-	if ($timezone > 0) {
-		$timezone = '+'.$timezone; 
-	}
+	if ($timezone > 0) { $timezone = '+'.$timezone; }
 	$city .= ','.$json->{sys}->{country};
 	$city .= " (UTC$timezone)";
 
@@ -731,7 +728,7 @@ sub CREATEDB {
 # Check if user has saved city, if not save new city. Return undef if no city found or city name.
 sub check_user_city {
 	my ($checkcity, $nick, @rest) = @_;
-	$checkcity = KaaosRadioClass::ktrim($checkcity);
+	$checkcity = ktrim($checkcity);
 	if (!$checkcity) {
 		if (defined $users_cache->{$nick}) {
 			return $users_cache->{$nick};
@@ -804,12 +801,12 @@ sub trim {
 sub filter_keyword {
 	my ($msg, $nick, @rest) = @_;
 	my ($returnstring, $city);
-	$msg = trim($msg);
+	$msg = ktrim($msg);
 
-	if ($msg =~ /^\!(sää |saa |s )(.*)/ui) {
+	if ($msg =~ /^\!(sää |saa |s )(.*)$/ui) {
 		# !sää with a search word, always save new city to user
 
-		my $searchword = KaaosRadioClass::ktrim($2);
+		my $searchword = ktrim($2);
 		if (!$searchword) {
 			return 'Kirjoita kaupunki, esim: !sää Kuopio';
 		}
@@ -845,11 +842,19 @@ sub filter_keyword {
 		} else {
 			$returnstring = FINDFORECAST($user_city);
 		}
+	} elsif ($msg eq '!se5') {
+		my $user_city = check_user_city('', $nick);
+		if (not defined $user_city) {
+			dp(__LINE__ . ', no user city found for nick: ' . $nick . ', city: ' . $user_city);
+			$returnstring = 'Unohdin, missä asuitkaan.. Kirjoita: !se5 kaupunzi';
+		} else {
+			$returnstring = FINDFORECAST($user_city, 5);
+		}
 	} elsif ($msg eq '!sa') {
 		my $user_city = check_user_city('', $nick);
 		if (not defined $user_city) {
 			dp(__LINE__ . ', no user city found for nick: ' . $nick . ', city: ' . $user_city);
-			$returnstring = 'Unohdin, missä asuitkaan.. Kirjoita: !sa kaupunni';
+			$returnstring = 'Unohdin, missä asuitkaan.. Kirjoita: !sa kaupunski';
 		} else {
 			#$dbh = KaaosRadioClass::connectSqlite($db_file);
 			$returnstring = FINDAREAWEATHER($user_city);

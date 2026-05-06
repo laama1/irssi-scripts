@@ -70,7 +70,7 @@ sub parseQuote {
 		prind("$msg -- request from $nick on channel: $target");
 		$server->command("msg $nick quote lisätty! $quoteurl");
 		$server->command("msg $target :)");
-	} elsif ($msg =~ /^!rq (.{3,15})/gi) {
+	} elsif ($msg =~ /^!rq (.{3,55})/gi) {
 		my $searchword = decode('UTF-8', $1);
 		return if KaaosRadioClass::floodCheck();
 		my @answers = search_from_file($tiedosto, $searchword);
@@ -93,7 +93,7 @@ sub parseQuote {
 		prind("$msg request from $nick") if $DEBUG;
 		$server->command("msg $nick vitsi lisätty! $vitsiurl");
 		$server->command("msg $target xD");
-	} elsif ($msg =~ /^!rj (.{3,15})/gi) {
+	} elsif ($msg =~ /^!rj (.{3,55})/gi) {
 		my $searchword = decode('UTF-8', $1);
 		return if KaaosRadioClass::floodCheck();
 		my @answers = search_from_file($vitsitiedosto, $searchword);

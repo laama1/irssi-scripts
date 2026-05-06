@@ -145,6 +145,17 @@ sub GETBADWORDLIST {
 	return;
 }
 
+sub PRINTBADWORDS {
+	my @rest = @_;
+	my $list = join(', ', @badwords);
+	prind("Kirosanat: $list");
+	#foreach my $badword (@badwords) {
+	#	prind($badword);
+	#}
+
+	return;
+}
+
 sub kickPerson {
 	my ($server, $channel, $nick, $reason, $kicker, @rest) = @_;
 	#dp("target: $channel, nick: $nick, reason: $reason");
@@ -318,6 +329,22 @@ sub event_pubmsg {
 	}
 }
 
+sub add_enabled_channel_command {
+	my ($text, $server, $channel, @rest) = @_;
+	prind('Add channel: text: ' . $text . ', server tag: ' . $server->{tag} . ', server chatnet: ' . $server->{chatnet} . ', channel: ' . $channel->{name});
+	my $rv = KaaosRadioClass::add_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
+	prind("Enabled channels: " . Irssi::settings_get_str('kickpelle_enabled_channels'));
+	return 0;
+}
+
+sub remove_enabled_channel_command {
+	my ($text, $server, $channel, @rest) = @_;
+	my $rv = KaaosRadioClass::remove_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
+	prind("Channel $channel->{name}\@$server->{chatnet} removed from enabled channels.");
+	prind("Enabled channels: " . Irssi::settings_get_str('kickpelle_enabled_channels'));
+	return 1;
+}
+
 sub prind {
 	my ($text, @rest) = @_;
 	print("\00313" . $IRSSI{name} . ">\003 ". $text);
@@ -337,8 +364,11 @@ sub dp {
 }
 
 Irssi::command_bind('kickpellestats', \&getStats, 'kickpelle');
+Irssi::command_bind('kickpelle_badwords_list', \&PRINTBADWORDS, 'kickpelle');
+Irssi::command_bind('kickpelle_add_channel', \&add_enabled_channel_command, 'kickpelle');
+Irssi::command_bind('kickpelle_remove_channel', \&remove_enabled_channel_command, 'kickpelle');
 Irssi::settings_add_str('kickpelle', 'kickpelle_enabled_channels', '');
 #print_joinmsg();
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-prind("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1\@network #chan2\@network, /kickpellestats");
+prind("kickpelle.pl v. $VERSION -- New commands: /set kickpelle_enabled_channels #chan1\@network #chan2\@network, /kickpellestats, /kickpelle_badwords_list, /kickpelle_add_channel, /kickpelle_remove_channel. For help: !help kick or !help badword in channel.");

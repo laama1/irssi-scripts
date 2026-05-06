@@ -162,4 +162,4 @@ sub prindw {
 }
 
 Irssi::signal_add('sig_imgur_api', 'imgur_api');
-prind($IRSSI{name} . " script loaded! Version: $VERSION");
+prind("loaded! Version: $VERSION");

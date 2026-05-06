@@ -27,15 +27,22 @@ geoip_city_db_location = script_dir + '/geolite2/GeoLite2-City.mmdb'
 geoip_asn_db_location = script_dir + '/geolite2/GeoLite2-ASN.mmdb'
 geoip_country_db_location = script_dir + '/geolite2/GeoLite2-Country.mmdb'
 
+def log_to_file(logtext):
+	timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+	logtext = f"[{timestamp}] {logtext}"
+	with open('ip_info.log', 'a') as log_file:
+		log_file.write(logtext + '\n')
+
+
 def check_age_of_files():
 	files = ['socks4.txt', 'socks5.txt', 'http.txt']
 	for file in files:
 		if os.path.exists(file):
 			mod_time = os.path.getmtime(file)
 			age_days = (time.time() - mod_time) / (24 * 3600)
-			#print(f"{file} age: {age_days:.2f} days")
+			log_to_file(f"{file} age: {age_days:.2f} days")
 		else:
-			#print(f"{file} does not exist.")
+			log_to_file(f"{file} does not exist.")
 			return 100
 	return age_days
 
@@ -52,9 +59,9 @@ def download_proxy_lists():
 			response.raise_for_status()
 			with open(file, 'w') as f:
 				f.write(response.text)
-			#print(f"Downloaded and saved {file}")
+			log_to_file(f"Downloaded and saved {file}")
 		except Exception as e:
-			print(f"Failed to download {file} from {url}: {e}")
+			log_to_file(f"Failed to download {file} from {url}: {e}")
 
 def check_if_ip_in_proxy_lists(ip):
 	files = ['socks4.txt', 'socks5.txt', 'http.txt']
@@ -67,7 +74,7 @@ def check_if_ip_in_proxy_lists(ip):
 						#print(f"IP {ip} found in {file}. Line: {line.strip()}")
 						print(shortfilename + ": " + line.strip(), end=', ')
 		except Exception as e:
-			print(f"Failed to read {file}: {e}", file=sys.stderr)
+			log_to_file(f"Failed to read {file}: {e}")
 	return False
 
 def nmap_given_port(ip, port):
@@ -78,7 +85,8 @@ def nmap_given_port(ip, port):
 		if completed.returncode == 0:
 			return completed.stdout
 		return None
-	except Exception:
+	except Exception as e:
+		log_to_file(f"Failed to run nmap on {ip}:{port}: {e}")
 		return None
 
 def get_geoip_info(ip, city_db, asn_db):
@@ -94,6 +102,7 @@ def get_geoip_info(ip, city_db, asn_db):
 		asn_reader.close()
 		return country, city, asn
 	except Exception as e:
+		log_to_file(f"Failed to get GeoIP info for {ip}: {e}")
 		return None, None, None
 
 def ping_ip(ip):

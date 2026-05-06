@@ -14,7 +14,7 @@ $VERSION = '2025-09-13';
 %IRSSI = (
     authors     => 'LAama1',
     contact     => 'ircnet: LAama1',
-    name        => 'Steal money',
+    name        => 'Steal',
     description => 'React to !steal and add stolen money to total pile, saving to file',
     license     => 'Public Domain',
     url         => '#salamolo',
@@ -86,7 +86,7 @@ sub create_sqlite_db {
     $dbh->do("CREATE TABLE IF NOT EXISTS steals (id INTEGER PRIMARY KEY, unit TEXT NOT NULL, target TEXT NOT NULL, total_amount INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, latest_steal DATETIME )");
     $dbh->do("CREATE UNIQUE INDEX IF NOT EXISTS idx_steals_target_unit ON steals(target, unit)");
     $dbh->disconnect();
-    Irssi::print("SQLite database initialized at $database_file");
+    prind("SQLite database initialized at $database_file");
     return;
 }
 
@@ -112,10 +112,10 @@ sub increase_value {
     my $sql = "UPDATE steals SET total_amount = $newvalue, latest_steal = CURRENT_TIMESTAMP WHERE unit = '$monetary_unit' AND target = '$steal_target'";
     my $rv = writeToDB($database_file, $sql);
     if($rv ne 0) {
-        print "DBI Error: $rv";
+        prindw("DBI Error: $rv");
         return 'error';
     } else {
-        print "Updated total for $steal_target by adding $amount $monetary_unit";
+        prind("Updated total for $steal_target by adding $amount $monetary_unit");
     }
     return $newvalue;
 }
@@ -129,7 +129,7 @@ sub create_new_line {
     my $sql = "INSERT INTO steals (unit, target, total_amount) VALUES ('$monetary_unit', '$steal_target', $total)";
     my $rv = writeToDB($database_file, $sql);
     if($rv ne 0) {
-        print "DBI Error: $rv";
+        prindw("DBI Error: $rv");
         return 'error';
     } else {
         print "Created new line for $steal_target with $total $monetary_unit";
@@ -140,18 +140,26 @@ sub create_new_line {
 sub get_top_ten {
     my $sql = "SELECT id, target, total_amount, unit FROM steals order by total_amount desc limit 10";
     my @data = bindSQL($database_file, $sql);
-    #print __LINE__ . ' dada: ' . Dumper(\@data) if $DEBUG;
     return @data;
 }
 
 sub load_latest_steal {
     my $sql = "SELECT unit, target from steals order by latest_steal desc limit 1";
     my @data = readLineFromDataBase($database_file, $sql);
-    print __LINE__ . ": Latest steal data: " . Dumper(\@data) if $DEBUG;
     if (scalar(@data) > 0) {
         ($monetary_unit, $steal_target) = ($data[0], $data[1]);
-        print __LINE__ . ": Loaded latest steal target: $steal_target with unit $monetary_unit" if $DEBUG;
+        prind("Loaded latest steal target: $steal_target with unit $monetary_unit");
     }
+}
+
+sub prind {
+	my ($text, @rest) = @_;
+	print "\00313" . $IRSSI{name} . ">\003 " . $text;
+}
+
+sub prindw {
+	my ($text, @rest) = @_;
+	print "\0034" . $IRSSI{name} . ">\003 " . $text;
 }
 
 create_sqlite_db();

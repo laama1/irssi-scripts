@@ -374,4 +374,4 @@ my $timer_socket = Irssi::timeout_add(500, \&check_sock, []);
 Irssi::signal_add('message public', 'event_pubmsg');
 Irssi::command_bind('muistutukset', 'print_muistutukset', 'muistuta');
 #Irssi::signal_add('message private', 'event_privmsg');
-prind("$IRSSI{name} v$VERSION loaded.");
+prind("v$VERSION loaded.");

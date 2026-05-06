@@ -37,7 +37,7 @@ $VERSION = 1.03;
 @EXPORT = qw(readLastLineFromFilename readFromDB 
 readLinesFromDataBase connectSqlite closeDB readLineFromDataBase readLineFromOpenDB bindSQL bindSQL_nc insertSQL writeToOpenDB
 readTextFile addLineToFile writeToFile writeArrayToFile getNytsoi24h replaceWeird stripLinks writeToDB getMonthString
-is_enabled_channe add_enabled_channel remove_enabled_channel format_time_ago format_kibibytes getJSON df);
+is_enabled_channel add_enabled_channel remove_enabled_channel format_time_ago format_kibibytes getJSON df ktrim floodCheck);
 
 #$scriptDir = cwd();
 our $scriptDir = $ENV{HOME}.'/.irssi/scripts';

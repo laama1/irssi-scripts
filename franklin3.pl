@@ -597,7 +597,10 @@ sub dalle {
             my $answer = '';
             prind(__LINE__ . ": vision preview response:");
             prindd(Dumper $json_decoded);
-            if (defined $json_decoded->{choices}[0]->{message}->{content}) {
+            if (defined $json_decoded->{choices}[0]->{finish_reason} &&
+                $json_decoded->{choices}[0]->{finish_reason} eq 'length') {
+                $server->command("msg -channel $channel $nick: \0035Warning:\003 length.");
+            } elsif (defined $json_decoded->{choices}[0]->{message}->{content}) {
                 $answer = $json_decoded->{choices}[0]->{message}->{content};
                 $server->command("msg -channel $channel $answer");
                 prind("success: " . $answer);

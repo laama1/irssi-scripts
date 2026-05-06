@@ -2,6 +2,7 @@
 # LAama1 4.4.2020
 use strict;
 use warnings;
+use utf8;
 use Irssi;
 use JSON;
 use Data::Dumper;
@@ -124,8 +125,9 @@ sub get_title_desc {
 	foreach my $item (@$json) {
 		# TODO: tell something about the rest of the episodes too?
 		my $region = $item->{region};
-		prind('Episode title: ' . $item->{episode_title} . ', episode description: ' . $item->{description});
-		return $region, $item->{episode_title} . $extrastring, $item->{description};
+		my $title = $item->{episode_title} || $item->{title} || 'N/A';
+		prind('Episode title: ' . $title . ', episode description: ' . $item->{description});
+		return $region, $title . $extrastring, $item->{description};
 	}
 }
 
