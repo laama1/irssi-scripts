@@ -21,7 +21,7 @@ $VERSION = '0.2';
 
 my $dronebl_address = 'https://';
 my $statsfile = Irssi::get_irssi_dir() . '/scripts/dronebl.log';
-my $scriptfile = Irssi::get_irssi_dir() . '/scripts/checkdnsbl.sh';
+my $scriptfile = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/checkdnsbl.sh';
 my $ipinfo_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/python/ip_info.py';
 my $nicks = {};
 my $memory = {};
