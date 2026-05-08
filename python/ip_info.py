@@ -16,7 +16,9 @@ import dns.reversename
 import geoip2.database
 import os
 import time
+import requests
 
+use_ipinfo_io = True  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and API token)
 
 socks4_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"
 socks5_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
@@ -26,6 +28,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 geoip_city_db_location = script_dir + '/geolite2/GeoLite2-City.mmdb'
 geoip_asn_db_location = script_dir + '/geolite2/GeoLite2-ASN.mmdb'
 geoip_country_db_location = script_dir + '/geolite2/GeoLite2-Country.mmdb'
+
+output_buffer = []
 
 def log_to_file(logtext):
 	timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -47,7 +51,6 @@ def check_age_of_files():
 	return age_days
 
 def download_proxy_lists():
-	import requests
 	files = {
 		'socks4.txt': socks4_url,
 		'socks5.txt': socks5_url,
@@ -72,7 +75,15 @@ def check_if_ip_in_proxy_lists(ip):
 				for line in f:
 					if ip in line:
 						#print(f"IP {ip} found in {file}. Line: {line.strip()}")
-						print(shortfilename + ": " + line.strip(), end=', ')
+						output_buffer.append(shortfilename + ": " + line.strip())
+						if ":" in line:
+							parts = line.strip().split(':')
+							if len(parts) >= 2 and parts[0] == ip:
+								port = parts[1]
+								nmap_result = nmap_given_port(ip, port)
+								if nmap_result:
+									output_buffer.append(f"Nmap result: {nmap_result}")
+						return True
 		except Exception as e:
 			log_to_file(f"Failed to read {file}: {e}")
 	return False
@@ -83,11 +94,36 @@ def nmap_given_port(ip, port):
 			'nmap', '-p', str(port), ip
 		], capture_output=True, text=True)
 		if completed.returncode == 0:
-			return completed.stdout
+			lines = completed.stdout.splitlines()
+			target = "PORT   STATE SERVICE"
+			next_line = None
+			for i, line in enumerate(lines):
+				if line.strip() == target:
+					if i + 1 < len(lines):
+						next_line = lines[i + 1].strip()
+					break
+			if next_line and next_line.startswith(str(port)):
+				return next_line
+
 		return None
 	except Exception as e:
 		log_to_file(f"Failed to run nmap on {ip}:{port}: {e}")
 		return None
+
+def ipinfo_io(ip):
+	try:
+		response = requests.get(f"https://ipinfo.io/{ip}/json")
+		response.raise_for_status()
+		data = response.json()
+		country = data.get('country')
+		city = data.get('city')
+		region = data.get('region')
+		org = data.get('org')
+		hostname = data.get('hostname')
+		return country, city, region, org, hostname
+	except Exception as e:
+		log_to_file(f"Failed to get info from ipinfo.io for {ip}: {e}")
+		return None, None, None, None, None
 
 def get_geoip_info(ip, city_db, asn_db):
 	try:
@@ -134,22 +170,33 @@ def main():
 		sys.exit(1)
 	ip = sys.argv[1]
 
-	country, city, asn = get_geoip_info(ip, geoip_city_db_location, geoip_asn_db_location)
-	if country: print(f"Country: {country}", end=', ')
-	if city: print(f"City: {city}", end=', ')
-	if asn: print(f"ASN: {asn}", end=', ')
+	if (use_ipinfo_io):
+		country, city, region, org, hostname = ipinfo_io(ip)
+		if country: output_buffer.append(f"Country: {country}")
+		if city: output_buffer.append(f"City: {city}")
+		if region: output_buffer.append(f"Region: {region}")
+		if org: output_buffer.append(f"Org: {org}")
+		if hostname: output_buffer.append(f"Hostname: {hostname}")
+	else:
+		country, city, asn = get_geoip_info(ip, geoip_city_db_location, geoip_asn_db_location)
+		if country: output_buffer.append(f"Country: {country}")
+		if city: output_buffer.append(f"City: {city}")
+		if asn: output_buffer.append(f"ASN: {asn}")
+		hostname = reverse_dns(ip)
+		if hostname: output_buffer.append(f"Reverse DNS: {hostname}")
 
 	latency = ping_ip(ip)
-	if latency: print(f"Ping latency: {latency} ms", end=', ')
-
-	hostname = reverse_dns(ip)
-	if hostname: print(f"Reverse DNS: {hostname}", end=', ')
+	if latency: output_buffer.append(f"Ping latency: {latency} ms")
 
 	if check_age_of_files() > 1:
 		#print("Proxy list files are older than 1 day. Downloading new lists...")
 		download_proxy_lists()
 
-	check_if_ip_in_proxy_lists(ip)
+	if (check_if_ip_in_proxy_lists(ip)):
+		nmap_given_port
+
+	if output_buffer:
+		print(', '.join(output_buffer))
 
 if __name__ == "__main__":
 	main()
