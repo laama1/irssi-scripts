@@ -611,6 +611,13 @@ sub signal_emitters {
 		return 1;
 	}
 
+	if ($url =~ /(?:youtube\.com|m\.youtube\.com)\/\@([A-Za-z0-9._-]+)/i) {
+		my $creator_handle = $1;
+		Irssi::signal_emit('sig_youtube_creator_id', $server, $target, $creator_handle);
+		prind("Youtube creator signal emited!! \@$creator_handle");
+		return 1;
+	}
+
 	if ($url =~ /imgur\.com/) {
 		# imgur url, emit signal for another script to handle
 		Irssi::signal_emit('sig_imgur_api', $server, $target, $url);
@@ -1137,6 +1144,9 @@ Irssi::signal_register($signal_config_hash5);
 
 my $signal_config_hash51 = { 'sig_youtube_playlist_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash51);
+
+my $signal_config_hash52 = { 'sig_youtube_creator_id' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash52);
 
 my $signal_config_hash6 = { 'sig_imgur_api' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash6);
