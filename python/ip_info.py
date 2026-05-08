@@ -100,7 +100,7 @@ def nmap_given_port(ip, port):
 			for i, line in enumerate(lines):
 				if line.strip() == target:
 					if i + 1 < len(lines):
-						next_line = lines[i + 1].strip().replace('\t', ' ')
+						next_line = re.sub(r'\s+', ' ', lines[i + 1].strip())
 					break
 			if next_line and next_line.startswith(str(port)):
 				return next_line
