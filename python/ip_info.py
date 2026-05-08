@@ -100,7 +100,7 @@ def nmap_given_port(ip, port):
 			for i, line in enumerate(lines):
 				if line.strip() == target:
 					if i + 1 < len(lines):
-						next_line = lines[i + 1].strip()
+						next_line = lines[i + 1].strip().replace('\t', ' ')
 					break
 			if next_line and next_line.startswith(str(port)):
 				return next_line
@@ -186,14 +186,12 @@ def main():
 		if hostname: output_buffer.append(f"Reverse DNS: {hostname}")
 
 	latency = ping_ip(ip)
-	if latency: output_buffer.append(f"Ping latency: {latency} ms")
+	if latency: output_buffer.append(f"Ping: {latency} ms")
 
-	if check_age_of_files() > 1:
-		#print("Proxy list files are older than 1 day. Downloading new lists...")
+	if use_ipinfo_io == False and check_age_of_files() > 1:
 		download_proxy_lists()
 
-	if (check_if_ip_in_proxy_lists(ip)):
-		nmap_given_port
+	check_if_ip_in_proxy_lists(ip)
 
 	if output_buffer:
 		print(', '.join(output_buffer))
