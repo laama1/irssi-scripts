@@ -72,7 +72,7 @@ sub msgit {
 # Say it to a public channel
 sub sayit {
 	my ($server, $target, $saywhat) = @_;
-	if (KaaosRadioClass::floodCheck(5) == 0) {
+	if (floodCheck(5) == 0) {
 		$server->command("MSG $target $saywhat");
 	}
 	return;
@@ -90,7 +90,7 @@ sub ADDBADWORD {
 	if ($badsword ~~ @badwords) {
 		return 1;
 	}
-	if(KaaosRadioClass::addLineToFile($badwordfile, $badsword) == 0) {
+	if(addLineToFile($badwordfile, $badsword) == 0) {
 		push @badwords, $badsword;
 		return 1;
 	}
@@ -99,7 +99,7 @@ sub ADDBADWORD {
 
 sub SAVEBADWORDLIST {
 	my @rest = @_;
-	if (KaaosRadioClass::writeArrayToFile($badwordfile, @badwords) == 0) {
+	if (writeArrayToFile($badwordfile, @badwords) == 0) {
 		return 1;
 	}
 	return 0;
@@ -130,7 +130,7 @@ sub DELBADWORD {
 
 sub GETBADWORDLIST {
 	my @rest = @_;
-	my $temp_badwords = KaaosRadioClass::readTextFile($badwordfile);
+	my $temp_badwords = readTextFile($badwordfile);
 	if ($temp_badwords == -1) {
 		dp(__LINE__ . ': no bad words!');
 		@badwords = ('____', 'russiancup');
@@ -270,7 +270,13 @@ sub event_pubmsg {
 	return if ($nick eq $mynick);   #self-test
 
 	my $is_enabled = KaaosRadioClass::is_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $target);
+	#prind("event_pubmsg: server: $server->{tag}, chatnet: $server->{chatnet}, target: $target, is_enabled: $is_enabled");
 	return unless $is_enabled;
+
+	if (badWordFilter($msg)) {
+		doKick($server, $target, $nick, 'Ei kiroilla!');
+		return;
+	}
 
 	if ($msg =~ /^!help kick/i) {
 		print_help($server, $target);
@@ -323,16 +329,13 @@ sub event_pubmsg {
 		return;
 	}
 
-	if (badWordFilter($msg)) {
-		doKick($server, $target, $nick, 'Ei kiroilla!');
-		return;
-	}
+
 }
 
 sub add_enabled_channel_command {
 	my ($text, $server, $channel, @rest) = @_;
 	prind('Add channel: text: ' . $text . ', server tag: ' . $server->{tag} . ', server chatnet: ' . $server->{chatnet} . ', channel: ' . $channel->{name});
-	my $rv = KaaosRadioClass::add_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
+	my $rv = add_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
 	prind("Enabled channels: " . Irssi::settings_get_str('kickpelle_enabled_channels'));
 	return 0;
 }
