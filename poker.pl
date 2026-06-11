@@ -1,6 +1,6 @@
 use strict;
 use vars qw($VERSION %IRSSI);
-
+use utf8;
 use Irssi;
 use IO::File;
 $VERSION = '0.00.05';
@@ -183,7 +183,7 @@ sub check_player_winning_hand {
 
 sub evaluate_poker_hand {
     my @cards = @_;
-
+    my $hand_name = "";
     # Treat joker as a wild card marker for now.
     if (grep { defined $_ && $_ =~ /^Joker/ } @cards) {
         return "Joker Wild";
@@ -202,7 +202,7 @@ sub evaluate_poker_hand {
     foreach my $card (@cards) {
         next if !defined $card;
         $card =~ s/\\003\d?//g;  # remove IRC color codes
-        print(__LINE__ . ': card: >' . $card . '<') if $DEBUG;
+        #print(__LINE__ . ': card: >' . $card . '<') if $DEBUG;
         if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
             my ($rank, $suit) = ($1, $2);
             my $value = $rank_map{$rank};
@@ -214,9 +214,9 @@ sub evaluate_poker_hand {
     }
 
     return "High Card" if scalar(@values) != 5;
-    print(__LINE__ . ": Values: " . join(", ", @values)) if $DEBUG;
     @values = sort { $a <=> $b } @values;
     my $is_flush = (scalar(keys %suit_counts) == 1) ? 1 : 0;
+    print(__LINE__ . ": Values: " . join(", ", @values) . ", is Flush: $is_flush") if $DEBUG;
 
     my $is_straight = 0;
     my %unique = map { $_ => 1 } @values;
@@ -268,6 +268,12 @@ sub evaluate_poker_hand {
     return "High Card";
 }
 
+sub prind {
+	my ($text, @rest) = @_;
+	print("\0034" . $IRSSI{name} . ">\003 ". $text);
+}
 
 Irssi::signal_add("message public", "sig_msg_pub");
 
+prind("v.$VERSION loaded");
+prind("new commands: !shuffle !poker !hold <numbers>");

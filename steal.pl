@@ -46,7 +46,8 @@ sub event_pubmsg {
         sayit($server, $target, $helptext);
         return;
     } elsif ($msg !~ /^!steal\b/) {
-        return; # Not a steal command, ignore
+        # Not a steal command, ignore
+        return;
     }
     if ($msg =~ /^!steal$/) {
         my $amount = int(rand(120)) + 1; # Steal 1-120
@@ -56,11 +57,11 @@ sub event_pubmsg {
         my $total = 0;
         
         if ($total = line_exists()) {
-            print __LINE__ . ": Line exists for $steal_target with unit $monetary_unit, increasing value by $amount" if $DEBUG;
+            #print __LINE__ . ": Line exists for $steal_target with unit $monetary_unit, increasing value by $amount" if $DEBUG;
             #increase_value($dbh, $amount, $total);
             $total = increase_value($amount, $total);
         } else {
-            print __LINE__ . ": Line does not exist for $steal_target with unit $monetary_unit, creating new line with $amount" if $DEBUG;
+            #print __LINE__ . ": Line does not exist for $steal_target with unit $monetary_unit, creating new line with $amount" if $DEBUG;
             #$total = create_new_line($dbh, $amount);
             $total = create_new_line($amount);
         }

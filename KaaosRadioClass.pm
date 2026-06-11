@@ -506,11 +506,15 @@ sub fetchResponse {
 
 
 sub fetchUrl {
-	my ($url, $getsize, $headers);
-	($url, $getsize, $headers) = @_;
-	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers));
+	my ($url, $getsize, $headers, $cookie_file, @rest) = @_;
 
-	my $cookie_file = $scriptDir .'/KRCcookies.dat';
+	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers) . ', cookie_file: ' . $cookie_file);
+
+	if ($cookie_file) {
+		$cookie_file = $cookie_file;
+	} else {
+		$cookie_file = $scriptDir .'/KRCcookies.dat';
+	}
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,

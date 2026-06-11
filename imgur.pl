@@ -112,11 +112,11 @@ sub imgur_api  {
 		}
 		df(__LINE__ . ' urltitle imgurdata: ' . Dumper($jsondata)) if $DEBUG;
 		my $id = $jsondata->{data}->{id} || '';
-		my $title = $jsondata->{data}->{title} || '';
+		my $title = $jsondata->{data}->{title} || $jsondata->{data}->{name};
 		$title .= ' ' if $title ne '';
 		my $width = $jsondata->{data}->{width} || '';
 		my $height = $jsondata->{data}->{height} || '';
-		my $size = $jsondata->{data}->{size} || '';
+		my $size = $jsondata->{data}->{size} || $jsondata->{data}->{mp4_size};
 		my $views = $jsondata->{data}->{views} || '';
 		my $datetime = $jsondata->{data}->{datetime} || '';
 		my $datetime_formatted = strftime('%Y-%m-%d %H:%M:%S', localtime($datetime)) if $datetime;
@@ -126,7 +126,7 @@ sub imgur_api  {
 			$tags = "Tags: ${tags}" if $tags ne '';
 			$tags = '' if $tags eq '';
 
-		$title .= "\0033Imgur image:\003 ${title}[${width}x${height}, " . sprintf("%.2f", $size / 1024) . "KiB";
+		$title = "\0033Imgur image:\003 ${title}[${width}x${height}, " . sprintf("%.2f", $size / 1024) . "KiB";
 		if ($views) {
 			$title .= ", views: $views";
 		}

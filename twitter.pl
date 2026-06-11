@@ -28,7 +28,7 @@ $VERSION = '2025-11-23';
 # nitter.mailstation.de nitter.namazso.eu nitter.himiko.cloud nitter.domain.glass nitter.unixfox.eu
 
 my $localdir = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/';
-my $bearer_token = KaaosRadioClass::readLastLineFromFilename($localdir . 'twitter_bearer_token.key');
+my $bearer_token = readLastLineFromFilename($localdir . 'twitter_bearer_token.key');
 # https://elfsight.com/blog/how-to-get-x-twitter-api-key-in-2026/
 
 my $url = 'https://api.twitter.com/2/tweets/';
@@ -39,10 +39,10 @@ $headers->header('Authorization' => 'Bearer ' . $bearer_token);
 sub sig_twitter {
     my ($server, $target, $id) = @_;
     prind("got signal: Target: $target, tweet-id: $id");
-    return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
+    return unless is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
 
     my $twitter_url = $url . $id . $fields;
-    my $jsondata = KaaosRadioClass::getJSON($twitter_url, $headers);
+    my $jsondata = getJSON($twitter_url, $headers);
     if ($jsondata eq '-1') {
         #$server->command("MSG $target 🐦 error..");
     } else {

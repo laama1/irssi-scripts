@@ -306,7 +306,7 @@ sub event_pubmsg {
 		}
 		return;
 	} elsif ($msg =~ /^!kick ([^\s]*)/gi) {
-		dp(__LINE__.": msg: $msg");
+		dp(__LINE__.": kickmsg: $msg");
 		my $kicknick = $1;
 		my $reason = '';		# no reason, just for kicks
 		if (get_nickrec($server, $target, $kicknick)) {
@@ -314,6 +314,7 @@ sub event_pubmsg {
 		}
 		return;
 	} elsif ($msg =~ /^!badword del (.*)/gi) {
+		dp(__LINE__.": badword del: $msg");
 		if (DELBADWORD($1)) {
 			sayit($server, $target, "Poistettiin '$1' kirosanafiltteristä.");
 		} else {
@@ -321,6 +322,7 @@ sub event_pubmsg {
 		}
 		return;
 	} elsif ($msg =~ /^!badword add (.*)$/gi || $msg =~ /^!badword (.*)$/gi) {
+		dp(__LINE__.": badword add: $msg");
 		if (ADDBADWORD($1)) {
 			sayit($server, $target, "Lisättiin '$1' kirosanafiltteriin.");
 		} else {
@@ -342,7 +344,7 @@ sub add_enabled_channel_command {
 
 sub remove_enabled_channel_command {
 	my ($text, $server, $channel, @rest) = @_;
-	my $rv = KaaosRadioClass::remove_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
+	my $rv = remove_enabled_channel('kickpelle_enabled_channels', $server->{chatnet}, $channel->{name});
 	prind("Channel $channel->{name}\@$server->{chatnet} removed from enabled channels.");
 	prind("Enabled channels: " . Irssi::settings_get_str('kickpelle_enabled_channels'));
 	return 1;

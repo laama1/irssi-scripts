@@ -600,7 +600,7 @@ sub signal_emitters {
 	) {
 		my $videoid = $1;
 		Irssi::signal_emit('sig_youtube_search_id', $server, $target, $videoid);
-		prind("Youtube signal emited!! $videoid");
+		prind("Youtube search signal emited!! $videoid");
 		return 1;
 	}
 

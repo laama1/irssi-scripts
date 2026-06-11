@@ -14,12 +14,14 @@ use HTTP::Date;
 use DateTime::Format::Strptime;
 use Time::Piece;
 use Encode qw/encode decode/;
+use POSIX qw(strftime);
 
 # http://www.perl.com/pub/1998/12/cooper-01.html
 # 6.7.2021: use kaaosradioclass more
+# 2026-05-31: add cookie support for selecting language
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2021-07-06';
+$VERSION = '2026-05-31';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'ircnet: LAama1',
@@ -30,7 +32,7 @@ $VERSION = '2021-07-06';
 	changed     => $VERSION,
 );
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $myname = 'taivaanvahti.pl';
 my $db = Irssi::get_irssi_dir() . '/scripts/taivaanvahti.sqlite';
 my $timeout_tag;
@@ -39,6 +41,9 @@ my $taivaanvahtiURL = 'https://www.taivaanvahti.fi/observations/rss';
 my $count = 0;
 my $resultarray = {};
 my $parser = new XML::RSS();
+my $logfile = Irssi::get_irssi_dir() . '/scripts/taivaanvahti_debug.txt';
+my $cookie_file = Irssi::get_irssi_dir() . '/scripts/taivaanvahti_cookie.dat';
+
 
 unless (-e $db) {
 	unless(open FILE, '>'.$db) {
@@ -50,19 +55,6 @@ unless (-e $db) {
 	prind("Database file $db created.");
 } else {
 	prind("Database file $db found!");
-}
-
-sub DP {
-	return unless $DEBUG == 1;
-	print("$myname debug> @_");
-	return;
-}
-
-sub DA {
-	return unless $DEBUG == 1;
-	print("$myname-debug array>");
-	print Dumper (@_);
-	return;
 }
 
 sub print_help {
@@ -87,6 +79,9 @@ sub sig_taivaanvahti_search {
 		#my $sayline = "$title: ($timepiece, $location) $desc";
 		my $sayline = $line[0].': ('.$timepiece.', '.$line[3].') '.$line[1];
 		sayit($server, $target, $sayline);
+		DP(__LINE__.' search result for havainto-ID: '. $value . ': ' . $sayline);
+	} else {
+		DP(__LINE__.' No search result found for Havainto-ID: '. $value);
 	}
 	$sth->finish();
 	close_database_handle();
@@ -128,7 +123,7 @@ sub sayit {
 		$sayline = substr $sayline, 0, 250;
 		$sayline .= ' ...';
 	}
-	$sayline = KaaosRadioClass::replaceWeird($sayline);
+	$sayline = replaceWeird($sayline);
 	$server->command("msg -channel $target $sayline");
 	return;
 }
@@ -161,12 +156,12 @@ sub msg_to_channel {
 }
 
 sub open_database_handle {
-	$dbh = KaaosRadioClass::connectSqlite($db);
+	$dbh = connectSqlite($db);
 	return;
 }
 
 sub close_database_handle {
-	$dbh = KaaosRadioClass::closeDB($dbh);
+	$dbh = closeDB($dbh);
 	return;
 }
 
@@ -222,7 +217,7 @@ sub create_db {
 	
 	# Using FTS (full-text search)
 	my $sqlquery = 'CREATE VIRTUAL TABLE taivaanvahti5 using fts4(PVM int,TITLE,LINK, PUBDATE int, DESCRIPTION, CITY, HAVAINTOID int primary key, HAVAINTODATE int, DELETED int default 0)';
-	KaaosRadioClass::writeToDB($dbh, $sqlquery);
+	writeToDB($dbh, $sqlquery);
 	close_database_handle();
 	return;
 }
@@ -278,8 +273,10 @@ sub parseRFC822Time {
 sub parse_time {
 	my ($string, @rest) = @_;
 	# Tue, 04 Sep 2018 22:37:34 +0300
+	#Sun, 31 May 2026 10:46:10 +0300
 	#my $tzone = '+0300';		# Default value for timezone (Finnish summer time)
-	my $tzone = '+0200';		# Default value for timezone (Finnish winter time)
+	#my $tzone = '+0200';		# Default value for timezone (Finnish winter time)
+	my $tzone = strftime('%z', localtime);
 	if ($string =~ /\w{3}, (\d{2}) (\w{3}) \d{4} (\d{2}:\d{2}):\d{2} ([+-]\d{4})/i) {
 		return parseRFC822Time($string, $tzone);
 	} else {
@@ -313,7 +310,7 @@ sub parse_mini {
 
 sub parse_extrainfo_from_link_new {
 	my ($url, @rest) = @_;
-	my $text = KaaosRadioClass::fetchUrl($url);
+	my $text = fetchUrl($url, 0, {}, $cookie_file);
 	my %returnObject = (
 		'unixtime' => 0,
 		'type' => '',
@@ -324,7 +321,9 @@ sub parse_extrainfo_from_link_new {
 
 sub parse_extrainfo_from_link {
 	my ($url, @rest) = @_;
-	my $text = KaaosRadioClass::fetchUrl($url);
+	my $text = fetchUrl($url, 0, {}, $cookie_file);
+	writeToFile($logfile, $text);
+
 	my %returnObject = (
 		'unixtime' => 0,
 		'type' => '',
@@ -335,19 +334,20 @@ sub parse_extrainfo_from_link {
 	my $date;
 	if ($text =~ /<div class="main-heading">(.*?)<\/div>/gis) {
 		my $heading = $1;
+		DP(__LINE__.' main heading found!');
 		if ($heading =~ /<h1>(.*?)<\/h1>/gis) {
-			my $innerdata = KaaosRadioClass::ktrim($1);
+			my $innerdata = ktrim($1);
 			DP(__LINE__.' innerdata: '. $innerdata);
 			# Parse havaintodate -- TODO, parse dates using DateTime functions
 			if ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match1!');
-				my $type = KaaosRadioClass::ktrim($1);
+				my $type = ktrim($1);
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
 				my $phour = $5;
 				my $pminute = $6;
-				my $city = KaaosRadioClass::ktrim($12);
+				my $city = ktrim($12);
 
 				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
 				$returnObject{'type'} = $type;
@@ -355,13 +355,13 @@ sub parse_extrainfo_from_link {
 			}
 			elsif ($innerdata =~ /(.*?) - (\d{1,2})\.(\d{1,2})\.(\d{4}) klo (\d{1,2})\.(\d{2}) (.*?)</gis) {
 				DP(__LINE__.' match2!');
-				my $type = KaaosRadioClass::ktrim($1);
+				my $type = ktrim($1);
 				my $pday = $2;
 				my $pmonth = $3;
 				my $pyear = $4;
 				my $phour = $5;
 				my $pminute = $6;
-				my $city = KaaosRadioClass::ktrim($7);
+				my $city = ktrim($7);
 				parse_mini(\%returnObject, $pday, $pmonth, $pyear, $phour, $pminute);
 				$returnObject{'type'} = $type;
 				$returnObject{'city'} = $city;
@@ -379,7 +379,7 @@ sub parse_xml {
 	foreach my $item (@{$parser->{items}}) {
 		$index++;
 		if (if_link_in_db($item->{'link'}) == 0) {
-			#DA($item);
+			#DA(__LINE__, $item);
 			my $havaintoid = parse_id_from_link($item->{'link'});
 			my %extrainfo = parse_extrainfo_from_link($item->{'link'});
 			
@@ -405,7 +405,8 @@ sub parse_xml {
 
 # does not do anything
 sub get_xml {
-	my $xmlfile = get($taivaanvahtiURL);
+	DP(__LINE__.' Fetching XML from URL: '. $taivaanvahtiURL);
+	my $xmlfile = fetchUrl($taivaanvahtiURL, 0, {}, $cookie_file);
 	$parser->parse($xmlfile);
 	return;
 }
@@ -430,6 +431,19 @@ sub prind {
 sub prindw {
 	my ($text, @test) = @_;
 	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
+}
+
+sub DP {
+	return unless $DEBUG == 1;
+	print("\0038" . $IRSSI{name} . " debug> @_\003");
+	return;
+}
+
+sub DA {
+	return unless $DEBUG == 1;
+	print("\0038" . $IRSSI{name} . "-debug array>\003");
+	print Dumper (@_);
+	return;
 }
 
 Irssi::command_bind('taivaanvahti_update', \&timerfunc, 'taivaanvahti');

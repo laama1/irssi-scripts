@@ -341,6 +341,7 @@ sub make_call_public {
         prindw("got error " . $res->code);
         prindw(Dumper $res->{error});
         #prindd(Dumper $res);
+        return "Error: " . $res->{error}->{message};
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
