@@ -1,0 +1,59 @@
+some weather related UTF8 emojis:
+⛈️ Cloud With Lightning and Rain
+☁️ Cloud
+🌩️ Cloud With Lightning
+🌧️ Cloud With Rain
+🌨️ Cloud With Snow
+❄️ Snow flake
+🌪️ Tornado
+
+🌫️ Fog
+🌁 Foggy (city)
+⚡ High Voltage
+
+☔ Umbrella With Rain Drops
+🌂 closed umbrella
+🌈 rainbow
+🌥️ Sun Behind Large Cloud
+⛅ Sun Behind Cloud
+🌦️ Sun Behind Rain Cloud
+🌤️ Sun Behind Small Cloud
+
+🌄 sunrise over mountains
+🌅 sunrise
+🌇 sunset over buildings
+🌞 Sun With Face
+☀️ Sun
+😎 Smiling face with sunglasses
+🌆 cityscape at dusk
+🌉 bridge at night
+🌃 night with stars
+
+🌊 water wave
+🌀 cyclone
+🌬️ Wind Face
+💨 dashing away
+🍂 fallen leaf
+🌋 volcano
+🌏 earth globe asia australia
+🌟 glowing star
+🌠 shooting star
+🎆 fireworks
+💧 droplet
+
+🌌 milky way
+🌛 first quarter moon face
+🌝 full moon face
+🌜 last quarter moon face
+🌚 new moon face
+🌙 crescent moon
+🌑 new moon
+🌓 first quarter moon
+🌖 Waning gibbous moon
+🌒 waxing crescent moon
+🌔 waxing gibbous moon
+
+🦄 Unicorn Face
+🎠 carousel horse
+https://emojipedia.org/moon-viewing-ceremony/
+🌶  Hot Pepper
