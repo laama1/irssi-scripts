@@ -6,13 +6,14 @@ use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use Net::DNS;
 use POSIX qw(strftime);
+use Socket qw(AF_INET6 inet_pton);
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '0.2';
 %IRSSI = (
     authors	=> 'LAama1',
     contact	=> '#kaaosradio.fi@IRCNet',
-    name	=> 'dronecheck',
+    name	=> 'dronebl_check',
     description	=> 'Check if somebody joined the channel from an open proxy.',
     license	=> 'BSD',
     changed	=> '2025-12-29',
@@ -46,7 +47,7 @@ sub sig_msg_pub {
             $server->command("msg $target DroneBL check for $ip: $data1");
         }
         if ($data2 ne '') {
-            $server->command("msg $target GeoLite2 info for $ip: $data2");
+            $server->command("msg $target Info for $ip: $data2");
         }
     }
 }
@@ -190,24 +191,28 @@ sub do_the_kick {
 sub is_ipaddress {
     my ($value, @rest) = @_;
     if ($value =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/) {
+        # check if value is ipv4 address, like 192.168.0.1
         prind(__LINE__ . ": ipv4 address detected: " . $value) if $DEBUG;
         return $value;
     }
-    # check if it is ipv6
-    if ($value =~ /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/) {
+
+    if (defined inet_pton(AF_INET6, $value)) {
+        # check if it is ipv6 address, like 2001:0db8:85a3:0000:0000:8a2e:0370:7334
         prind(__LINE__ . ": ipv6 address detected: " . $value) if $DEBUG;
         return $value;
     }
-    # value is exactly 8 hex chars, probably hex cloaked ident
+    
     if ($value =~ /^[0-9a-fA-F]{8}$/) {
+        # check if value is exactly 8 hex chars, probably hex cloaked ident, like 5f2d3a1b
         my $converted_ip = is_hex_ident($value);
         if ($converted_ip ne 0) {
             prind(__LINE__ . ": converted hex ident to ip: " . $converted_ip) if $DEBUG;
             return $converted_ip;
         }
     }
-    # value has hex chars in the middle, probably part of a hex cloaked ident
+    
     if ($value =~ /[0-9a-fA-F]{8}/) {
+        # check if value has hex chars in the middle, probably part of a hex cloaked ident
         my $converted_ip2 = is_hex_ident($value);
         if ($converted_ip2 ne 0) {
             prind(__LINE__ . ": found hex from the middle part: " . $converted_ip2) if $DEBUG;
@@ -215,7 +220,7 @@ sub is_ipaddress {
         }
     }
 
-    prind(__LINE__ . ": this not an ip address: " . $value) if ($value && $DEBUG);
+    #prind(__LINE__ . ": this not an ip address: " . $value) if ($value && $DEBUG);
     return 0;
 }
 
