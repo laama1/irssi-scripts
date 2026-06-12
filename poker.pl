@@ -3,7 +3,7 @@ use vars qw($VERSION %IRSSI);
 use utf8;
 use Irssi;
 use IO::File;
-$VERSION = '0.01.06';
+$VERSION = '0.02.06';
 %IRSSI = (
 	authors			=> 'LAama1',
 	contact			=> 'laama@8u.fi',
@@ -59,6 +59,18 @@ Tie-break notes:
 - If still tied, compare next highest card(s) (kickers).
 - If all ranks are equal, the hand is a tie.
 
+Joker handling:
+Real cards	                        Joker becomes	                        Result
+--------------------------------------------------------------------------------------------
+4 same suit, all from {10,J,Q,K,A}	missing royal card	                    Royal Flush
+4 same suit, 4 consecutive ranks	missing rank	                        Straight Flush
+4 of same rank	                    5th of same rank	                    Five of a Kind
+3 of same rank	                    4th of same rank	                    Four of a Kind
+Two pairs	                        3rd of either pair	                    Full House
+4 same suit	                        matching suit	                        Flush
+4 consecutive ranks (not same suit)	missing rank	                        Straight
+One pair	                        3rd of same rank	                    Three of a Kind
+All different	                    pairs with best card	                One Pair
 
 =cut
 
@@ -246,13 +258,6 @@ sub check_player_winning_hand {
 
 sub evaluate_poker_hand {
     my @cards = @_;
-    my $hand_name = "";
-    my $has_joker = 0;
-    # Treat joker as a wild card marker for now.
-    if (grep { defined $_ && $_ =~ /^Joker/ } @cards) {
-        $has_joker = 1;
-        return "Joker Wild";
-    }
 
     my %rank_map = (
         '2'  => 2,  '3'  => 3,  '4'  => 4,  '5'  => 5,
@@ -260,15 +265,17 @@ sub evaluate_poker_hand {
         '10' => 10, 'J'  => 11, 'Q'  => 12, 'K'  => 13, 'A' => 14,
     );
 
+    my $has_joker = scalar(grep { defined $_ && $_ =~ /^Joker/ } @cards);
+
     my %rank_counts = ();
     my %suit_counts = ();
     my @values = ();
 
     foreach my $card (@cards) {
         next if !defined $card;
+        next if $card =~ /^Joker/;
         $card =~ s/\\003\d?//g;  # remove IRC color codes
         if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
-            # we are not adding Joker to the rank map
             my ($rank, $suit) = ($1, $2);
             my $value = $rank_map{$rank};
             print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
@@ -278,17 +285,70 @@ sub evaluate_poker_hand {
         }
     }
 
-    return "High Card" if scalar(@values) != 5;
+    # With joker we have 4 real cards, without we need 5.
+    my $expected = $has_joker ? 4 : 5;
+    return "High Card" if scalar(@values) != $expected;
 
-    # sort cards by value for straight checking
     @values = sort { $a <=> $b } @values;
+    my @count_values = sort { $b <=> $a } values %rank_counts;
+    my $max_count = $count_values[0] || 0;
     my $is_flush = (scalar(keys %suit_counts) == 1) ? 1 : 0;
-    print(__LINE__ . ": Values: " . join(", ", @values) . ", is Flush: $is_flush") if $DEBUG;
 
+    if ($has_joker) {
+        # Determine if the joker can complete a straight.
+        # Need 4 unique values spanning at most 4 ranks (joker fills the gap).
+        my %unique = map { $_ => 1 } @values;
+        my $n_unique = scalar(keys %unique);
+        my $is_straight_joker = 0;
+        if ($n_unique == 4) {
+            # Normal case: span <= 4 means joker can fill the one missing rank.
+            if ($values[3] - $values[0] <= 4) {
+                $is_straight_joker = 1;
+            }
+            # Ace-low: A,2,3,4 + joker = A,2,3,4,5
+            if (!$is_straight_joker && join(',', @values) eq '2,3,4,14') {
+                $is_straight_joker = 1;
+            }
+        }
+
+        # Royal Flush: flush + all 4 real cards from {10,J,Q,K,A}, joker fills the missing one.
+        # All 4 values >= 10 and max <= 14 guarantees they are a 4-subset of {10..14}.
+        if ($is_flush && $n_unique == 4 && $values[0] >= 10) {
+            return "Royal Flush";
+        }
+        if ($is_flush && $is_straight_joker) {
+            return "Straight Flush";
+        }
+        # Five of a Kind: four cards of same rank + joker
+        if ($max_count == 4) {
+            return "Five of a Kind";
+        }
+        # Four of a Kind: three of same rank + joker
+        if ($max_count == 3) {
+            return "Four of a Kind";
+        }
+        # Full House: two pairs + joker (joker becomes 3rd of either pair)
+        if (scalar(@count_values) >= 2 && $count_values[0] == 2 && $count_values[1] == 2) {
+            return "Full House";
+        }
+        if ($is_flush) {
+            return "Flush";
+        }
+        if ($is_straight_joker) {
+            return "Straight";
+        }
+        # Three of a Kind: one pair + joker
+        if ($max_count == 2) {
+            return "Three of a Kind";
+        }
+        # Default: joker pairs with highest card
+        return "One Pair";
+    }
+
+    # No joker - standard 5-card evaluation
     my $is_straight = 0;
     my %unique = map { $_ => 1 } @values;
     if (scalar(keys %unique) == 5) {
-        # 5 different cards, check if they are consecutive
         my $consecutive = 1;
         for my $i (1..4) {
             print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
@@ -304,8 +364,6 @@ sub evaluate_poker_hand {
         }
     }
 
-    my @count_values = sort { $b <=> $a } values %rank_counts;
-
     if ($is_straight && $is_flush && join(',', @values) eq '10,11,12,13,14') {
         return "Royal Flush";
     }
@@ -317,9 +375,6 @@ sub evaluate_poker_hand {
     }
     if ($count_values[0] == 3 && $count_values[1] == 2) {
         return "Full House";
-    }
-    if ($count_values[0] == 2 && $count_values[1] == 3) {
-        return "Full House2";
     }
     if ($is_flush) {
         return "Flush";
