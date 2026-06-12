@@ -3,7 +3,7 @@ use vars qw($VERSION %IRSSI);
 use utf8;
 use Irssi;
 use IO::File;
-$VERSION = '0.00.05';
+$VERSION = '0.01.06';
 %IRSSI = (
 	authors			=> 'LAama1',
 	contact			=> 'laama@8u.fi',
@@ -16,6 +16,8 @@ $VERSION = '0.00.05';
 my $used_cards = {};
 my @deck = ();
 my $players = {};
+my $table_timers = {};
+my $table_activity_seq = {};
 my $DEBUG = 1;
 
 =pod
@@ -85,46 +87,106 @@ sub ask_question {
 	my $answer = "";
 	
 	if (/^!poker/i) {
-        my @hand = get_five_random_cards($nick);
+        if (defined $players->{$target}->{$nick}) {
+            $server->command("msg $target $nick, You already have a hand. Use !hold command to hold cards and get new ones, or !shuffle to start a new round.");
+            return;
+        }
+        my @hand = get_five_random_cards($target, $nick);
         #my $hand_str = join(", ", @hand);
         # remove space after commas
         
         my $hand_str = format_hand_with_colors(@hand);
-        my ($is_winning, $hand_name) = check_player_winning_hand($nick);
+        my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
         my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
         $server->command("msg $target $nick, Your hand:$hand_str - $result_text");
+        restart_inactivity_timer($server, $target);
+        
         return;
     } elsif (/^!shuffle/i) {
-        %$used_cards = ();
-        %$players = ();
+        clear_table_state($target);
+        stop_inactivity_timer($target);
         $server->command("msg $target Deck shuffled. All cards are back in the deck. Time to start a new round.");
         return;
     } elsif (/^!hold\s+((?:\d+\s*)+)$/i) {
+        if (not defined $players->{$target}->{$nick}) {
+            $server->command("msg $target $nick, You don't have a hand to hold cards from. Use !poker to get a hand first.");
+            return;
+        }
+        if ($players->{$target}->{$nick}->{held}) {
+            $server->command("msg $target $nick, You can only hold cards once per game. Wait for !shuffle.");
+            return;
+        }
+        $players->{$target}->{$nick}->{held} = 1;
         my @hold_numbers = split /\s+/, $1;
-        my @new_hand = hold_cards_by_number($nick, @hold_numbers);
+        my @new_hand = hold_cards_by_number($target, $nick, @hold_numbers);
         my $hand_str = format_hand_with_colors(@new_hand);
-        my ($is_winning, $hand_name) = check_player_winning_hand($nick);
+        my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
         my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
         $server->command("msg $target $nick, Your new hand:$hand_str - $result_text");
+        restart_inactivity_timer($server, $target);
         return;
     } else {
         return;
     }
 }
 
+sub clear_table_state {
+    my ($target) = @_;
+    delete $used_cards->{$target};
+    delete $players->{$target};
+}
+
+sub stop_inactivity_timer {
+    my ($target) = @_;
+    if (defined $table_timers->{$target}) {
+        Irssi::timeout_remove($table_timers->{$target});
+        delete $table_timers->{$target};
+    }
+}
+
+sub restart_inactivity_timer {
+    my ($server, $target) = @_;
+    stop_inactivity_timer($target);
+
+    $table_activity_seq->{$target} = ($table_activity_seq->{$target} || 0) + 1;
+    my $seq = $table_activity_seq->{$target};
+    my $server_tag = $server->{tag} || '';
+    my $timer_data = join("\x1f", $target, $server_tag, $seq);
+
+    $table_timers->{$target} = Irssi::timeout_add_once(60_000, 'table_inactivity_timeout', $timer_data);
+}
+
+sub table_inactivity_timeout {
+    my ($timer_data) = @_;
+    my ($target, $server_tag, $seq) = split(/\x1f/, $timer_data, 3);
+
+    # Ignore stale timers that were superseded by newer actions.
+    return if !defined $target;
+    return if !defined $table_activity_seq->{$target};
+    return if $table_activity_seq->{$target} != $seq;
+
+    clear_table_state($target);
+    delete $table_timers->{$target};
+
+    my $server = Irssi::server_find_tag($server_tag);
+    if (defined $server) {
+        $server->command("msg $target No card actions for 60 seconds. Auto-shuffling this table.");
+    }
+}
+
 sub get_five_random_cards {
-    my $nick = shift;
+    my ($target, $nick) = @_;
     # when dealing fresh hands to players.
-    if (scalar(keys %$used_cards) > 48) {
+    if (scalar(keys %{$used_cards->{$target}}) > 48) {
         return ("No more cards in the deck. Please shuffle the deck with !shuffle command.");
     }
     my @hand = ();
     my $index = 0;
     while (scalar(@hand) < 5) {
         $index++;
-        my $card = get_one_random_card();
+        my $card = get_one_random_card($target);
         push @hand, $card;
-        $players->{$nick}->{$index} = $card;
+        $players->{$target}->{$nick}->{$index} = $card;
     }
     return @hand;
 }
@@ -144,25 +206,26 @@ sub format_hand_with_colors {
 }
 
 sub get_one_random_card {
+    my $target = shift;
     while (1) {
         my $random_index = int(rand(scalar(@deck)));
         my $card = $deck[$random_index];
-        next if exists $used_cards->{$card};
-        $used_cards->{$card} = 1;
+        next if exists $used_cards->{$target}->{$card};
+        $used_cards->{$target}->{$card} = 1;
         return $card;
     }
 }
 
 sub hold_cards_by_number {
     # hold cards by their position in the hand (1-5) and replace the rest with new random cards
-    my ($nick, @hold_numbers) = @_;
-    my $player_cards = $players->{$nick} || {};
+    my ($target, $nick, @hold_numbers) = @_;
+    my $player_cards = $players->{$target}->{$nick} || {};
     my @held_cards = ();
     foreach my $card_index (1..5) {
         if (grep { $_ == $card_index } @hold_numbers) {
             push @held_cards, $player_cards->{$card_index} || "Unknown Card";
         } else {
-            my $new_card = get_one_random_card();
+            my $new_card = get_one_random_card($target);
             $player_cards->{$card_index} = $new_card;
             push @held_cards, $new_card;
         }
@@ -171,8 +234,8 @@ sub hold_cards_by_number {
 }
 
 sub check_player_winning_hand {
-    my ($nick) = @_;
-    my $player_cards = $players->{$nick} || {};
+    my ($target, $nick) = @_;
+    my $player_cards = $players->{$target}->{$nick} || {};
     my @cards = map { $player_cards->{$_} } (1..5);
     return (0, "Incomplete Hand") if grep { !defined $_ } @cards;
 
@@ -184,8 +247,10 @@ sub check_player_winning_hand {
 sub evaluate_poker_hand {
     my @cards = @_;
     my $hand_name = "";
+    my $has_joker = 0;
     # Treat joker as a wild card marker for now.
     if (grep { defined $_ && $_ =~ /^Joker/ } @cards) {
+        $has_joker = 1;
         return "Joker Wild";
     }
 
@@ -202,8 +267,8 @@ sub evaluate_poker_hand {
     foreach my $card (@cards) {
         next if !defined $card;
         $card =~ s/\\003\d?//g;  # remove IRC color codes
-        #print(__LINE__ . ': card: >' . $card . '<') if $DEBUG;
         if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
+            # we are not adding Joker to the rank map
             my ($rank, $suit) = ($1, $2);
             my $value = $rank_map{$rank};
             print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
@@ -214,6 +279,8 @@ sub evaluate_poker_hand {
     }
 
     return "High Card" if scalar(@values) != 5;
+
+    # sort cards by value for straight checking
     @values = sort { $a <=> $b } @values;
     my $is_flush = (scalar(keys %suit_counts) == 1) ? 1 : 0;
     print(__LINE__ . ": Values: " . join(", ", @values) . ", is Flush: $is_flush") if $DEBUG;
@@ -221,6 +288,7 @@ sub evaluate_poker_hand {
     my $is_straight = 0;
     my %unique = map { $_ => 1 } @values;
     if (scalar(keys %unique) == 5) {
+        # 5 different cards, check if they are consecutive
         my $consecutive = 1;
         for my $i (1..4) {
             print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
@@ -249,6 +317,9 @@ sub evaluate_poker_hand {
     }
     if ($count_values[0] == 3 && $count_values[1] == 2) {
         return "Full House";
+    }
+    if ($count_values[0] == 2 && $count_values[1] == 3) {
+        return "Full House2";
     }
     if ($is_flush) {
         return "Flush";
