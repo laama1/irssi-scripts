@@ -3,6 +3,7 @@ use vars qw($VERSION %IRSSI);
 use utf8;
 use Irssi;
 use IO::File;
+use DBI;
 $VERSION = '0.02.06';
 %IRSSI = (
 	authors			=> 'LAama1',
@@ -18,6 +19,7 @@ my @deck = ();
 my $players = {};
 my $table_timers = {};
 my $table_activity_seq = {};
+my $stats_db_file = Irssi::get_irssi_dir() . '/scripts/poker_stats.sqlite';
 my $DEBUG = 1;
 
 =pod
@@ -93,17 +95,179 @@ sub sig_msg_pub {
 	ask_question($server, $msg, $nick, $target);
 }
 
+sub get_stats_dbh {
+    my $dbh;
+    eval {
+        $dbh = DBI->connect(
+            "dbi:SQLite:dbname=$stats_db_file",
+            "",
+            "",
+            {
+                RaiseError => 1,
+                PrintError => 0,
+                AutoCommit => 1,
+            }
+        );
+    };
+    if ($@) {
+        prind("Stats DB connect failed: $@") if $DEBUG;
+        return;
+    }
+    return $dbh;
+}
+
+sub init_stats_db {
+    my $dbh = get_stats_dbh();
+    return if !defined $dbh;
+
+    eval {
+        $dbh->do(q{
+            CREATE TABLE IF NOT EXISTS poker_channel_stats (
+                channel TEXT PRIMARY KEY,
+                rounds_played INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        });
+
+        $dbh->do(q{
+            CREATE TABLE IF NOT EXISTS poker_player_stats (
+                channel TEXT NOT NULL,
+                nick TEXT NOT NULL,
+                hands_played INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (channel, nick)
+            )
+        });
+    };
+
+    if ($@) {
+        prind("Stats DB schema init failed: $@") if $DEBUG;
+    }
+
+    $dbh->disconnect;
+}
+
+sub add_hand_stats {
+    my ($target, $nick, $is_new_round) = @_;
+    my $dbh = get_stats_dbh();
+    return if !defined $dbh;
+
+    eval {
+        if ($is_new_round) {
+            $dbh->do(
+                'INSERT OR IGNORE INTO poker_channel_stats (channel, rounds_played) VALUES (?, 0)',
+                undef,
+                $target
+            );
+            $dbh->do(
+                'UPDATE poker_channel_stats SET rounds_played = rounds_played + 1, updated_at = CURRENT_TIMESTAMP WHERE channel = ?',
+                undef,
+                $target
+            );
+        }
+
+        $dbh->do(
+            'INSERT OR IGNORE INTO poker_player_stats (channel, nick, hands_played) VALUES (?, ?, 0)',
+            undef,
+            $target,
+            $nick
+        );
+        $dbh->do(
+            'UPDATE poker_player_stats SET hands_played = hands_played + 1, updated_at = CURRENT_TIMESTAMP WHERE channel = ? AND nick = ?',
+            undef,
+            $target,
+            $nick
+        );
+    };
+
+    if ($@) {
+        prind("Stats DB update failed: $@") if $DEBUG;
+    }
+
+    $dbh->disconnect;
+}
+
+sub get_channel_rounds_played {
+    my ($target) = @_;
+    my $dbh = get_stats_dbh();
+    return 0 if !defined $dbh;
+
+    my $rounds = 0;
+    eval {
+        my $sth = $dbh->prepare('SELECT rounds_played FROM poker_channel_stats WHERE channel = ?');
+        $sth->execute($target);
+        my ($value) = $sth->fetchrow_array;
+        $rounds = defined $value ? $value : 0;
+        $sth->finish;
+    };
+
+    if ($@) {
+        prind("Stats DB read failed (rounds): $@") if $DEBUG;
+    }
+
+    $dbh->disconnect;
+    return $rounds;
+}
+
+sub get_channel_top_players {
+    my ($target, $limit) = @_;
+    $limit = 5 if !defined $limit;
+
+    my $dbh = get_stats_dbh();
+    return () if !defined $dbh;
+
+    my @rows = ();
+    eval {
+        my $sth = $dbh->prepare('SELECT nick, hands_played FROM poker_player_stats WHERE channel = ? ORDER BY hands_played DESC, nick ASC LIMIT ?');
+        $sth->execute($target, $limit);
+        while (my ($nick, $hands_played) = $sth->fetchrow_array) {
+            push @rows, {
+                nick => $nick,
+                hands_played => $hands_played,
+            };
+        }
+        $sth->finish;
+    };
+
+    if ($@) {
+        prind("Stats DB read failed (players): $@") if $DEBUG;
+    }
+
+    $dbh->disconnect;
+    return @rows;
+}
+
 sub ask_question {
 	my ($server, $msg, $nick, $target) = @_;
 	$_ = $msg;
 	my $answer = "";
 	
-	if (/^!poker/i) {
+	if (/^!poker\s+stats(?:\s+(\d+))?$/i) {
+        my $limit = defined $1 ? $1 : 5;
+        $limit = 1 if $limit < 1;
+        $limit = 20 if $limit > 20;
+
+        my $rounds = get_channel_rounds_played($target);
+        my @top_players = get_channel_top_players($target, $limit);
+
+        my $players_text = scalar(@top_players)
+            ? join(', ', map { $_->{nick} . ': ' . $_->{hands_played} } @top_players)
+            : 'no player stats yet';
+
+        $server->command("msg $target Poker stats for $target | rounds played: $rounds | top players: $players_text");
+        return;
+    } elsif (/^!poker/i) {
+        my $is_new_round = (!defined $used_cards->{$target} || scalar(keys %{$used_cards->{$target}}) == 0) ? 1 : 0;
         if (defined $players->{$target}->{$nick}) {
             $server->command("msg $target $nick, You already have a hand. Use !hold command to hold cards and get new ones, or !shuffle to start a new round.");
             return;
         }
         my @hand = get_five_random_cards($target, $nick);
+        if (scalar(@hand) == 1 && $hand[0] =~ /^No more cards in the deck/) {
+            $server->command("msg $target $hand[0]");
+            return;
+        }
+        add_hand_stats($target, $nick, $is_new_round);
         #my $hand_str = join(", ", @hand);
         # remove space after commas
         
@@ -278,7 +442,7 @@ sub evaluate_poker_hand {
         if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
             my ($rank, $suit) = ($1, $2);
             my $value = $rank_map{$rank};
-            print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
+            #print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
             $rank_counts{$value}++;
             $suit_counts{$suit}++;
             push @values, $value;
@@ -351,7 +515,7 @@ sub evaluate_poker_hand {
     if (scalar(keys %unique) == 5) {
         my $consecutive = 1;
         for my $i (1..4) {
-            print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
+            #print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
             if ($values[$i] != $values[$i - 1] + 1) {
                 $consecutive = 0;
                 last;
@@ -398,6 +562,8 @@ sub prind {
 	my ($text, @rest) = @_;
 	print("\0034" . $IRSSI{name} . ">\003 ". $text);
 }
+
+init_stats_db();
 
 Irssi::signal_add("message public", "sig_msg_pub");
 
