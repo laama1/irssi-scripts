@@ -279,6 +279,7 @@ sub ask_question {
         
         return;
     } elsif (/^!shuffle/i) {
+        announce_round_winner($server, $target);
         clear_table_state($target);
         stop_inactivity_timer($target);
         $server->command("msg $target Deck shuffled. All cards are back in the deck. Time to start a new round.");
@@ -312,6 +313,31 @@ sub clear_table_state {
     delete $players->{$target};
 }
 
+sub announce_round_winner {
+    my ($server, $target) = @_;
+    return if !defined $server || !defined $target;
+
+    my $result = compare_current_players_hands($target);
+    if (!defined $result) {
+        $server->command("msg $target Round ended. No complete hands to compare.");
+        return;
+    }
+
+    my @winners = @{ $result->{winners} || [] };
+    return if !@winners;
+
+    my $winning_hand = $result->{winning_hand} || 'High Card';
+    if (scalar(@winners) == 1) {
+        my $winner = $winners[0];
+        my $cards_text = format_hand_with_colors(@{ $winner->{cards} || [] });
+        $server->command("msg $target Round winner: $winner->{nick} with $winning_hand ($cards_text)");
+        return;
+    }
+
+    my $winner_nicks = join(', ', map { $_->{nick} } @winners);
+    $server->command("msg $target Round tied: $winner_nicks with $winning_hand");
+}
+
 sub stop_inactivity_timer {
     my ($target) = @_;
     if (defined $table_timers->{$target}) {
@@ -341,10 +367,14 @@ sub table_inactivity_timeout {
     return if !defined $table_activity_seq->{$target};
     return if $table_activity_seq->{$target} != $seq;
 
+    my $server = Irssi::server_find_tag($server_tag);
+    if (defined $server) {
+        announce_round_winner($server, $target);
+    }
+
     clear_table_state($target);
     delete $table_timers->{$target};
 
-    my $server = Irssi::server_find_tag($server_tag);
     if (defined $server) {
         $server->command("msg $target No card actions for 60 seconds. Auto-shuffling this table.");
     }
@@ -420,8 +450,10 @@ sub check_player_winning_hand {
     return ($is_winning, $hand_name);
 }
 
-sub evaluate_poker_hand {
-    my @cards = @_;
+sub parse_card_value_and_suit {
+    my ($card) = @_;
+    return if !defined $card;
+    return if $card =~ /^Joker/;
 
     my %rank_map = (
         '2'  => 2,  '3'  => 3,  '4'  => 4,  '5'  => 5,
@@ -429,133 +461,205 @@ sub evaluate_poker_hand {
         '10' => 10, 'J'  => 11, 'Q'  => 12, 'K'  => 13, 'A' => 14,
     );
 
-    my $has_joker = scalar(grep { defined $_ && $_ =~ /^Joker/ } @cards);
+    $card =~ s/\003\d?//g;
+    if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
+        return ($rank_map{$1}, $2);
+    }
+    return;
+}
+
+sub score_hand_without_wildcards {
+    my ($values_ref, $suits_ref) = @_;
+    my @values = sort { $a <=> $b } @{$values_ref};
+    my @suits = @{$suits_ref};
 
     my %rank_counts = ();
-    my %suit_counts = ();
-    my @values = ();
+    $rank_counts{$_}++ for @values;
+    my @groups = sort {
+        $rank_counts{$b} <=> $rank_counts{$a}
+            || $b <=> $a
+    } keys %rank_counts;
 
-    foreach my $card (@cards) {
-        next if !defined $card;
-        next if $card =~ /^Joker/;
-        $card =~ s/\\003\d?//g;  # remove IRC color codes
-        if ($card =~ /^(10|[2-9JQKA])([♠♥♦♣])/u) {
-            my ($rank, $suit) = ($1, $2);
-            my $value = $rank_map{$rank};
-            #print(__LINE__ . ": Card: $card, Rank: $rank, Suit: $suit, Value: $value") if $DEBUG;
-            $rank_counts{$value}++;
-            $suit_counts{$suit}++;
-            push @values, $value;
-        }
-    }
+    my $is_flush = (scalar(keys %{ { map { $_ => 1 } @suits } }) == 1) ? 1 : 0;
 
-    # With joker we have 4 real cards, without we need 5.
-    my $expected = $has_joker ? 4 : 5;
-    return "High Card" if scalar(@values) != $expected;
-
-    @values = sort { $a <=> $b } @values;
-    my @count_values = sort { $b <=> $a } values %rank_counts;
-    my $max_count = $count_values[0] || 0;
-    my $is_flush = (scalar(keys %suit_counts) == 1) ? 1 : 0;
-
-    if ($has_joker) {
-        # Determine if the joker can complete a straight.
-        # Need 4 unique values spanning at most 4 ranks (joker fills the gap).
-        my %unique = map { $_ => 1 } @values;
-        my $n_unique = scalar(keys %unique);
-        my $is_straight_joker = 0;
-        if ($n_unique == 4) {
-            # Normal case: span <= 4 means joker can fill the one missing rank.
-            if ($values[3] - $values[0] <= 4) {
-                $is_straight_joker = 1;
-            }
-            # Ace-low: A,2,3,4 + joker = A,2,3,4,5
-            if (!$is_straight_joker && join(',', @values) eq '2,3,4,14') {
-                $is_straight_joker = 1;
-            }
-        }
-
-        # Royal Flush: flush + all 4 real cards from {10,J,Q,K,A}, joker fills the missing one.
-        # All 4 values >= 10 and max <= 14 guarantees they are a 4-subset of {10..14}.
-        if ($is_flush && $n_unique == 4 && $values[0] >= 10) {
-            return "Royal Flush";
-        }
-        if ($is_flush && $is_straight_joker) {
-            return "Straight Flush";
-        }
-        # Five of a Kind: four cards of same rank + joker
-        if ($max_count == 4) {
-            return "Five of a Kind";
-        }
-        # Four of a Kind: three of same rank + joker
-        if ($max_count == 3) {
-            return "Four of a Kind";
-        }
-        # Full House: two pairs + joker (joker becomes 3rd of either pair)
-        if (scalar(@count_values) >= 2 && $count_values[0] == 2 && $count_values[1] == 2) {
-            return "Full House";
-        }
-        if ($is_flush) {
-            return "Flush";
-        }
-        if ($is_straight_joker) {
-            return "Straight";
-        }
-        # Three of a Kind: one pair + joker
-        if ($max_count == 2) {
-            return "Three of a Kind";
-        }
-        # Default: joker pairs with highest card
-        return "One Pair";
-    }
-
-    # No joker - standard 5-card evaluation
     my $is_straight = 0;
-    my %unique = map { $_ => 1 } @values;
-    if (scalar(keys %unique) == 5) {
+    my $straight_high = 0;
+    if (scalar(keys %rank_counts) == 5) {
         my $consecutive = 1;
         for my $i (1..4) {
-            #print(__LINE__ . ": Checking straight: comparing $values[$i] and " . ($values[$i - 1] + 1)) if $DEBUG;
             if ($values[$i] != $values[$i - 1] + 1) {
                 $consecutive = 0;
                 last;
             }
         }
-        $is_straight = $consecutive;
-        # Ace-low straight: A,2,3,4,5
-        if (!$is_straight && join(',', @values) eq '2,3,4,5,14') {
+        if ($consecutive) {
             $is_straight = 1;
+            $straight_high = $values[4];
+        } elsif (join(',', @values) eq '2,3,4,5,14') {
+            $is_straight = 1;
+            $straight_high = 5;
         }
     }
 
-    if ($is_straight && $is_flush && join(',', @values) eq '10,11,12,13,14') {
-        return "Royal Flush";
+    my @freq = sort { $b <=> $a } values %rank_counts;
+    my @desc_values = sort { $b <=> $a } @values;
+
+    if ($freq[0] == 5) {
+        return [11, $groups[0]]; # Five of a Kind
+    }
+    if ($is_straight && $is_flush && $straight_high == 14) {
+        return [10]; # Royal Flush
     }
     if ($is_straight && $is_flush) {
-        return "Straight Flush";
+        return [9, $straight_high]; # Straight Flush
     }
-    if ($count_values[0] == 4) {
-        return "Four of a Kind";
+    if ($freq[0] == 4) {
+        my ($quad) = grep { $rank_counts{$_} == 4 } keys %rank_counts;
+        my ($kicker) = grep { $rank_counts{$_} == 1 } keys %rank_counts;
+        return [8, $quad, $kicker];
     }
-    if ($count_values[0] == 3 && $count_values[1] == 2) {
-        return "Full House";
+    if ($freq[0] == 3 && $freq[1] == 2) {
+        my ($trip) = grep { $rank_counts{$_} == 3 } keys %rank_counts;
+        my ($pair) = grep { $rank_counts{$_} == 2 } keys %rank_counts;
+        return [7, $trip, $pair];
     }
     if ($is_flush) {
-        return "Flush";
+        return [6, @desc_values];
     }
     if ($is_straight) {
-        return "Straight";
+        return [5, $straight_high];
     }
-    if ($count_values[0] == 3) {
-        return "Three of a Kind";
+    if ($freq[0] == 3) {
+        my ($trip) = grep { $rank_counts{$_} == 3 } keys %rank_counts;
+        my @kickers = sort { $b <=> $a } grep { $rank_counts{$_} == 1 } keys %rank_counts;
+        return [4, $trip, @kickers];
     }
-    if ($count_values[0] == 2 && $count_values[1] == 2) {
-        return "Two Pair";
+    if ($freq[0] == 2 && $freq[1] == 2) {
+        my @pairs = sort { $b <=> $a } grep { $rank_counts{$_} == 2 } keys %rank_counts;
+        my ($kicker) = grep { $rank_counts{$_} == 1 } keys %rank_counts;
+        return [3, $pairs[0], $pairs[1], $kicker];
     }
-    if ($count_values[0] == 2) {
-        return "One Pair";
+    if ($freq[0] == 2) {
+        my ($pair) = grep { $rank_counts{$_} == 2 } keys %rank_counts;
+        my @kickers = sort { $b <=> $a } grep { $rank_counts{$_} == 1 } keys %rank_counts;
+        return [2, $pair, @kickers];
     }
-    return "High Card";
+
+    return [1, @desc_values];
+}
+
+sub compare_score_arrays {
+    my ($a_ref, $b_ref) = @_;
+    my $len = @$a_ref > @$b_ref ? scalar(@$a_ref) : scalar(@$b_ref);
+    for my $i (0..($len - 1)) {
+        my $av = defined $a_ref->[$i] ? $a_ref->[$i] : 0;
+        my $bv = defined $b_ref->[$i] ? $b_ref->[$i] : 0;
+        return 1 if $av > $bv;
+        return -1 if $av < $bv;
+    }
+    return 0;
+}
+
+sub best_hand_score {
+    my @cards = @_;
+    my @real_values = ();
+    my @real_suits = ();
+    my $has_joker = 0;
+
+    foreach my $card (@cards) {
+        if (defined $card && $card =~ /^Joker/) {
+            $has_joker = 1;
+            next;
+        }
+        my ($value, $suit) = parse_card_value_and_suit($card);
+        return [1, 0] if !defined $value || !defined $suit;
+        push @real_values, $value;
+        push @real_suits, $suit;
+    }
+
+    if (!$has_joker) {
+        return score_hand_without_wildcards(\@real_values, \@real_suits);
+    }
+
+    # Try every joker substitution and keep the best hand score.
+    my @suits = ('♠', '♥', '♦', '♣');
+    my $best = [1, 0];
+    for my $value (2..14) {
+        for my $suit (@suits) {
+            my @values = (@real_values, $value);
+            my @all_suits = (@real_suits, $suit);
+            my $score = score_hand_without_wildcards(\@values, \@all_suits);
+            if (compare_score_arrays($score, $best) > 0) {
+                $best = $score;
+            }
+        }
+    }
+
+    return $best;
+}
+
+sub hand_name_from_score {
+    my ($score_ref) = @_;
+    my %hand_name = (
+        11 => 'Five of a Kind',
+        10 => 'Royal Flush',
+        9  => 'Straight Flush',
+        8  => 'Four of a Kind',
+        7  => 'Full House',
+        6  => 'Flush',
+        5  => 'Straight',
+        4  => 'Three of a Kind',
+        3  => 'Two Pair',
+        2  => 'One Pair',
+        1  => 'High Card',
+    );
+
+    my $rank = $score_ref->[0] || 1;
+    return $hand_name{$rank} || 'High Card';
+}
+
+sub evaluate_poker_hand {
+    my @cards = @_;
+    my $score_ref = best_hand_score(@cards);
+    return hand_name_from_score($score_ref);
+}
+
+sub compare_current_players_hands {
+    my ($target) = @_;
+    my $table_players = $players->{$target} || {};
+    my @evaluated = ();
+
+    foreach my $nick (keys %{$table_players}) {
+        my @cards = map { $table_players->{$nick}->{$_} } (1..5);
+        next if grep { !defined $_ } @cards;
+
+        my $score_ref = best_hand_score(@cards);
+        push @evaluated, {
+            nick => $nick,
+            cards => \@cards,
+            score => $score_ref,
+            hand_name => hand_name_from_score($score_ref),
+        };
+    }
+
+    return if !@evaluated;
+
+    my $best_score = $evaluated[0]->{score};
+    for my $entry (@evaluated) {
+        if (compare_score_arrays($entry->{score}, $best_score) > 0) {
+            $best_score = $entry->{score};
+        }
+    }
+
+    my @winners = grep {
+        compare_score_arrays($_->{score}, $best_score) == 0
+    } @evaluated;
+
+    return {
+        winners => \@winners,
+        all_players => \@evaluated,
+        winning_hand => hand_name_from_score($best_score),
+    };
 }
 
 sub prind {
