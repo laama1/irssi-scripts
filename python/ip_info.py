@@ -9,7 +9,7 @@ Usage:
 Script will print all errors and status messages to ip_info.log in the same directory as the script.
 All other output will be printed to stdout as a single line, comma-separated.
 
-This script takes an IP address as a parameter, 
+This script takes an IPv4 or IPv6 address as a parameter, 
 - optionally gets GeoIP info from a local MaxMind GeoLite2 database, 
 - or optionally checks the IP against ipinfo.io API.
 - Pings the address to get latency,
@@ -117,34 +117,89 @@ def check_if_ip_in_proxy_lists(ip):
 	Checks if the given IP is listed in any of the local proxy lists.
 	Performs NMAP on the found port if applicable.
 	"""
+	target_ip = normalize_ip_address(ip)
+	if target_ip is None:
+		return []
+
 	proxy_matches = []
 	for file, url in proxy_file_list.items():
 		shortfilename = os.path.splitext(os.path.basename(file))[0]  # 'socks4', 'socks5', or 'http'
 		try:
 			with open(file, 'r') as f:
 				for line in f:
-					if ip in line:
+					entry_ip, port = parse_proxy_list_entry(line)
+					if entry_ip is None:
+						continue
+					if entry_ip == target_ip:
 						proxy_matches.append(shortfilename + ": " + line.strip())
-						if ":" in line:
-							parts = line.strip().split(':')
-							if len(parts) >= 2 and parts[0] == ip:
-								port = parts[1]
-								nmap_result = nmap_given_port(ip, port)
-								if nmap_result:
-									proxy_matches.append(f"Nmap result: {nmap_result}")
-						#return proxy_matches
+						if port:
+							nmap_result = nmap_given_port(ip, port)
+							if nmap_result:
+								proxy_matches.append(f"Nmap result: {nmap_result}")
 		except Exception as e:
 			log_to_file(f"Failed to read {file}: {e}")
 	return proxy_matches
+
+def normalize_ip_address(ip):
+	"""
+	Parse and normalize an IP address string.
+	"""
+	try:
+		return ipaddress.ip_address(ip)
+	except ValueError as e:
+		log_to_file(f"Invalid IP address {ip}: {e}")
+		return None
+
+
+def parse_proxy_list_entry(line):
+	"""
+	Parse one proxy list line and return (ip_object, port_or_none).
+	Supports IPv4, IPv6, [IPv6]:port, and IPv4:port formats.
+	"""
+	entry = line.strip()
+	if not entry or entry.startswith('#'):
+		return None, None
+
+	token = entry.split()[0]
+
+	# Bracket notation: [2001:db8::1]:8080
+	if token.startswith('[') and ']' in token:
+		end_idx = token.find(']')
+		host = token[1:end_idx]
+		rest = token[end_idx + 1:]
+		port = rest[1:] if rest.startswith(':') and rest[1:].isdigit() else None
+		ip_obj = normalize_ip_address(host)
+		return ip_obj, port
+
+	# Direct IP (IPv4 or IPv6) without port.
+	ip_obj = normalize_ip_address(token)
+	if ip_obj is not None:
+		return ip_obj, None
+
+	# host:port, where host may be IPv4 or unbracketed IPv6.
+	if ':' in token:
+		host_candidate, port_candidate = token.rsplit(':', 1)
+		if port_candidate.isdigit():
+			host_ip = normalize_ip_address(host_candidate)
+			if host_ip is not None:
+				return host_ip, port_candidate
+
+	return None, None
 
 def nmap_given_port(ip, port):
 	"""
 	Use simple nmap command to scan ip and port, return the result line if found.
 	"""
 	try:
-		completed = subprocess.run([
-			'nmap', '-p', str(port), ip
-		], capture_output=True, text=True)
+		cmd = ['nmap']
+		try:
+			if ipaddress.ip_address(ip).version == 6:
+				cmd.append('-6')
+		except ValueError:
+			pass
+		cmd.extend(['-p', str(port), ip])
+
+		completed = subprocess.run(cmd, capture_output=True, text=True)
 		if completed.returncode == 0:
 			lines = completed.stdout.splitlines()
 			target = "PORT   STATE SERVICE"
@@ -233,19 +288,31 @@ def reverse_dns(ip):
 	except Exception:
 		return None
 
-def normalize_ipv4_for_dnsbl(ip):
+def normalize_ip_for_dnsbl(ip):
 	"""
-	Return an IPv4Address for plain IPv4 or IPv4-mapped IPv6 input.
+	Return an IP address object suitable for DNSBL checks.
+	IPv4-mapped IPv6 is converted to IPv4.
 	"""
 	try:
 		parsed_ip = ipaddress.ip_address(ip)
-		if isinstance(parsed_ip, ipaddress.IPv4Address):
-			return parsed_ip
 		if isinstance(parsed_ip, ipaddress.IPv6Address) and parsed_ip.ipv4_mapped:
 			return parsed_ip.ipv4_mapped
+		return parsed_ip
 	except ValueError as e:
 		log_to_file(f"Invalid IP address for DNSBL check {ip}: {e}")
 	return None
+
+
+def get_dnsbl_reverse_name(parsed_ip):
+	"""
+	Build the DNSBL reversed name prefix for IPv4 or IPv6 address.
+	"""
+	if isinstance(parsed_ip, ipaddress.IPv4Address):
+		return '.'.join(reversed(str(parsed_ip).split('.')))
+
+	# IPv6 nibble format (without the trailing ip6.arpa)
+	hex_nibbles = parsed_ip.exploded.replace(':', '')
+	return '.'.join(reversed(hex_nibbles))
 
 def query_dnsbl_host(reversed_ip, dnsbl_host):
 	"""
@@ -257,29 +324,30 @@ def query_dnsbl_host(reversed_ip, dnsbl_host):
 	resolver.timeout = 3.0
 	matches = []
 
-	try:
-		answers = resolver.resolve(query_name, "A")
-		for answer in answers:
-			matches.append(f"DNSBL {dnsbl_host}: {answer}")
-	except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
-		return []
-	except dns.exception.Timeout:
-		log_to_file(f"DNSBL query timed out for {query_name}")
-	except Exception as e:
-		log_to_file(f"DNSBL query failed for {query_name}: {e}")
+	for record_type in ("A", "AAAA"):
+		try:
+			answers = resolver.resolve(query_name, record_type)
+			for answer in answers:
+				matches.append(f"DNSBL {dnsbl_host} {record_type}: {answer}")
+		except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+			continue
+		except dns.exception.Timeout:
+			log_to_file(f"DNSBL query timed out for {query_name} ({record_type})")
+		except Exception as e:
+			log_to_file(f"DNSBL query failed for {query_name} ({record_type}): {e}")
 
 	return matches
 
 def check_dnsbl_lists(ip):
 	"""
-	Check IPv4 address against configured DNSBL zones and append matches to output.
+	Check IP address against configured DNSBL zones and append matches to output.
 	Running against each dnsbl_hosts can be slow, so consider limiting the list if speed is a concern.
 	"""
-	ipv4 = normalize_ipv4_for_dnsbl(ip)
-	if not ipv4:
+	parsed_ip = normalize_ip_for_dnsbl(ip)
+	if not parsed_ip:
 		return []
 
-	reversed_ip = '.'.join(reversed(str(ipv4).split('.')))
+	reversed_ip = get_dnsbl_reverse_name(parsed_ip)
 	matches = []
 	with concurrent.futures.ThreadPoolExecutor(max_workers=len(dnsbl_hosts)) as executor:
 		future_to_host = {
