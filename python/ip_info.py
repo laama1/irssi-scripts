@@ -14,14 +14,17 @@ This script takes an IP address as a parameter,
 - or optionally checks the IP against ipinfo.io API.
 - Pings the address to get latency,
 - performs a reverse DNS lookup.
-- Does NMAP if IP address was found in a proxy list.
+- Does NMAP to the found port, if IP address was found in a proxy list.
 - Checks the IP against DNSBL lists.
 - Keeps proxy lists updated by downloading them from GitHub if they are older than 1 day.
+
+Requests will be done in parallel to save time.
+
 Requires:
 - Python 3.x
 - pip install dnspython geoip2 dns.resolver requests. Maybe others.
+- Maxmind GeoLite2 databases (City, ASN, Country) in the same directory as this script, in a subdirectory called geolite2. https://www.maxmind.com/en/geolite2/signup
 
-Requests will be done in parallel to save time.
 
 TODO:
 - Add more DNSBL lists if needed.
@@ -43,7 +46,7 @@ import requests
 # SETTINGS:
 use_ipinfo_io = True  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and it is slow)
 use_dnsbl = True  # Set to True to check the IP against DNSBL lists (requires internet access and it is slow)
-
+# proxy lists
 socks4_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"
 socks5_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
 http_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
@@ -52,6 +55,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 geoip_city_db_location = script_dir + '/geolite2/GeoLite2-City.mmdb'
 geoip_asn_db_location = script_dir + '/geolite2/GeoLite2-ASN.mmdb'
 geoip_country_db_location = script_dir + '/geolite2/GeoLite2-Country.mmdb'
+
 proxy_file_list = {
 	script_dir + '/socks4.txt': socks4_url,
 	script_dir + '/socks5.txt': socks5_url,
@@ -72,12 +76,18 @@ dnsbl_hosts = [
 output_buffer = []
 
 def log_to_file(logtext):
+	"""
+	Logs messages to ip_info.log with timestamp.
+	"""
 	timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 	logtext = f"[{timestamp}] {logtext}"
 	with open(script_dir + '/ip_info.log', 'a') as log_file:
 		log_file.write(logtext + '\n')
 
 def check_age_of_files():
+	"""
+	Checks the age of the first proxy list file and logs the age in days.
+	"""
 	for file, url in proxy_file_list.items():
 		if os.path.exists(file):
 			mod_time = os.path.getmtime(file)
@@ -89,6 +99,9 @@ def check_age_of_files():
 	return age_days
 
 def download_proxy_lists():
+	"""
+	Downloads proxy lists from GitHub and saves them to local files.
+	"""
 	for file, url in proxy_file_list.items():
 		try:
 			response = requests.get(url)
@@ -100,6 +113,10 @@ def download_proxy_lists():
 			log_to_file(f"Failed to download {file} from {url}: {e}")
 
 def check_if_ip_in_proxy_lists(ip):
+	"""
+	Checks if the given IP is listed in any of the local proxy lists.
+	Performs NMAP on the found port if applicable.
+	"""
 	proxy_matches = []
 	for file, url in proxy_file_list.items():
 		shortfilename = os.path.splitext(os.path.basename(file))[0]  # 'socks4', 'socks5', or 'http'
@@ -115,7 +132,7 @@ def check_if_ip_in_proxy_lists(ip):
 								nmap_result = nmap_given_port(ip, port)
 								if nmap_result:
 									proxy_matches.append(f"Nmap result: {nmap_result}")
-						return proxy_matches
+						#return proxy_matches
 		except Exception as e:
 			log_to_file(f"Failed to read {file}: {e}")
 	return proxy_matches
