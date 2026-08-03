@@ -341,7 +341,7 @@ def main():
 		sys.exit(1)
 	ip = sys.argv[1]
 
-	if use_ipinfo_io == False and check_age_of_files() > 1:
+	if check_age_of_files() > 1:
 		download_proxy_lists()
 
 	info_func = format_ipinfo_output if use_ipinfo_io else format_local_geoip_output
