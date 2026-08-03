@@ -2,3 +2,4 @@
 KRCcookies.dat
 ts
 *.key
+__pycache__/

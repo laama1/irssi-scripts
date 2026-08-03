@@ -3,6 +3,7 @@
 ip_info.py
 version: 1.0
 author: laama
+LLM: vs code agent GPS-5.3 codex
 Usage:
   python ip_info.py <ip-address>
 
@@ -156,6 +157,13 @@ def parse_proxy_list_entry(line):
 	Parse one proxy list line and return (ip_object, port_or_none).
 	Supports IPv4, IPv6, [IPv6]:port, and IPv4:port formats.
 	"""
+	def _try_parse_ip(text):
+		"""Parse IP without logging; parser may try multiple formats per line."""
+		try:
+			return ipaddress.ip_address(text)
+		except ValueError:
+			return None
+
 	entry = line.strip()
 	if not entry or entry.startswith('#'):
 		return None, None
@@ -168,11 +176,11 @@ def parse_proxy_list_entry(line):
 		host = token[1:end_idx]
 		rest = token[end_idx + 1:]
 		port = rest[1:] if rest.startswith(':') and rest[1:].isdigit() else None
-		ip_obj = normalize_ip_address(host)
+		ip_obj = _try_parse_ip(host)
 		return ip_obj, port
 
 	# Direct IP (IPv4 or IPv6) without port.
-	ip_obj = normalize_ip_address(token)
+	ip_obj = _try_parse_ip(token)
 	if ip_obj is not None:
 		return ip_obj, None
 
@@ -180,7 +188,7 @@ def parse_proxy_list_entry(line):
 	if ':' in token:
 		host_candidate, port_candidate = token.rsplit(':', 1)
 		if port_candidate.isdigit():
-			host_ip = normalize_ip_address(host_candidate)
+			host_ip = _try_parse_ip(host_candidate)
 			if host_ip is not None:
 				return host_ip, port_candidate
 
