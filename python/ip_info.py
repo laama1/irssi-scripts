@@ -18,7 +18,7 @@ This script takes an IP address as a parameter,
 - Keeps proxy lists updated by downloading them from GitHub if they are older than 1 day.
 Requires:
 - Python 3.x
-- pip install dnspython geoip2 dns.resolver requests.
+- pip install dnspython geoip2 dns.resolver requests. Maybe others.
 
 Requests will be done in parallel to save time.
 """
@@ -60,7 +60,7 @@ dnsbl_hosts = [
 	"combined.abuse.ch",
 	"bogons.cymru.com",
 	"rbl.ircbl.org",
-	#"rbl.evilnet.org",
+	# does not respond? "rbl.evilnet.org",
 ]
 
 # Collect output fragments during checks and print them as one comma-separated line at the end.
