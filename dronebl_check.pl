@@ -41,11 +41,11 @@ sub sig_msg_pub {
     if ($msg =~ /^!ip (.*)$/) {
         create_window('dronebl_check');
         my $ip = $1;
-        my $data1 = dronebl_check($ip);
+        #my $data1 = dronebl_check($ip);
         my $data2 = ip_info($ip);
-        if ($data1 ne '') {
-            $server->command("msg $target DroneBL check for $ip: $data1");
-        }
+        #if ($data1 ne '') {
+        #    $server->command("msg $target DroneBL check for $ip: $data1");
+        #}
         if ($data2 ne '') {
             $server->command("msg $target Info for $ip: $data2");
         }
