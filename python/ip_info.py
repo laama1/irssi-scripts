@@ -8,8 +8,19 @@ Usage:
 
 Script will print all errors and status messages to ip_info.log in the same directory as the script.
 
-This script takes an IP address as a parameter, gets GeoIP info from a local MaxMind GeoLite2 database, pings the address to get latency, and performs a reverse DNS lookup.
-pip install dnspython geoip2
+This script takes an IP address as a parameter, 
+- optionally gets GeoIP info from a local MaxMind GeoLite2 database, 
+- or optionally checks the IP against ipinfo.io API.
+- Pings the address to get latency,
+- performs a reverse DNS lookup.
+- Does NMAP if IP address was found in a proxy list.
+- Checks the IP against DNSBL lists.
+- Keeps proxy lists updated by downloading them from GitHub if they are older than 1 day.
+Requires:
+- Python 3.x
+- pip install dnspython geoip2 dns.resolver requests.
+
+Requests will be done in parallel to save time.
 """
 
 import sys
@@ -49,7 +60,7 @@ dnsbl_hosts = [
 	"combined.abuse.ch",
 	"bogons.cymru.com",
 	"rbl.ircbl.org",
-	"rbl.evilnet.org",
+	#"rbl.evilnet.org",
 ]
 
 # Collect output fragments during checks and print them as one comma-separated line at the end.
