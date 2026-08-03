@@ -16,6 +16,7 @@ import sys
 import subprocess
 import re
 import ipaddress
+import concurrent.futures
 import dns.resolver
 import dns.reversename
 import geoip2.database
@@ -83,24 +84,25 @@ def download_proxy_lists():
 			log_to_file(f"Failed to download {file} from {url}: {e}")
 
 def check_if_ip_in_proxy_lists(ip):
+	proxy_matches = []
 	for file, url in proxy_file_list.items():
 		shortfilename = os.path.splitext(os.path.basename(file))[0]  # 'socks4', 'socks5', or 'http'
 		try:
 			with open(file, 'r') as f:
 				for line in f:
 					if ip in line:
-						output_buffer.append(shortfilename + ": " + line.strip())
+						proxy_matches.append(shortfilename + ": " + line.strip())
 						if ":" in line:
 							parts = line.strip().split(':')
 							if len(parts) >= 2 and parts[0] == ip:
 								port = parts[1]
 								nmap_result = nmap_given_port(ip, port)
 								if nmap_result:
-									output_buffer.append(f"Nmap result: {nmap_result}")
-						return True
+									proxy_matches.append(f"Nmap result: {nmap_result}")
+						return proxy_matches
 		except Exception as e:
 			log_to_file(f"Failed to read {file}: {e}")
-	return False
+	return proxy_matches
 
 def nmap_given_port(ip, port):
 	"""
@@ -126,6 +128,26 @@ def nmap_given_port(ip, port):
 	except Exception as e:
 		log_to_file(f"Failed to run nmap on {ip}:{port}: {e}")
 		return None
+
+def ping_ip(ip):
+	"""
+	Pings the given IP address and returns the latency in milliseconds.
+	-c count = 2
+	-W wait time = 1 second
+	-l preload = 2
+	"""
+	try:
+		completed = subprocess.run([
+			'ping', '-c', '2', '-W', '1', '-l', '2', ip
+		], capture_output=True, text=True)
+		if completed.returncode == 0:
+			match = re.search(r'time=([0-9.]+)\s*ms', completed.stdout)
+			if match:
+				return float(match.group(1))
+		return None
+	except Exception:
+		return None
+
 
 def ipinfo_io(ip):
 	"""
@@ -164,24 +186,6 @@ def get_geoip_info(ip, city_db, asn_db):
 		log_to_file(f"Failed to get GeoIP info for {ip}: {e}")
 		return None, None, None
 
-def ping_ip(ip):
-	"""
-	Pings the given IP address and returns the latency in milliseconds.
-	-c count = 2
-	-W wait time = 1 second
-	-l preload = 2
-	"""
-	try:
-		completed = subprocess.run([
-			'ping', '-c', '2', '-W', '1', '-l', '2', ip
-		], capture_output=True, text=True)
-		if completed.returncode == 0:
-			match = re.search(r'time=([0-9.]+)\s*ms', completed.stdout)
-			if match:
-				return float(match.group(1))
-		return None
-	except Exception:
-		return None
 
 def reverse_dns(ip):
 	"""
@@ -210,6 +214,29 @@ def normalize_ipv4_for_dnsbl(ip):
 		log_to_file(f"Invalid IP address for DNSBL check {ip}: {e}")
 	return None
 
+def query_dnsbl_host(reversed_ip, dnsbl_host):
+	"""
+	Query a single DNSBL zone and return formatted match fragments.
+	"""
+	query_name = f"{reversed_ip}.{dnsbl_host}"
+	resolver = dns.resolver.Resolver()
+	resolver.lifetime = 3.0
+	resolver.timeout = 3.0
+	matches = []
+
+	try:
+		answers = resolver.resolve(query_name, "A")
+		for answer in answers:
+			matches.append(f"DNSBL {dnsbl_host}: {answer}")
+	except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+		return []
+	except dns.exception.Timeout:
+		log_to_file(f"DNSBL query timed out for {query_name}")
+	except Exception as e:
+		log_to_file(f"DNSBL query failed for {query_name}: {e}")
+
+	return matches
+
 def check_dnsbl_lists(ip):
 	"""
 	Check IPv4 address against configured DNSBL zones and append matches to output.
@@ -220,25 +247,60 @@ def check_dnsbl_lists(ip):
 		return []
 
 	reversed_ip = '.'.join(reversed(str(ipv4).split('.')))
-	resolver = dns.resolver.Resolver()
-	resolver.lifetime = 3.0
-	resolver.timeout = 3.0
 	matches = []
-
-	for dnsbl_host in dnsbl_hosts:
-		query_name = f"{reversed_ip}.{dnsbl_host}"
-		try:
-			answers = resolver.resolve(query_name, "A")
-			for answer in answers:
-				matches.append(f"DNSBL {dnsbl_host}: {answer}")
-		except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
-			continue
-		except dns.exception.Timeout:
-			log_to_file(f"DNSBL query timed out for {query_name}")
-		except Exception as e:
-			log_to_file(f"DNSBL query failed for {query_name}: {e}")
+	with concurrent.futures.ThreadPoolExecutor(max_workers=len(dnsbl_hosts)) as executor:
+		future_to_host = {
+			executor.submit(query_dnsbl_host, reversed_ip, dnsbl_host): dnsbl_host
+			for dnsbl_host in dnsbl_hosts
+		}
+		for future in concurrent.futures.as_completed(future_to_host):
+			matches.extend(future.result())
 
 	return matches
+
+def format_ipinfo_output(ip):
+	"""
+	Fetch IP info and return formatted output fragments.
+	"""
+	results = []
+	country, city, region, org, hostname = ipinfo_io(ip)
+	if country:
+		results.append(f"Country: {country}")
+	if city:
+		results.append(f"City: {city}")
+	if region:
+		results.append(f"Region: {region}")
+	if org:
+		results.append(f"Org: {org}")
+	if hostname:
+		results.append(f"Hostname: {hostname}")
+	return results
+
+def format_local_geoip_output(ip):
+	"""
+	Fetch local GeoIP and PTR data and return formatted output fragments.
+	"""
+	results = []
+	country, city, asn = get_geoip_info(ip, geoip_city_db_location, geoip_asn_db_location)
+	if country:
+		results.append(f"Country: {country}")
+	if city:
+		results.append(f"City: {city}")
+	if asn:
+		results.append(f"ASN: {asn}")
+	hostname = reverse_dns(ip)
+	if hostname:
+		results.append(f"Hostname: {hostname}")
+	return results
+
+def format_ping_output(ip):
+	"""
+	Run ping and return a formatted output fragment when available.
+	"""
+	latency = ping_ip(ip)
+	if latency:
+		return [f"Ping: {latency} ms"]
+	return []
 
 def main():
 	if len(sys.argv) != 2:
@@ -246,30 +308,21 @@ def main():
 		sys.exit(1)
 	ip = sys.argv[1]
 
-	if (use_ipinfo_io):
-		country, city, region, org, hostname = ipinfo_io(ip)
-		if country: output_buffer.append(f"Country: {country}")
-		if city: output_buffer.append(f"City: {city}")
-		if region: output_buffer.append(f"Region: {region}")
-		if org: output_buffer.append(f"Org: {org}")
-		if hostname: output_buffer.append(f"Hostname: {hostname}")
-	else:
-		country, city, asn = get_geoip_info(ip, geoip_city_db_location, geoip_asn_db_location)
-		if country: output_buffer.append(f"Country: {country}")
-		if city: output_buffer.append(f"City: {city}")
-		if asn: output_buffer.append(f"ASN: {asn}")
-		hostname = reverse_dns(ip)
-		if hostname: output_buffer.append(f"Hostname: {hostname}")
-
-	latency = ping_ip(ip)
-	if latency: output_buffer.append(f"Ping: {latency} ms")
-
 	if use_ipinfo_io == False and check_age_of_files() > 1:
 		download_proxy_lists()
 
-	if use_dnsbl:
-		output_buffer.extend(check_dnsbl_lists(ip))
-	check_if_ip_in_proxy_lists(ip)
+	info_func = format_ipinfo_output if use_ipinfo_io else format_local_geoip_output
+	with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+		info_future = executor.submit(info_func, ip)
+		ping_future = executor.submit(format_ping_output, ip)
+		proxy_future = executor.submit(check_if_ip_in_proxy_lists, ip)
+		dnsbl_future = executor.submit(check_dnsbl_lists, ip) if use_dnsbl else None
+
+		output_buffer.extend(info_future.result())
+		output_buffer.extend(ping_future.result())
+		output_buffer.extend(proxy_future.result())
+		if dnsbl_future:
+			output_buffer.extend(dnsbl_future.result())
 
 	if output_buffer:
 		print(', '.join(output_buffer))
