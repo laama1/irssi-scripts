@@ -7,6 +7,7 @@ Usage:
   python ip_info.py <ip-address>
 
 Script will print all errors and status messages to ip_info.log in the same directory as the script.
+All other output will be printed to stdout as a single line, comma-separated.
 
 This script takes an IP address as a parameter, 
 - optionally gets GeoIP info from a local MaxMind GeoLite2 database, 
@@ -21,6 +22,10 @@ Requires:
 - pip install dnspython geoip2 dns.resolver requests. Maybe others.
 
 Requests will be done in parallel to save time.
+
+TODO:
+- Add more DNSBL lists if needed.
+- Use offline cache for DNSBL-queries to speed up repeated checks for the same IP.
 """
 
 import sys
