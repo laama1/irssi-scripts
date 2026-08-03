@@ -13,6 +13,8 @@ use POSIX qw(strftime);
 use POSIX qw(locale_h);	# necessary?
 use locale;	# necessary??
 
+setlocale(LC_TIME, "fi_FI.UTF-8");
+
 use vars qw($VERSION %IRSSI);
 $VERSION = '0.36';
 %IRSSI = (
@@ -67,12 +69,9 @@ sub event_priv_msg {
 	my ($server, $msg, $nick, $address) = @_;
     my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
-	if ($msg =~ /\!help hor/i) { 
+	if ($msg =~ /\!help hor/i || $msg =~ /\?ho/i) { 
 		$server->command("msg -nick $nick $helpmessage2");
 	}
-	# elsif ($msg =~ /!help$/) {
-	#	$server->command("msg -nick $nick $helpmessage1");
-	#}
 	return unless ($msg =~ /^\!h!(a|e|u|o)/i);
 	return if (KaaosRadioClass::floodCheck() == 1);
 	return;
@@ -82,14 +81,10 @@ sub event_pub_msg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	return unless ($target ~~ @channels);
 	return if $nick ~~ @ignorenicks;
-	if ($msg =~ /^\!help hor/i) {
+	if ($msg =~ /^\!help hor/i || $msg =~ /^\?ho/i) {
 		$serverrec->command("msg -channel $target $helpmessage2");
 		return;
 	}
-	# elsif ($msg =~ /\!help$/i) {
-	#	$serverrec->command("msg -channel $target $helpmessage1");
-	#	return;
-	#}
 
 	return unless ($msg =~ /^\!h/i);
 	return if ($msg =~ /!huomen/ || $msg =~ /!help/ || $msg =~ /!ha/ || $msg =~ /!hol/);	# ignore !huomen, !help, !ha, !hold commands

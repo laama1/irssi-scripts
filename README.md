@@ -50,4 +50,5 @@
 - AI::MegaHAL
 
 ### fmi_weather.pl
+- Number::Format
 - pip install fmi-weather fmi-weather-client

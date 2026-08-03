@@ -42,9 +42,11 @@ use Time::Piece;
 #use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use lib  '/home/laama/.irssi/scripts/irssi-scripts';
 use KaaosRadioClass;				# LAama1 13.11.2016
+use Number::Format qw(:subs :vars);
+my $fi = new Number::Format(-decimal_point => ',', -thousand_sep => ' ', -format_bytes => );
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '2024-06-12';
+$VERSION = '2026-08-03';
 %IRSSI = (
 	authors     => 'Will Storey, LAama1',
 	contact     => 'LAama1',
@@ -69,7 +71,7 @@ my @ignorenicks = (
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $DEBUG_decode = 1;
+my $DEBUG_decode = 0;
 my $irssidir = '/home/laama/.irssi';
 my $logfile = $irssidir.'/scripts/urllog_v2.txt';
 my $cookie_file = $irssidir . '/scripts/urltitle3_cookies.dat';
@@ -208,7 +210,8 @@ sub fetch_title {
 		} else {
 			prindw("Couldn't get size of the document!");
 		}
-		$size = format_kibibytes($size);
+		#$size = format_kibibytes($size);
+		$size = $fi->format_bytes($size, precision => 2, mode => 'iec');
 		
 	} else {
 		prindw("Failure ($url): code: " . $response->code() . ', message: ' . $response->message() . ', status line: ' . $response->status_line);

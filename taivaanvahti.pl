@@ -406,8 +406,21 @@ sub parse_xml {
 # does not do anything
 sub get_xml {
 	DP(__LINE__.' Fetching XML from URL: '. $taivaanvahtiURL);
-	my $xmlfile = fetchUrl($taivaanvahtiURL, 0, {}, $cookie_file);
-	$parser->parse($xmlfile);
+	my $xmlfile = KaaosRadioClass::fetchUrl($taivaanvahtiURL, 0, {}, $cookie_file);
+	if (!defined $xmlfile || $xmlfile eq '-1' || $xmlfile eq '') {
+		prindw('Failed to fetch RSS feed, skipping parse.');
+		DP(__LINE__.' fetchUrl returned invalid content');
+		return;
+	}
+
+	eval {
+		$parser->parse($xmlfile);
+	};
+	if ($@) {
+		prindw('XML parse failed, skipping this update cycle.');
+		DP(__LINE__.' XML parse error: ' . $@);
+		return;
+	}
 	return;
 }
 

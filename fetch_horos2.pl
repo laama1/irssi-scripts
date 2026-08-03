@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/perl
 use strict;
-#use warnings;
-#use Irssi;
+use warnings;
+use Irssi;
 use utf8;
 use Data::Dumper;
 use lib $ENV{HOME}.'/.irssi/scripts/irssi-scripts';

@@ -32,6 +32,7 @@ my $processes = {};
 my $fetch_dalle_processes = {};
 my $fetch_dalle_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fetch_dalle.sh';
 my $DEBUG = 1;
+my $DEBUG1 = 0;
 my $runningnumber = 0;
 my $socket_path = '/tmp/franklin3.sock';
 
@@ -45,7 +46,8 @@ my $botnick = 'KD_Bat';
 #my $model = 'gpt-4-turbo-preview';
 #my $model = 'text-davinci-003';
 #my $model = 'gpt-4o-mini';
-my $model = 'gpt-5';
+#my $model = 'gpt-5';
+my $model = 'gpt-5.5-2026-04-23';
 
 # web search models:
 # gpt-5-search-api
@@ -57,7 +59,8 @@ my $heat  = 0.4;
 my $hardlimit = 500;
 
 # dall-e models: 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-2', and 'dall-e-3'.
-my $visionmodel = 'dall-e-3';
+#my $visionmodel = 'dall-e-3';
+my $visionmodel = 'gpt-image-1.5';
 my $fetch_dalle = 'wget -q -O ' . $outputdir;
 my $execscript = 'exec -window -name franklin3_';
 
@@ -310,21 +313,24 @@ sub make_call_public {
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
-        #prindd(__LINE__ . ": got success response from API.");
-        #prindd(Dumper $res);
         my $json_rep  = $res->content();
         my $headers = $res->headers();
         my $json_decd = decode_json($json_rep);
-        #prindd(__LINE__ . ": headers:");
-        #prindd(Dumper $headers);
+        prindd(__LINE__ . ": got success response from API.") if $DEBUG1;
+        prindd(Dumper $json_decd) if $DEBUG1;
+
         my $total_tokens = $json_decd->{usage}->{total_tokens};
         my $processing_time = $headers->{'openai-processing-ms'};
         my $model_used = $json_decd->{model};
-
-        #prindd(__LINE__ . ": total tokens used: " . $total_tokens . ', processing time: ' . $processing_time . ' ms, model used: ' . $model_used);
+        my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, ' . $model_used . ')';
 
         #my $answered = $json_decd->{choices}[0]->{message}->{content};
-        my $answered =  $json_decd->{output}[1]->{content}[0]->{text}; # gpt-5
+        my $answered = ''; 
+        if (defined $json_decd->{output}[1]->{content}[0]->{text}) {
+            $answered = $json_decd->{output}[1]->{content}[0]->{text}; # gpt-5
+        } elsif (defined $json_decd->{output}[0]->{content}[0]->{text}) {
+            $answered = $json_decd->{output}[0]->{content}[0]->{text}; # gpt-5
+        }
 
         $chathistory->{$channel}->{$timestamp}->{nick} = $nick;
         $chathistory->{$channel}->{$timestamp}->{answer} = $answered;
@@ -336,12 +342,13 @@ sub make_call_public {
             my $oldest_timestamp = shift @timestamps;
             delete $chathistory->{$channel}->{$oldest_timestamp};
         }
-        return $answered . ' (tok: ' . $total_tokens . ', ' . $processing_time . ' ms)';
+        return $answered . $infoline;
     } elsif ($res->code >= 400) {
         prindw("got error " . $res->code);
         prindw(Dumper $res->{error});
-        #prindd(Dumper $res);
-        return "Error: " . $res->{error}->{message};
+        prindd(Dumper $res);
+        #return "\003Error:\003 " . $res->{error}->{message};
+        return "\003Error:\003 " . $res->{error};
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
@@ -378,9 +385,10 @@ sub frank {
         my $textcall = $1;
         return if check_flood($nick, $channel);
 
-        # @todo fork or something
+       
         for (0..2) {
             #if (my $answer = make_call($textcall, $nick)) {
+            # @todo run in background process
             if (my $answer = make_call_public($textcall, $nick, $channel, $server->{tag})) {
                 $answer = format_markdown($answer);
                 $answer = format_formula($answer);
@@ -444,7 +452,7 @@ sub make_vision_preview_json {
     return encode_json($data);
 }
 
-# describe image
+# describe image (deprecated)
 sub make_vision_preview_json2 {
     my ($url, $searchprompt, @rest) = @_;
     debu(__LINE__ . ": make_vision_preview_json2 called");
@@ -478,7 +486,7 @@ sub tts {
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
 
-    if ($msg =~ /^!tts$/u || $msg =~ /^!tts help$/u) {
+    if ($msg =~ /^!tts$/u || $msg =~ /^!tts help$/u || $msg =~ /^\?tts$/u) {
         # print help
         my $answer = "\002OpenAI TTS voices:\002 ";
         $answer .= join(', ', @tts_voices);
@@ -533,7 +541,7 @@ sub tts {
             my $data = $res->content;
             my $time = time;
             my $audio_filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
-            if (save_file_blob($data, $audio_filename)) {
+            if (save_file_blob($audio_filename, $data)) {
                 $answer .= "\002OpenAI TTS result:\002 ";
                 $answer .= "https://bot.8-b.fi/dale/$audio_filename (" .length($data). 'b)';
                 $server->command("msg -channel $channel $answer");
@@ -561,7 +569,7 @@ sub tts {
                 my $index = 0;
                 
                 my $tts_filename = $nick . '_' . $time . '_' . $voicemodel.'.mp3';
-                if (save_file_blob($data, $tts_filename)) {
+                if (save_file_blob($tts_filename, $data)) {
                     $answer .= "\002" . $voicemodel . ":\002 ";
                     $answer .= "https://bot.8-b.fi/dale/$tts_filename (" .length($data). 'b), ';
                 }
@@ -576,33 +584,47 @@ sub tts {
     }
 }
 
+# image generation
 sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
     my $mynick = quotemeta $server->{nick};
     return if $nick eq $mynick;	#self-test
     $nick = strip_nick($nick);
 
+    if ($msg =~ /^!dalle$/u || $msg =~ /^!dalle help$/u || $msg =~ /^\?dalle$/u) {
+        # print help
+        my $answer = "\002Dall-e image generation:\002 usage: !dalle prompt. Model used: $visionmodel";
+        $server->command("msg -channel $channel $answer");
+        return;
+    }
+
     if ($msg =~ /!dalle (https?\:\/\/[^ ]+)(.*)/ui ) {
         # image guessing 2024-02-13
         my $imagesearchurl = $1;
         my $question = $2;
-        #my $request_content = make_vision_preview_json2($imagesearchurl, $question);
+        prind("Creating a dalle request... image url: $imagesearchurl, question: $question");
         my $request_content = make_vision_preview_json($imagesearchurl, $question);
 
         # @todo fork or something
         #my $res = $ua->post($uri, Content => $request_content);
         my $res = $ua->post($visionapiurl, Content => $request_content);
         if ($res->is_success) {
+            my $response_headers = $res->headers();
             my $json_rep  = $res->content();
             my $json_decoded = decode_json($json_rep);
             my $answer = '';
+            my $total_tokens = $json_decoded->{usage}->{total_tokens};
+            my $processing_time = $response_headers->{'openai-processing-ms'};
+            my $model_used = $json_decoded->{model};
+            my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, model: ' . $model_used . ')';
             prind(__LINE__ . ": vision preview response:");
             prindd(Dumper $json_decoded);
             if (defined $json_decoded->{choices}[0]->{finish_reason} &&
                 $json_decoded->{choices}[0]->{finish_reason} eq 'length') {
-                $server->command("msg -channel $channel $nick: \0035Warning:\003 length.");
+
+                $server->command("msg -channel $channel $nick: \0035Warning:\003 length." . $infoline);
             } elsif (defined $json_decoded->{choices}[0]->{message}->{content}) {
-                $answer = $json_decoded->{choices}[0]->{message}->{content};
+                $answer = $json_decoded->{choices}[0]->{message}->{content} . $infoline;
                 $server->command("msg -channel $channel $answer");
                 prind("success: " . $answer);
             }
@@ -613,56 +635,73 @@ sub dalle {
         } else {
 		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
         }
-        #prindd(__LINE__ . ' response:');
-        #prindd(Dumper $res);
+
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
+        prind("Creating a dalle request... query: $query");
         my $request = make_dalle_json($query, $nick);
         #my $request = make_vision_json($query, $nick);
-
-        # @todo fork or something
+        
+        # @todo create sub process
         my $res = $ua->post($duri, Content => $request);
 
         if ($res->is_success) {
             my $json_rep  = $res->content();
+            my $response_headers = $res->headers();
             my $json_decd = decode_json($json_rep);
+            my $total_tokens = $json_decd->{usage}->{total_tokens};
+            my $processing_time = $response_headers->{'openai-processing-ms'};
+            #my $model_used = $json_decd->{model};
+            my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, ' . $visionmodel . ')';
 
             if (defined $json_decd->{data}) {
-                #prindd(Dumper $json_decd);
                 my $time = time;
                 my $answer = 'DALL-e results: ';
                 my $index = 0;
+                
                 while ($index < $howManyImages) {
                     my $filename = $nick.'_'.$time.'_'.$index.'.png';
                     my $imageurl = $json_decd->{data}[$index]->{url};
                     my $result = `${fetch_dalle}${filename} "$imageurl"`;
-
-                    debu(__LINE__ . ": wget output file: " . $outputdir.$filename);
+                    #save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json});
+                    #debu(__LINE__ . ": wget output file: " . $outputdir.$filename);
                     my $window_refnum = find_window_refnum($server, $channel);
                     #my $dallecmd = make_dalle_curl_cmd($query, $filename);
                     #start_cmd($dallecmd, find_window_refnum($server, $channel), $nick);
                     create_dalle_process($nick, $window_refnum, $filename, $query);
 
-                    #if (save_file_blob(decode_base64($json_decd->{data}[$index]->{b64_json}), $filename) >= 0) {
+                    if (save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json})) {
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
-                    #}
+                    }
                     $index++;
+                    # API not returning this anymore $answer .= '(revised prompt: ' . $json_decd->{data}[$index]->{revised_prompt} . ')';
                 }
-                $answer .= '(revised prompt: ' . $json_decd->{data}[0]->{revised_prompt} . ')';
-                $server->command("msg -channel $channel $answer");
+                
+                $server->command("msg -channel $channel $answer" . $infoline);
 
             }
         } elsif ($res->is_error) {
-            #print "ERROR!" if $DEBUG;
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
-            $server->command("msg -channel $channel $nick: \0035Error:\003 $errormsg");
+            my $processing_time = $res->headers()->{'openai-processing-ms'};
+            $server->command("msg -channel $channel $nick: \0035Error:\003 $errormsg (" . $processing_time . ' ms)');
+
             prindw("Error: $errormsg");
         } else {
 		    prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
         }
-        #prindd(__LINE__ . ' :');
-        #print Dumper $res if $DEBUG;
     }
+}
+
+sub save_image_from_b64 {
+    my ($filename, $b64data, @rest) = @_;
+    my $decoded_data = decode_base64($b64data);
+    if (save_file_blob($filename, $decoded_data) >= 0) {
+        return 1;
+        debu(__LINE__ . ": saved image file: " . $outputdir.$filename);
+    } else {
+        prindw(__LINE__ . ": failed to save image file: " . $outputdir.$filename);
+    }
+    return 0;
 }
 
 # start chatgpt request in background process
@@ -670,8 +709,10 @@ sub start_cmd {
     my ($cmd, $window_number, $nick, @rest) = @_;
     $runningnumber += 1;
     create_window('franklin3');
+    
     my $fullcmd = $execscript . $window_number . '_' . $nick . ' ' . $cmd;
-    debu(__LINE__ . ": starting command: $fullcmd");
+    debu(__LINE__, "starting command1: $fullcmd");
+    #debu(__LINE__, "started command: $fullcmd");
     Irssi::command($fullcmd);
 }
 
@@ -684,15 +725,14 @@ sub make_dalle_curl_cmd {
         '-d \'{"model": "' . $visionmodel . '", "prompt": "' . $prompt . '", "size": "1024x1024"}\' ' .
         '| jq -r \'.data[0].url\' ' .
         '| xargs -I {} curl -s -L "{}" -o ' . $outputdir . '2_' . $image_filename;
-    #debu(__LINE__ . ": DALL-e curl command: $curlcmd");
+    debu(__LINE__, "DALL-e curl command: $curlcmd");
     return $curlcmd;
 }
 
 sub save_file_blob {
-    my ($blob, $filename, @rest) = @_;
+    my ($filename, $blob, @rest) = @_;
 	open (OUTPUT, '>>', $outputdir.$filename) or die $!;
     binmode OUTPUT;
-	#print OUTPUT decode_base64($blob);
     print OUTPUT $blob;
 	close OUTPUT or return -2;
     return 1;
@@ -716,8 +756,6 @@ sub get_prompt {
     }
     return $settings->{prompt}->{$network}->{$who};
 }
-
-
 
 # if $nick is OP or VOICE or HALFOP
 sub ifop {
@@ -834,7 +872,6 @@ sub event_pubmsg {
     }
 }
 
-
 sub make_search_request {
     my ($server, $query, $target) = @_;
     my $url = 'https://api.openai.com/v1/chat/completions';
@@ -851,8 +888,6 @@ sub make_search_request {
         ]
     };
     my $request = encode_json($data);
-    prindd(__LINE__ . ' JSON request:');
-    prindd($request);
     my $res = $newua->post($urii, Content => $request);
     if ($res->is_success) {
         my $json_rep  = $res->content();
@@ -863,12 +898,13 @@ sub make_search_request {
         my $total_tokens = $json_decd->{usage}->{total_tokens};
         my $processing_time = $response_headers->{'openai-processing-ms'};
         my $model_used = $json_decd->{model};
+        my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, model: ' . $model_used . ')';
 
         if (defined $json_decd->{choices}[0]->{message}->{content}) {
             my $answer = $json_decd->{choices}[0]->{message}->{content};
             prindd(__LINE__ . ' answer:');
             prindd($answer);
-            return $answer . " (tok: " . $total_tokens . ', ' . $processing_time . ' ms)';
+            return $answer . $infoline;
         } else {
             prindw("No content in response.");
         }
@@ -939,7 +975,7 @@ sub prindd() {
     # print debug messages2
     my ($text, @rest) = @_;
     if ($DEBUG) {
-        print $IRSSI{name} . " debug> " . $text;
+        print $IRSSI{name} . " debug dump> " . $text;
     }
 }
 
@@ -955,10 +991,10 @@ sub prindw {
 }
 
 sub debu {
-	my ($text, @rest) = @_;
+	my ($line, $text, @rest) = @_;
 	return unless $DEBUG;
 	create_window('franklin3');
-	Irssi::active_win()->print($IRSSI{name}.'> '. $text);
+	Irssi::active_win()->print($IRSSI{name}.":$line> " . $text);
 }
 
 # read prompt from database per channel or per user
@@ -1007,7 +1043,7 @@ sub create_window {
         prind("Create new window: $window_name");
         Irssi::command("window new hidden");
         Irssi::command("window name $window_name");
-		debu("Window created: " . Irssi::active_win()->{name});
+		debu(__LINE__, "Window created: " . Irssi::active_win()->{name});
     }
     Irssi::command("window goto $window_name");
 }
@@ -1062,7 +1098,7 @@ sub exec_input {
 
 	$text =~ s/\t+/  /g;
 	#prind('exec_input text: ' . $text);
-	#debu(__LINE__ . ': ' . Dumper($res));
+	debu(__LINE__, Dumper($res));
 }
 
 sub exec_remove {
@@ -1092,7 +1128,7 @@ sub exec_remove {
 	}
 	create_window('franklin3');
 
-	debu(__LINE__ . ' exec_remove, pid: '. $res->{pid} . ', args: '. $res->{args} . ', silent: '. $res->{silent} . 
+	debu(__LINE__, 'exec_remove, pid: '. $res->{pid} . ', args: '. $res->{args} . ', silent: '. $res->{silent} . 
 	' shell: '. $res->{shell} . ', channel: ' . $channel . ', server tag: ' . $server .
 	#' target_win: '. Dumper($res->{target_win}) . 
 	', status: '. $status);
@@ -1100,11 +1136,11 @@ sub exec_remove {
 	my $elapsed = time() - $processes->{$res->{pid}}->{timestamp};
 
 	if ($status == 0 && $winnum != -1) {
-		debu(__LINE__ . ": $process_name finished in $elapsed seconds.");
+		debu(__LINE__, "$process_name finished in $elapsed seconds.");
 	} elsif ($winnum != -1) {
-		debu(__LINE__ . ": $process_name failed with status $status after $elapsed seconds.");
+		debu(__LINE__, "$process_name failed with status $status after $elapsed seconds.");
 	} else {
-		debu(__LINE__ . ': No valid window number found in process name.');
+		debu(__LINE__, 'No valid window number found in process name.');
 	}
 	
 	delete $processes->{$res->{pid}};
@@ -1117,6 +1153,7 @@ sub find_window_refnum {
 	
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
+        next unless $window->{active}->{type};
 		next unless $window->{active}->{type} eq 'CHANNEL';
 		next unless $window->{active}->{server}->{tag} eq $server_tag;
 
@@ -1131,19 +1168,20 @@ my $handle;
 sub start_socket_server {
     my ($socket_path) = @_;
     unlink $socket_path if -e $socket_path; # remove existing socket file
-    my $server = IO::Socket::UNIX->new(
+    my $socket_server = IO::Socket::UNIX->new(
         Type => SOCK_STREAM(),
         Local => $socket_path,
         Listen => 1,
     ) or die "Can't create socket server: $!";
-    prind("Socket server started at $socket_path");
-    $handle = Irssi::input_add(fileno($server), Irssi::INPUT_READ, \&handle_socket_connection, $server);
-    return $server;
+    prind("Socket server started, listening at $socket_path");
+    $handle = Irssi::input_add(fileno($socket_server), Irssi::INPUT_READ, \&handle_socket_connection, $socket_server);
+    return $socket_server;
 }
 
 sub handle_socket_connection {
-    my ($server) = @_;
-    my $client = $server->accept();
+    my ($socket_server) = @_;
+    prind("Handle socket server...") if $DEBUG;
+    my $client = $socket_server->accept();
     if ($client) {
         prind("Client connected to socket server.");
         while (my $line = <$client>) {
@@ -1166,9 +1204,9 @@ sub handle_socket_connection {
 sub create_dalle_process {
     my ($nick, $window_refnum, $image_filename, $prompt,@rest) = @_;
     $fetch_dalle_processes->{$image_filename} = $window_refnum; # mark as running
-    debu(__LINE__ . ": starting command: $fetch_dalle_script $image_filename \"$prompt\"");
-    Irssi::command($fetch_dalle_script . ' ' . $image_filename . ' "' . $prompt . '"');
-    debu(__LINE__ . ': command started...');
+    debu(__LINE__, "starting command2: $fetch_dalle_script $image_filename \"$prompt\"");
+    Irssi::command($fetch_dalle_script . ' ' . $image_filename . '2 "' . $prompt . '"');
+    debu(__LINE__, 'command started...');
 }
 
 start_socket_server($socket_path);

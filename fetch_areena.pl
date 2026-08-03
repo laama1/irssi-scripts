@@ -266,7 +266,7 @@ sub debu {
 	my ($text, @rest) = @_;
 	return unless $DEBUG;
 	create_window('yle-dl');
-	Irssi::active_win()->print($IRSSI{name}.'> '. $text);
+	Irssi::active_win()->print("\00311" . $IRSSI{name} . ">\003 ". $text);
 }
 
 sub prind {

@@ -25,8 +25,8 @@ $VERSION = '2025-05-02';
 	url         => 'https://8-b.fi',
 	changed     => $VERSION,
 );
-
-my $DEBUG = 0;
+Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
+my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
 my $timeout_tag;
@@ -296,7 +296,7 @@ Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_priv');
-Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
+#Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
 
 timeout_start();
 

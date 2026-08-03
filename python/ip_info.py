@@ -1,8 +1,12 @@
 #!/usr/bin/python
 """
 ip_info.py
+version: 1.0
+author: laama
 Usage:
   python ip_info.py <ip-address>
+
+Script will print all errors and status messages to ip_info.log in the same directory as the script.
 
 This script takes an IP address as a parameter, gets GeoIP info from a local MaxMind GeoLite2 database, pings the address to get latency, and performs a reverse DNS lookup.
 pip install dnspython geoip2
@@ -11,6 +15,7 @@ pip install dnspython geoip2
 import sys
 import subprocess
 import re
+import ipaddress
 import dns.resolver
 import dns.reversename
 import geoip2.database
@@ -18,7 +23,9 @@ import os
 import time
 import requests
 
-use_ipinfo_io = True  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and API token)
+# SETTINGS:
+use_ipinfo_io = True  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and it is slow)
+use_dnsbl = True  # Set to True to check the IP against DNSBL lists (requires internet access and it is slow)
 
 socks4_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"
 socks5_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
@@ -28,35 +35,44 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 geoip_city_db_location = script_dir + '/geolite2/GeoLite2-City.mmdb'
 geoip_asn_db_location = script_dir + '/geolite2/GeoLite2-ASN.mmdb'
 geoip_country_db_location = script_dir + '/geolite2/GeoLite2-Country.mmdb'
+proxy_file_list = {
+	script_dir + '/socks4.txt': socks4_url,
+	script_dir + '/socks5.txt': socks5_url,
+	script_dir + '/http.txt': http_url
+}
 
+dnsbl_hosts = [
+	"dnsbl.dronebl.org",
+	"rbl.efnetrbl.org",
+	"dnsbl.swiftbl.net",
+	"combined.abuse.ch",
+	"bogons.cymru.com",
+	"rbl.ircbl.org",
+	"rbl.evilnet.org",
+]
+
+# Collect output fragments during checks and print them as one comma-separated line at the end.
 output_buffer = []
 
 def log_to_file(logtext):
 	timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 	logtext = f"[{timestamp}] {logtext}"
-	with open('ip_info.log', 'a') as log_file:
+	with open(script_dir + '/ip_info.log', 'a') as log_file:
 		log_file.write(logtext + '\n')
 
-
 def check_age_of_files():
-	files = ['socks4.txt', 'socks5.txt', 'http.txt']
-	for file in files:
+	for file, url in proxy_file_list.items():
 		if os.path.exists(file):
 			mod_time = os.path.getmtime(file)
 			age_days = (time.time() - mod_time) / (24 * 3600)
 			log_to_file(f"{file} age: {age_days:.2f} days")
 		else:
 			log_to_file(f"{file} does not exist.")
-			return 100
+			age_days = 100
 	return age_days
 
 def download_proxy_lists():
-	files = {
-		'socks4.txt': socks4_url,
-		'socks5.txt': socks5_url,
-		'http.txt': http_url
-	}
-	for file, url in files.items():
+	for file, url in proxy_file_list.items():
 		try:
 			response = requests.get(url)
 			response.raise_for_status()
@@ -67,14 +83,12 @@ def download_proxy_lists():
 			log_to_file(f"Failed to download {file} from {url}: {e}")
 
 def check_if_ip_in_proxy_lists(ip):
-	files = ['socks4.txt', 'socks5.txt', 'http.txt']
-	for file in files:
-		shortfilename = os.path.splitext(file)[0]  # 'socks4', 'socks5', or 'http'
+	for file, url in proxy_file_list.items():
+		shortfilename = os.path.splitext(os.path.basename(file))[0]  # 'socks4', 'socks5', or 'http'
 		try:
 			with open(file, 'r') as f:
 				for line in f:
 					if ip in line:
-						#print(f"IP {ip} found in {file}. Line: {line.strip()}")
 						output_buffer.append(shortfilename + ": " + line.strip())
 						if ":" in line:
 							parts = line.strip().split(':')
@@ -89,6 +103,9 @@ def check_if_ip_in_proxy_lists(ip):
 	return False
 
 def nmap_given_port(ip, port):
+	"""
+	Use simple nmap command to scan ip and port, return the result line if found.
+	"""
 	try:
 		completed = subprocess.run([
 			'nmap', '-p', str(port), ip
@@ -111,6 +128,9 @@ def nmap_given_port(ip, port):
 		return None
 
 def ipinfo_io(ip):
+	"""
+	Fetches IP information from ipinfo.io API.
+	"""
 	try:
 		response = requests.get(f"https://ipinfo.io/{ip}/json")
 		response.raise_for_status()
@@ -126,6 +146,9 @@ def ipinfo_io(ip):
 		return None, None, None, None, None
 
 def get_geoip_info(ip, city_db, asn_db):
+	"""
+	Fetches GeoIP information from local MaxMind GeoLite2 databases.
+	"""
 	try:
 		city_reader = geoip2.database.Reader(city_db)
 		asn_reader = geoip2.database.Reader(asn_db)
@@ -142,9 +165,15 @@ def get_geoip_info(ip, city_db, asn_db):
 		return None, None, None
 
 def ping_ip(ip):
+	"""
+	Pings the given IP address and returns the latency in milliseconds.
+	-c count = 2
+	-W wait time = 1 second
+	-l preload = 2
+	"""
 	try:
 		completed = subprocess.run([
-			'ping', '-c', '1', '-W', '1', ip
+			'ping', '-c', '2', '-W', '1', '-l', '2', ip
 		], capture_output=True, text=True)
 		if completed.returncode == 0:
 			match = re.search(r'time=([0-9.]+)\s*ms', completed.stdout)
@@ -155,6 +184,9 @@ def ping_ip(ip):
 		return None
 
 def reverse_dns(ip):
+	"""
+	Performs a reverse DNS lookup for the given IP address. (PTR record)
+	"""
 	try:
 		addr = dns.reversename.from_address(ip)
 		resolver = dns.resolver.Resolver()
@@ -163,6 +195,50 @@ def reverse_dns(ip):
 			return str(answer[0]).rstrip('.')
 	except Exception:
 		return None
+
+def normalize_ipv4_for_dnsbl(ip):
+	"""
+	Return an IPv4Address for plain IPv4 or IPv4-mapped IPv6 input.
+	"""
+	try:
+		parsed_ip = ipaddress.ip_address(ip)
+		if isinstance(parsed_ip, ipaddress.IPv4Address):
+			return parsed_ip
+		if isinstance(parsed_ip, ipaddress.IPv6Address) and parsed_ip.ipv4_mapped:
+			return parsed_ip.ipv4_mapped
+	except ValueError as e:
+		log_to_file(f"Invalid IP address for DNSBL check {ip}: {e}")
+	return None
+
+def check_dnsbl_lists(ip):
+	"""
+	Check IPv4 address against configured DNSBL zones and append matches to output.
+	Running against each dnsbl_hosts can be slow, so consider limiting the list if speed is a concern.
+	"""
+	ipv4 = normalize_ipv4_for_dnsbl(ip)
+	if not ipv4:
+		return []
+
+	reversed_ip = '.'.join(reversed(str(ipv4).split('.')))
+	resolver = dns.resolver.Resolver()
+	resolver.lifetime = 3.0
+	resolver.timeout = 3.0
+	matches = []
+
+	for dnsbl_host in dnsbl_hosts:
+		query_name = f"{reversed_ip}.{dnsbl_host}"
+		try:
+			answers = resolver.resolve(query_name, "A")
+			for answer in answers:
+				matches.append(f"DNSBL {dnsbl_host}: {answer}")
+		except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+			continue
+		except dns.exception.Timeout:
+			log_to_file(f"DNSBL query timed out for {query_name}")
+		except Exception as e:
+			log_to_file(f"DNSBL query failed for {query_name}: {e}")
+
+	return matches
 
 def main():
 	if len(sys.argv) != 2:
@@ -183,7 +259,7 @@ def main():
 		if city: output_buffer.append(f"City: {city}")
 		if asn: output_buffer.append(f"ASN: {asn}")
 		hostname = reverse_dns(ip)
-		if hostname: output_buffer.append(f"Reverse DNS: {hostname}")
+		if hostname: output_buffer.append(f"Hostname: {hostname}")
 
 	latency = ping_ip(ip)
 	if latency: output_buffer.append(f"Ping: {latency} ms")
@@ -191,6 +267,8 @@ def main():
 	if use_ipinfo_io == False and check_age_of_files() > 1:
 		download_proxy_lists()
 
+	if use_dnsbl:
+		output_buffer.extend(check_dnsbl_lists(ip))
 	check_if_ip_in_proxy_lists(ip)
 
 	if output_buffer:

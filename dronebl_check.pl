@@ -90,8 +90,8 @@ sub dronebl_check {
     chomp(my $data = `${scriptfile} ${ip}`);
 
     if ($data) {
-        Irssi::active_win()->print("data from checkdns script for ip $ip: ");
-        Irssi::active_win()->print(Dumper $data);
+        Irssi::active_win()->print("data from checkdns script for ip $ip: " . Dumper $data);
+        #Irssi::active_win()->print(Dumper $data);
     } else {
         Irssi::active_win()->print("No data from checkdns script for ip: " . $ip);
     }
@@ -107,7 +107,8 @@ sub event_msg_joined {
     my ($server, $channel, $nick, $address, $account, $realname, @rest) = @_;
     create_window('dronebl_check');
     Irssi::active_win()->print("------------------------------------------>");
-    Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next... rest: " . Dumper \@rest);
+    #Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next... rest: " . Dumper \@rest);
+    Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next...");
     my @ip_parts = split('@', $address);
 
     $memory->{$nick}->{'host'} = $address;
@@ -132,7 +133,7 @@ sub event_msg_joined {
         dronebl_check($real_ip);
     } else {
         # do reverse dns here if needed
-        Irssi::active_win()->print(__LINE__ . ": do reverse dns for host: " . $host) if $DEBUG;
+        Irssi::active_win()->print(__LINE__ . ": resolve host: " . $host) if $DEBUG;
         $real_ip = do_resolve($host);
         if ($real_ip ne '') {
             $memory->{$nick}->{'real_ip'} = $real_ip;
@@ -151,7 +152,7 @@ sub is_hex_ident {
         my @decimals = map { hex($_) } @bytes;
         #prind(__LINE__ . " decimals: " . Dumper \@decimals) if $DEBUG;
         my $ip = join('.', @decimals);
-        prind(__LINE__ . ": converted ip: " . $ip) if $DEBUG;
+        prind(__LINE__ . ": converted ip: " . $ip . " (from hex: " . $ident . ")") if $DEBUG;
         return $ip;
     }
     return 0;

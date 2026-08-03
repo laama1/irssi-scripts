@@ -269,7 +269,7 @@ sub print_line_from_search_result {
 
 	if ($short != 1) {
 		# dont print url when short = 1
-		$link = "http://www.imdb.com/title/" . $param->{imdbID};
+		$link = "https://www.imdb.com/title/" . $param->{imdbID};
 	}
 	
 	$title = "\002".$param->{Title}." [".$param->{Year}."]\002";

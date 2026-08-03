@@ -37,7 +37,8 @@ $VERSION = 1.03;
 @EXPORT = qw(readLastLineFromFilename readFromDB 
 readLinesFromDataBase connectSqlite closeDB readLineFromDataBase readLineFromOpenDB bindSQL bindSQL_nc insertSQL writeToOpenDB
 readTextFile addLineToFile writeToFile writeArrayToFile getNytsoi24h replaceWeird stripLinks writeToDB getMonthString
-is_enabled_channel add_enabled_channel remove_enabled_channel format_time_ago format_kibibytes getJSON df ktrim floodCheck);
+is_enabled_channel add_enabled_channel remove_enabled_channel format_time_ago getJSON df ktrim floodCheck fetchUrl);
+# format_kibibytes
 
 #$scriptDir = cwd();
 our $scriptDir = $ENV{HOME}.'/.irssi/scripts';
@@ -703,20 +704,36 @@ sub remove_enabled_channel {
 # format youtube/imgur etc timestamp
 sub format_time_ago {
 	my ($value, @rest) = @_;
-	my $time_object = Time::Piece->strptime($value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
+	return 'unknown time' unless defined $value;
+
+	# Support both 2026-08-03T12:34:56Z and 2026-08-03T12:34:56.123456Z.
+	my $normalized_value = $value;
+	$normalized_value =~ s/\.\d+(?=Z$)//;
+
+	my $time_object = eval {
+		Time::Piece->strptime($normalized_value, "%Y-%m-%dT%H:%M:%SZ");	# ISO8601
+	};
+	if ($@ || !defined $time_object) {
+		dp(__LINE__.": Failed to parse timestamp '$value': $@");
+		return 'unknown time';
+	}
 	my $local_time = localtime;
 
 	my $diff = ($local_time - $time_object);
+	my $seconds_in_year = 60 * 60 * 24 * 365;
+	my $seconds_in_month = 60 * 60 * 24 * 30;
+	my $seconds_in_week = 60 * 60 * 24 * 7;
+	my $seconds_in_day = 60 * 60 * 24;
 
 	my $result = '';
-	if ($diff >= 29030400) {
-    	$result = sprintf("%.1f", ($diff / 29030400)) . 'y';
-	} elsif ($diff >= 2419200) {
-		$result = sprintf("%.1f", ($diff / 2419200)) . 'mon';
-	} elsif ($diff >= 604800) {
-		$result = sprintf("%.1f", ($diff / 604800)) . 'wk';
-	} elsif ($diff > 86400) {
-		$result = sprintf("%.1f", ($diff / 86400)) . 'days';
+	if ($diff >= $seconds_in_year) {
+    	$result = sprintf("%.1f", ($diff / $seconds_in_year)) . 'y';
+	} elsif ($diff >= $seconds_in_month) {
+		$result = sprintf("%.1f", ($diff / $seconds_in_month)) . 'mon';
+	} elsif ($diff >= $seconds_in_week) {
+		$result = sprintf("%.1f", ($diff / $seconds_in_week)) . 'wk';
+	} elsif ($diff >= $seconds_in_day) {
+		$result = sprintf("%.1f", ($diff / $seconds_in_day)) . 'days';
 	} elsif ($diff > 3600) {
 		$result = sprintf("%.1f", ($diff / 3600)) . 'h';
 	} elsif($diff > 60) {
@@ -728,16 +745,31 @@ sub format_time_ago {
 	return $result;
 }
 
-sub format_kibibytes {
-	my $size_in_bytes = shift;
-	if ($size_in_bytes / (1024*1024) > 1) {
-		$size_in_bytes = sprintf("%.2f", $size_in_bytes / (1024*1024)).'MiB';
-	} elsif ($size_in_bytes / 1024 > 1) {
-		$size_in_bytes = sprintf("%.2f", $size_in_bytes / 1024) . 'KiB';
-	} else {
-		$size_in_bytes = $size_in_bytes.'B';
-	}
-	return $size_in_bytes;
+sub format_duration {
+	# example 'PT12H42M45S' used for youtube video duration, convert to 12:42:45
+    my $value = shift;
+    $value =~ /PT((\d+)H)?((\d+)M)?((\d+)S)?/;
+    my $hours = defined $2 ? $2 : 0;
+    my $minutes = defined $4 ? $4 : 0;
+    my $seconds = defined $6 ? $6 : 0;
+    my $result = '';
+    if ($hours > 0) {
+        $result .= $hours . ':';
+    }
+    $result .= sprintf("%02d:%02d", $minutes, $seconds);
+    return $result;
 }
+
+#sub format_kibibytes {
+#	my $size_in_bytes = shift;
+#	if ($size_in_bytes / (1024*1024) > 1) {
+#		$size_in_bytes = sprintf("%.2f", $size_in_bytes / (1024*1024)).'MiB';
+#	} elsif ($size_in_bytes / 1024 > 1) {
+#		$size_in_bytes = sprintf("%.2f", $size_in_bytes / 1024) . 'KiB';
+#	} else {
+#		$size_in_bytes = $size_in_bytes.'B';
+#	}
+#	return $size_in_bytes;
+#}
 print ">>>> using .irssi/scripts/KaaosRadioClass.pm";
 1;		# loaded OK

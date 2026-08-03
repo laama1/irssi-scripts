@@ -18,7 +18,7 @@ use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;				# LAama1 13.11.2016
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '20251108';
+$VERSION = '20260708';
 %IRSSI = (
 	authors     => 'LAama1',
 	contact     => 'LAama1@ircnet',
@@ -47,7 +47,7 @@ my $forecastUrl = 'https://api.openweathermap.org/data/2.5/forecast?';
 my $areaUrl = 'https://api.openweathermap.org/data/2.5/find?cnt=5&lat=';
 my $uvUrl = 'https://api.openweathermap.org/data/2.5/uvi?&lat=';
 my $uvforecastUrl = 'https://api.openweathermap.org/data/2.5/uvi/forecast?';
-my $DEBUG = 0;
+my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $db_file = Irssi::get_irssi_dir(). '/scripts/openweathermap3.db';
 my $dbh;	# database handle
@@ -55,6 +55,8 @@ my $dbh;	# database handle
 my $users_cache = {};
 
 my $helptext = 'Openweathermap sääskripti. Ohje: https://bot.8-b.fi/#s';
+
+my @weekdayarray = ('su','ma','ti','ke','to','pe','la','su', 'ma','ti','ke','to','pe','la');
 
 =pod
 some weather related UTF8 emojis:
@@ -134,6 +136,7 @@ unless (-e $db_file) {
 # replace weather description with emoji
 sub replace_with_emoji {
 	my ($string, $sunrise, $sunset, $comparetime, $tz, @rest) = @_;
+	dp(__LINE__ . ': string before: ' . $string) if $DEBUG1;
 	$sunrise += $tz;
 	$sunset += $tz;
 	$comparetime += $tz;
@@ -169,6 +172,7 @@ sub replace_with_emoji {
 		$string =~ s/overcast clouds/☁ /sui;
 		$string =~ s/few clouds/☁ /sui;
 	}
+	dp(__LINE__ . ': string after: ' . $string) if $DEBUG1;
 	return $string;
 }
 
@@ -281,9 +285,10 @@ sub FINDFORECAST {
 		$json = request_api($forecastUrl.'q='.$city) if defined $city;
 		return 0 if ($json eq '-1');
 	}
-	dp(__LINE__ . ', got json from api...');
+	dp(__LINE__ . ', got json from api...') if $DEBUG1;
 	if (defined $days && $days == 5) {
-		return forecastloop5($json);
+		#return forecastloop5($json);
+		return find_day_highest_and_lowest($json);
 	} else {
 		return forecastloop1($json);
 	}
@@ -298,7 +303,7 @@ sub createUrlTailFromSearchword {
 	}
 }
 
-# print temperature for every 3 hours for the first 24h
+# print temperature forecast for every 3 hours for the first 24h
 sub forecastloop1 {
 	my ($json, @rest) = @_;
 	my $index = 0;
@@ -313,11 +318,9 @@ sub forecastloop1 {
 			my $timezone = ($json->{city}->{timezone} / 3600);
 			if ($timezone > 0) { $timezone = '+'.$timezone };
 			$timezone = '(UTC' . $timezone . ')';
-			#print ("Timezone: " . $timezone) if $DEBUG;
 			$returnstring = "\002" . $city . ','.$json->{city}->{country} . " $timezone klo:\002 ";
 		}
-		dp(__LINE__);
-		my $weathericon = replace_with_emoji($item->{weather}[0]->{main},
+		my $weathericon = replace_with_emoji($item->{weather}[0]->{description},
 												$json->{city}->{sunrise},
 												$json->{city}->{sunset},
 												$item->{dt},
@@ -330,13 +333,13 @@ sub forecastloop1 {
 	return $returnstring;
 }
 
-# print temperature for every 12 h in the next 5d
+# print temperature forecast for every 12 h in the next 5d
 sub forecastloop5 {
 	my ($json, @rest) = @_;
 	my $index = 0;
 	my $returnstring = '';
 	my $daytemp = '';
-	my @weekdayarray = ('su','ma','ti','ke','to','pe','la','su');
+
 	my $timezone = $json->{city}->{timezone};
 	foreach my $item (@{$json->{list}}) {
 		my $tiem = $item->{dt_txt};
@@ -348,8 +351,8 @@ sub forecastloop5 {
 			if ($index == 0) {
 				$returnstring = "\002" . $json->{city}->{name} . ',' . $json->{city}->{country} . "\002 ";
 			}
-			dp(__LINE__);
-			my $weathericon = replace_with_emoji($item->{weather}[0]->{main}, 
+
+			my $weathericon = replace_with_emoji($item->{weather}[0]->{description}, 
 												$json->{city}->{sunrise},
 												$json->{city}->{sunset}, 
 												$item->{dt}, 
@@ -361,7 +364,7 @@ sub forecastloop5 {
 				#$returnstring .= "\002".$mday.'.'.($mon+1).'. ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 				$returnstring .= "\002" . $weekdaystring.': ('.sprintf('%.2d', $hour) .":\002 $weathericon ".$fi->format_number($item->{main}->{temp}, 0) .'°C, ';
 			}
-			#if ($tiem =~ /12:00:00/) {
+
 			if ($hour == 12) {
 				# end of temperature pair
 				$returnstring .= "\002)\002, ";
@@ -374,6 +377,73 @@ sub forecastloop5 {
 
 	$returnstring .= "\002)\002";
 	return $returnstring;
+}
+
+sub find_day_highest_and_lowest {
+	my ($json, @rest) = @_;
+	my $datearray = {};
+	my $returnstring = '';
+	my $timezone = $json->{city}->{timezone};
+	my $city = changeCity($json->{city}->{name}) . ','.$json->{city}->{country};
+	my $today_idx = (gmtime(time + $timezone))[6];	# number of weekday, 0=su, 1=ma, 2=ti, 3=ke, 4=to, 5=pe, 6=la, 7=su, 8=ma
+	dp(__LINE__ . ': today weekday index: ' . $today_idx);
+	my $counter = 0;
+	foreach my $item (@{$json->{list}}) {
+		# json list is in date time order, luckily
+		my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime ($item->{dt} + $timezone);
+		
+		my $tempvalue = $fi->format_number($item->{main}->{temp}, 0);
+		my $weathericon = replace_with_emoji($item->{weather}[0]->{description}, 
+												$json->{city}->{sunrise},
+												$json->{city}->{sunset}, 
+												$item->{dt}, 
+												$timezone
+												);
+		dp(__LINE__ . ': tempvalue: ' . $tempvalue . '°C' . ', weathericon: ' . $weathericon . ', weekday: ' . $wday) if $DEBUG1;
+		if (not defined $datearray->{$wday}) {
+			$datearray->{$wday} = ();
+			$datearray->{$wday}->{'highest'} = $tempvalue;
+			$datearray->{$wday}->{'lowest'} = $tempvalue;
+			$datearray->{$wday}->{'highest_icon'} = '';
+			$datearray->{$wday}->{'lowest_icon'} = '';
+		}
+		if ($tempvalue > $datearray->{$wday}->{'highest'}) {
+			$datearray->{$wday}->{'highest'} = $tempvalue;
+			$datearray->{$wday}->{'highest_icon'} = $weathericon;
+		}
+
+		if ($tempvalue < $datearray->{$wday}->{'lowest'}) {
+			$datearray->{$wday}->{'lowest'} = $tempvalue;
+			$datearray->{$wday}->{'lowest_icon'} = $weathericon;
+		}
+
+		#$datearray->{$wday}->{'lowest'} = $tempvalue if $tempvalue < ($datearray->{$wday}->{'lowest'});
+		$counter++;
+	}
+
+	$counter = 0;
+	my $counter_end = $today_idx + 5;	# can be more than 7, but we will use modulo 7 to get the correct weekday
+    foreach my $result_idx ($today_idx .. $counter_end) {
+		# loop every day and add highest and lowest to return string
+		#if ($result_idx < $today_idx) {
+			# skip days before today
+		#	next;
+		#}
+		my $modulo = $result_idx % 7;
+		my $dayname = $weekdayarray[$modulo];
+		dp(__LINE__ . ': result_idx: ' . $result_idx . ', modulo: ' . $modulo . ', dayname: ' . $dayname) if $DEBUG1;
+		#my $weekdaystring = $weekdayarray[$result_idx % 7];
+		my $highest = $datearray->{$modulo}->{'highest'};
+		my $highest_icon = $datearray->{$modulo}->{'highest_icon'};
+		my $lowest = $datearray->{$modulo}->{'lowest'};
+		#my $lowest_icon = $datearray->{$modulo}->{'lowest_icon'};
+		$returnstring .= "\002$dayname:\002 $highest_icon $lowest…$highest °C, ";
+		$counter++;
+		#if ($counter >= 5) {
+		#	last;
+		#}
+    }
+	return $city . ' ' . $returnstring;
 }
 
 sub FINDAREAWEATHER {
@@ -545,10 +615,10 @@ sub getSayLine {
 	}
 	$wind .= ' m/s';
 	$wind .= " $winddir";
-	my $city = changeCity($json->{name});
+	my $city = "\002" . changeCity($json->{name});
 	my $timezone = ($json->{timezone} / 3600);
 	if ($timezone > 0) { $timezone = '+'.$timezone; }
-	$city .= ','.$json->{sys}->{country};
+	$city .= ','.$json->{sys}->{country} . "\002";
 	$city .= " (UTC$timezone)";
 
 	my $weatherdesc = make_weather_desc(@{$json->{weather}});;
@@ -564,7 +634,7 @@ sub getSayLine {
 									$json->{dt},
 									$json->{timezone}
 									);
-	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky . $uv_index.', P: '. $pressure . ', RH: ' . $humidity . $snow;
+	my $returnvalue = $city.': '.$newdesc.' '.$temp.$apparent_temp.', '.$sunrise.' '.$sunset.', '.$wind.$sky.$uv_index.", \002P:\002 ".$pressure.", \002RH:\002 ".$humidity.$snow;
 	return $returnvalue;
 }
 
@@ -754,18 +824,18 @@ sub read_user_city_from_database {
 	my $nick = shift;
 	dp(__LINE__.', read_user_city_from_database next for nick: ' . $nick);
 	if (defined $users_cache->{$nick}) {
-		dp(__LINE__.', käyttäjän '.$nick.' kaupunki löytyi välimuistista: '.$users_cache->{$nick});
+		#dp(__LINE__.', käyttäjän '.$nick.' kaupunki löytyi välimuistista: '.$users_cache->{$nick});
 		return $users_cache->{$nick};
 	}
 	my $sql = 'SELECT C.NAME FROM USERS U LEFT JOIN CITIES C ON U.CITY = C.CITYID WHERE U.NICK = ? LIMIT 1;';
 	my @results = KaaosRadioClass::bindSQL($db_file, $sql, ($nick));
-	da(__LINE__, Dumper(@results));
+	#da(__LINE__, Dumper(@results));
 	if (defined $results[0][0]) {
 		$users_cache->{$nick} = decode('UTF-8', $results[0][0]);
-		dp(__LINE__.', found '.$nick.' city from database: '.$users_cache->{$nick});
+		#dp(__LINE__.', found '.$nick.' city from database: '.$users_cache->{$nick});
 		return $users_cache->{$nick};
 	}
-	dp(__LINE__.', no city found for user '.$nick.' in database.');
+	#dp(__LINE__.', no city found for user '.$nick.' in database.');
 	return undef;
 }
 
