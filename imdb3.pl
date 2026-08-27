@@ -25,7 +25,7 @@ $VERSION = '2023-10-08';
 
 my $DEBUG = 0;
 my $DEBUG1 = 0;
-my $debugfilename = Irssi::get_irssi_dir(). '/scripts/imdb3debuglog.txt';
+my $debugfilename = Irssi::get_irssi_dir(). '/scripts/logs/imdb3debuglog.txt';
 my $json = JSON->new();
 $json->allow_blessed(1);
 

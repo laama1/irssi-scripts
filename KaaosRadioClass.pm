@@ -37,7 +37,7 @@ $VERSION = 1.03;
 @EXPORT = qw(readLastLineFromFilename readFromDB 
 readLinesFromDataBase connectSqlite closeDB readLineFromDataBase readLineFromOpenDB bindSQL bindSQL_nc insertSQL writeToOpenDB
 readTextFile addLineToFile writeToFile writeArrayToFile getNytsoi24h replaceWeird stripLinks writeToDB getMonthString
-is_enabled_channel add_enabled_channel remove_enabled_channel format_time_ago getJSON df ktrim floodCheck fetchUrl);
+is_enabled_channel add_enabled_channel remove_enabled_channel format_time_ago format_duration getJSON df ktrim floodCheck fetchUrl);
 # format_kibibytes
 
 #$scriptDir = cwd();
@@ -509,13 +509,12 @@ sub fetchResponse {
 sub fetchUrl {
 	my ($url, $getsize, $headers, $cookie_file, @rest) = @_;
 
-	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers) . ', cookie_file: ' . $cookie_file);
-
 	if ($cookie_file) {
 		$cookie_file = $cookie_file;
 	} else {
 		$cookie_file = $scriptDir .'/KRCcookies.dat';
 	}
+	dp(__LINE__ . ': fetchUrl url: ' . $url . ', headers: ' . Dumper($headers) . ', cookie_file: ' . $cookie_file);
 	my $cookie_jar = HTTP::Cookies->new(
 		file => $cookie_file,
 		autosave => 1,
@@ -609,7 +608,7 @@ sub df {
 	my ($text, @rest) = @_;
 	my $timestring = strftime("%Y-%m-%d %H:%M:%S", localtime);
 	$text = "[$timestring] $text";
-	my $logfile = $scriptDir . '/kaaosradio_debug.log';
+	my $logfile = $scriptDir . '/logs/kaaosradio_debug.log';
 	addLineToFile($logfile, $text);
 	return;
 }

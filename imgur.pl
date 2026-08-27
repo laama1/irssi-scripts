@@ -21,7 +21,8 @@ $VERSION = '2026-02-21';
 );
 
 my $DEBUG = 1;
-my $imgur_proxy_url = 'farside.link/rimgo';
+#my $imgur_proxy_url = 'farside.link/rimgo';
+my $imgur_proxy_url = 'imgur.nerdvpn.de';
 
 my $baseurl = 'https://api.imgur.com/3/';
 my $apiurl_image = $baseurl . "image/";

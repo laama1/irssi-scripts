@@ -19,6 +19,7 @@ use KaaosRadioClass;
 our $localdir = $ENV{HOME}."/.irssi/scripts/";
 our $database = $localdir . "franklin3.db";
 
+
 #my $apiurl = "https://api.openai.com/v1/completions";
 my $visionapiurl = 'https://api.openai.com/v1/chat/completions';
 my $apiurl = 'https://api.openai.com/v1/responses';
@@ -35,6 +36,7 @@ my $DEBUG = 1;
 my $DEBUG1 = 0;
 my $runningnumber = 0;
 my $socket_path = '/tmp/franklin3.sock';
+my $socket_server = start_socket_server($socket_path);
 
 #my $systemsg_start = 'Answer at most in 40 words. ';
 my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
@@ -53,15 +55,17 @@ my $model = 'gpt-5.5-2026-04-23';
 # gpt-5-search-api
 # gpt-4o-search-preview
 # gpt-4o-mini-search-preview
-my $web_search_model = 'gpt-4o-search-preview';
+# deprecated: gpt-4o-search-preview
+my $web_search_model = 'gpt-5.6-terra';
 
 my $heat  = 0.4;
 my $hardlimit = 500;
 
 # dall-e models: 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-2', and 'dall-e-3'.
 #my $visionmodel = 'dall-e-3';
-my $visionmodel = 'gpt-image-1.5';
-my $fetch_dalle = 'wget -q -O ' . $outputdir;
+#my $visionmodel = 'gpt-image-1.5';
+my $visionmodel = 'gpt-image-2';
+my $fetch_dalle_wget = 'wget -q -O ' . $outputdir;
 my $execscript = 'exec -window -name franklin3_';
 
 my $timediff = 3600;    # 1h in seconds. length of lastlog history
@@ -638,7 +642,7 @@ sub dalle {
 
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
-        prind("Creating a dalle request... query: $query");
+        prind("Creating a dalle request... prompt: $query");
         my $request = make_dalle_json($query, $nick);
         #my $request = make_vision_json($query, $nick);
         
@@ -660,15 +664,16 @@ sub dalle {
                 my $index = 0;
                 
                 while ($index < $howManyImages) {
-                    my $filename = $nick.'_'.$time.'_'.$index.'.png';
+                    my $file_basename = $nick.'_'.$time.'_'.$index;
+                    my $filename = $file_basename.'.png';
                     my $imageurl = $json_decd->{data}[$index]->{url};
-                    my $result = `${fetch_dalle}${filename} "$imageurl"`;
+                    my $result = `${fetch_dalle_wget}${filename} "$imageurl"`;
                     #save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json});
                     #debu(__LINE__ . ": wget output file: " . $outputdir.$filename);
                     my $window_refnum = find_window_refnum($server, $channel);
                     #my $dallecmd = make_dalle_curl_cmd($query, $filename);
                     #start_cmd($dallecmd, find_window_refnum($server, $channel), $nick);
-                    create_dalle_process($nick, $window_refnum, $filename, $query);
+                    create_dalle_process($nick, $window_refnum, $file_basename, $query);
 
                     if (save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json})) {
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
@@ -676,6 +681,7 @@ sub dalle {
                     $index++;
                     # API not returning this anymore $answer .= '(revised prompt: ' . $json_decd->{data}[$index]->{revised_prompt} . ')';
                 }
+                #create_dalle_process($nick, $window_refnum, $file_basename, $query);
                 
                 $server->command("msg -channel $channel $answer" . $infoline);
 
@@ -881,7 +887,7 @@ sub make_search_request {
     my $prompt = get_prompt($target, $server->{tag});
     my $data = {
         model => $web_search_model,
-        max_completion_tokens => 60,
+        max_completion_tokens => 260,
         messages => [
             { role => 'user', content => $query },
             { role => 'system', content => $prompt }
@@ -1168,19 +1174,19 @@ my $handle;
 sub start_socket_server {
     my ($socket_path) = @_;
     unlink $socket_path if -e $socket_path; # remove existing socket file
-    my $socket_server = IO::Socket::UNIX->new(
+    $socket_server = IO::Socket::UNIX->new(
         Type => SOCK_STREAM(),
         Local => $socket_path,
         Listen => 1,
     ) or die "Can't create socket server: $!";
-    prind("Socket server started, listening at $socket_path");
     $handle = Irssi::input_add(fileno($socket_server), Irssi::INPUT_READ, \&handle_socket_connection, $socket_server);
+    prind("Socket server started, listening at $socket_path");
     return $socket_server;
 }
 
 sub handle_socket_connection {
     my ($socket_server) = @_;
-    prind("Handle socket server...") if $DEBUG;
+    prind("Handle socket server...");
     my $client = $socket_server->accept();
     if ($client) {
         prind("Client connected to socket server.");
@@ -1202,14 +1208,13 @@ sub handle_socket_connection {
 }
 
 sub create_dalle_process {
-    my ($nick, $window_refnum, $image_filename, $prompt,@rest) = @_;
+    my ($nick, $window_refnum, $image_file_basename, $prompt,@rest) = @_;
+    my $image_filename = $image_file_basename . '_2.png';
     $fetch_dalle_processes->{$image_filename} = $window_refnum; # mark as running
-    debu(__LINE__, "starting command2: $fetch_dalle_script $image_filename \"$prompt\"");
-    Irssi::command($fetch_dalle_script . ' ' . $image_filename . '2 "' . $prompt . '"');
+    debu(__LINE__, "starting command2: $fetch_dalle_script $image_filename" . $prompt . '"');
+    Irssi::command($fetch_dalle_script . ' ' . $image_filename . $prompt . '"');
     debu(__LINE__, 'command started...');
 }
-
-start_socket_server($socket_path);
 
 Irssi::signal_add("exec new", 'exec_new');
 Irssi::signal_add("exec remove", 'exec_remove');

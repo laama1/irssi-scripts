@@ -19,7 +19,7 @@ This script takes an IPv4 or IPv6 address as a parameter,
 - Checks the IP against DNSBL lists.
 - Keeps proxy lists updated by downloading them from GitHub if they are older than 1 day.
 
-Requests will be done in parallel to save time.
+Requests (ipinfo, ping, dns lookup, proxy lookup from files) will be done in parallel to save time.
 
 Requires:
 - Python 3.x
@@ -45,24 +45,31 @@ import time
 import requests
 
 # SETTINGS:
-use_ipinfo_io = True  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and it is slow)
+use_ipinfo_io = False  # Set to True to use ipinfo.io API instead of local GeoLite2 databases (requires internet access and it is slow)
 use_dnsbl = True  # Set to True to check the IP against DNSBL lists (requires internet access and it is slow)
-# proxy lists
+
+# Setup proxy lists
 socks4_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"
 socks5_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
 http_url = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
 
+# Setup directories and file paths
 script_dir = os.path.dirname(os.path.abspath(__file__))
+logs_dir = script_dir + '/logs'
+geoip_dir = script_dir + '/geolite2'
+proxy_file_list_dir = script_dir + '/proxy_lists'
+log_file_path = logs_dir + '/ip_info.log'
 geoip_city_db_location = script_dir + '/geolite2/GeoLite2-City.mmdb'
 geoip_asn_db_location = script_dir + '/geolite2/GeoLite2-ASN.mmdb'
 geoip_country_db_location = script_dir + '/geolite2/GeoLite2-Country.mmdb'
 
 proxy_file_list = {
-	script_dir + '/socks4.txt': socks4_url,
-	script_dir + '/socks5.txt': socks5_url,
-	script_dir + '/http.txt': http_url
+	proxy_file_list_dir + '/socks4.txt': socks4_url,
+	proxy_file_list_dir + '/socks5.txt': socks5_url,
+	proxy_file_list_dir + '/http.txt': http_url
 }
 
+# Setup dns blacklist hosts to check against. These are public DNSBL zones that can be queried for IP reputation.
 dnsbl_hosts = [
 	"dnsbl.dronebl.org",
 	"rbl.efnetrbl.org",
@@ -76,16 +83,37 @@ dnsbl_hosts = [
 # Collect output fragments during checks and print them as one comma-separated line at the end.
 output_buffer = []
 
+def ensure_logs_dir():
+	"""
+	Create script_dir/logs when missing.
+	"""
+	if not os.path.isdir(logs_dir):
+		os.makedirs(logs_dir)
+
+def ensure_geoip_dir():
+	"""
+	Create script_dir/geolite2 when missing.
+	"""
+	if not os.path.isdir(script_dir + '/geolite2'):
+		os.makedirs(script_dir + '/geolite2')
+
+def ensure_proxy_lists_dir():
+	"""
+	Create script_dir/proxy_lists when missing.
+	"""
+	if not os.path.isdir(proxy_file_list_dir):
+		os.makedirs(proxy_file_list_dir)
+
 def log_to_file(logtext):
 	"""
 	Logs messages to ip_info.log with timestamp.
 	"""
 	timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 	logtext = f"[{timestamp}] {logtext}"
-	with open(script_dir + '/ip_info.log', 'a') as log_file:
+	with open(log_file_path, 'a') as log_file:
 		log_file.write(logtext + '\n')
 
-def check_age_of_files():
+def check_age_of_proxy_lists():
 	"""
 	Checks the age of the first proxy list file and logs the age in days.
 	"""
@@ -134,7 +162,7 @@ def check_if_ip_in_proxy_lists(ip):
 					if entry_ip == target_ip:
 						proxy_matches.append(shortfilename + ": " + line.strip())
 						if port:
-							nmap_result = nmap_given_port(ip, port)
+							nmap_result = _nmap_given_port(ip, port)
 							if nmap_result:
 								proxy_matches.append(f"Nmap result: {nmap_result}")
 		except Exception as e:
@@ -143,7 +171,7 @@ def check_if_ip_in_proxy_lists(ip):
 
 def normalize_ip_address(ip):
 	"""
-	Parse and normalize an IP address string.
+	Parse and normalize an IP address string using the ipaddress module. Returns an ipaddress object or None if invalid.
 	"""
 	try:
 		return ipaddress.ip_address(ip)
@@ -194,9 +222,9 @@ def parse_proxy_list_entry(line):
 
 	return None, None
 
-def nmap_given_port(ip, port):
+def _nmap_given_port(ip, port):
 	"""
-	Use simple nmap command to scan ip and port, return the result line if found.
+	Use simple nmap command to scan ip and port, return the result line if success.
 	"""
 	try:
 		cmd = ['nmap']
@@ -225,7 +253,7 @@ def nmap_given_port(ip, port):
 		log_to_file(f"Failed to run nmap on {ip}:{port}: {e}")
 		return None
 
-def ping_ip(ip):
+def _ping_ip(ip):
 	"""
 	Pings the given IP address and returns the latency in milliseconds.
 	-c count = 2
@@ -263,13 +291,14 @@ def ipinfo_io(ip):
 		log_to_file(f"Failed to get info from ipinfo.io for {ip}: {e}")
 		return None, None, None, None, None
 
-def get_geoip_info(ip, city_db, asn_db):
+def get_geoip_info(ip):
 	"""
 	Fetches GeoIP information from local MaxMind GeoLite2 databases.
 	"""
 	try:
-		city_reader = geoip2.database.Reader(city_db)
-		asn_reader = geoip2.database.Reader(asn_db)
+		city_reader = geoip2.database.Reader(geoip_city_db_location)
+		asn_reader = geoip2.database.Reader(geoip_asn_db_location)
+		# not in use country_reader = geoip2.database.Reader(geoip_country_db_location)
 		city_resp = city_reader.city(ip)
 		asn_resp = asn_reader.asn(ip)
 		country = city_resp.country.name
@@ -277,6 +306,7 @@ def get_geoip_info(ip, city_db, asn_db):
 		asn = asn_resp.autonomous_system_organization
 		city_reader.close()
 		asn_reader.close()
+		# not in use country_reader.close()
 		return country, city, asn
 	except Exception as e:
 		log_to_file(f"Failed to get GeoIP info for {ip}: {e}")
@@ -296,7 +326,7 @@ def reverse_dns(ip):
 	except Exception:
 		return None
 
-def normalize_ip_for_dnsbl(ip):
+def _normalize_ip_for_dnsbl(ip):
 	"""
 	Return an IP address object suitable for DNSBL checks.
 	IPv4-mapped IPv6 is converted to IPv4.
@@ -314,6 +344,7 @@ def normalize_ip_for_dnsbl(ip):
 def get_dnsbl_reverse_name(parsed_ip):
 	"""
 	Build the DNSBL reversed name prefix for IPv4 or IPv6 address.
+	Example: 1.2.3.4 -> 4.3.2.1
 	"""
 	if isinstance(parsed_ip, ipaddress.IPv4Address):
 		return '.'.join(reversed(str(parsed_ip).split('.')))
@@ -336,7 +367,7 @@ def query_dnsbl_host(reversed_ip, dnsbl_host):
 		try:
 			answers = resolver.resolve(query_name, record_type)
 			for answer in answers:
-				matches.append(f"DNSBL {dnsbl_host} {record_type}: {answer}")
+				matches.append(f"DNSBL matched {dnsbl_host} {record_type}: {answer}")
 		except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
 			continue
 		except dns.exception.Timeout:
@@ -351,7 +382,7 @@ def check_dnsbl_lists(ip):
 	Check IP address against configured DNSBL zones and append matches to output.
 	Running against each dnsbl_hosts can be slow, so consider limiting the list if speed is a concern.
 	"""
-	parsed_ip = normalize_ip_for_dnsbl(ip)
+	parsed_ip = _normalize_ip_for_dnsbl(ip)
 	if not parsed_ip:
 		return []
 
@@ -390,7 +421,7 @@ def format_local_geoip_output(ip):
 	Fetch local GeoIP and PTR data and return formatted output fragments.
 	"""
 	results = []
-	country, city, asn = get_geoip_info(ip, geoip_city_db_location, geoip_asn_db_location)
+	country, city, asn = get_geoip_info(ip)
 	if country:
 		results.append(f"Country: {country}")
 	if city:
@@ -406,7 +437,7 @@ def format_ping_output(ip):
 	"""
 	Run ping and return a formatted output fragment when available.
 	"""
-	latency = ping_ip(ip)
+	latency = _ping_ip(ip)
 	if latency:
 		return [f"Ping: {latency} ms"]
 	return []
@@ -417,7 +448,7 @@ def main():
 		sys.exit(1)
 	ip = sys.argv[1]
 
-	if check_age_of_files() > 1:
+	if check_age_of_proxy_lists() > 1:
 		download_proxy_lists()
 
 	info_func = format_ipinfo_output if use_ipinfo_io else format_local_geoip_output
@@ -435,6 +466,11 @@ def main():
 
 	if output_buffer:
 		print(', '.join(output_buffer))
+	else:
+		print("No information found for the given IP address.")
 
 if __name__ == "__main__":
+	ensure_logs_dir()
+	ensure_geoip_dir()
+	ensure_proxy_lists_dir()
 	main()

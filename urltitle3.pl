@@ -43,7 +43,7 @@ use Time::Piece;
 use lib  '/home/laama/.irssi/scripts/irssi-scripts';
 use KaaosRadioClass;				# LAama1 13.11.2016
 use Number::Format qw(:subs :vars);
-my $fi = new Number::Format(-decimal_point => ',', -thousand_sep => ' ', -format_bytes => );
+my $fi = new Number::Format(-decimal_point => ',', -thousands_sep => ' ');
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '2026-08-03';

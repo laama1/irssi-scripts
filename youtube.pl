@@ -11,7 +11,7 @@ use Data::Dumper;
 use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;
 use Number::Format qw(:subs :vars);
-my $fi = new Number::Format(decimal_point => ',', thousand_sep => ' ');
+my $fi = new Number::Format(decimal_point => ',', thousands_sep => ' ');
 
 $VERSION = '2026-08-03';
 %IRSSI = (
@@ -36,8 +36,9 @@ my $apiurl_playlist = "https://www.googleapis.com/youtube/v3/playlists?part=snip
 my $apiurl_channel = "https://www.googleapis.com/youtube/v3/channels?part=snippet%2Cstatistics&key=" . $apikey;
 
 #my $invidiousUrl = 'https://invidious.private.coffee';
-my $invidiousUrl = 'https://farside.link/invidious';
+#my $invidiousUrl = 'https://farside.link/invidious';
 #my $invidiousUrl ='https://invidious.protokolla.fi';
+my $invidiousUrl = 'https://invidious.nerdvpn.de';
 
 
 sub sig_youtube {

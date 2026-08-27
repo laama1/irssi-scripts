@@ -3,3 +3,4 @@ KRCcookies.dat
 ts
 *.key
 __pycache__/
+test_scripts/

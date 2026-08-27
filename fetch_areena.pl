@@ -6,6 +6,7 @@ use utf8;
 use Irssi;
 use JSON;
 use Data::Dumper;
+use File::Path qw(make_path);
 use vars qw($VERSION %IRSSI);
 $VERSION = '2025-10-27';
 %IRSSI = (
@@ -28,10 +29,19 @@ my $download_dir = $ENV{"HOME"} . "/public_html/areena";
 my $ylescript = 'yle-dl -qq --vfat --restrict-filename-no-spaces --destdir '.$download_dir.' --maxbitrate best' . $proxy;
 #my $execscript = 'exec -interactive -name yle-dl_';
 my $execscript = 'exec -window -name yle-dl_';
-my $logfile = Irssi::get_irssi_dir() . '/scripts/yle.log';
+my $script_dir = Irssi::get_irssi_dir() . '/scripts';
+my $logs_dir = $script_dir . '/logs';
+my $logfile = $logs_dir . '/yle.log';
 my $kanava1 = '#salamolo';
 prind('Download dir: '.$download_dir);
 my $processes = {};
+
+sub ensure_logs_dir {
+	if (!-d $logs_dir) {
+		make_path($logs_dir) or die "Cannot create logs dir $logs_dir: $!";
+		prind('Created logs dir: ' . $logs_dir);
+	}
+}
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
@@ -281,4 +291,5 @@ Irssi::signal_add("exec input", 'exec_input');
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('yle_url', 'sig_yle_url');
 Irssi::command_bind('window_info', 'print_window_data', 'fetch_areena');
+ensure_logs_dir();
 prind('v. '. $IRSSI{changed} . ' loaded.');
