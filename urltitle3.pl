@@ -567,7 +567,8 @@ sub signal_emitters {
 		$url =~ /x.com(.*)\/status\/(.*)/i || 
 		$url =~ /xcancel.com(.*)\/status\/(.*)/i || 
 		$url =~ /nitter.poast.org(.*)\/status\/(.*)/i ||
-		$url =~ /fixupx.com(.*)\/status\/(.*)/i) {
+		$url =~ /fixupx.com(.*)\/status\/(.*)/i ||
+		$url =~ /xitter.cf(.*)\/status\/(.*)/i) {
 		# twitter status
 		my $id = $2;
 		Irssi::signal_emit('twitter_search_id', $server, $target, $id);
