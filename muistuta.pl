@@ -18,7 +18,7 @@ $VERSION = '0.3';
 	description => 'provides an interface to irssi via unix sockets',
 	license     => 'GPLv2',
 	url         => 'https://kaaos.radio',
-	changed     => '2025-12-20',
+	changed     => '2026-09-19',
 );
 
 my $socket_file = "/tmp/irssi_muistuta.sock";
@@ -32,8 +32,10 @@ unlink $socket_file;
 # create the socket
 my $my_socket = IO::Socket::UNIX->new(Local  => $socket_file,
 								   Type   => SOCK_STREAM,
-								   Listen => 5) or die $@;
-chmod 0755, $socket_file;
+								   Listen => 2) or 
+								   die "Cannot create Unix socket: $@";
+
+chmod 0700, $socket_file;
 # set this socket as nonblocking so we can check stuff without interrupting irssi.
 nonblock($my_socket);
 
@@ -42,6 +44,28 @@ sub nonblock {
 	my($fd) = @_;
 	my $flags = fcntl($fd, F_GETFL, 0);
 	fcntl($fd, F_SETFL, $flags | O_NONBLOCK);
+}
+
+# check the socket for data and act upon it
+sub check_sock {
+	my $msg;
+	if (-S $socket_file) {
+	} else {
+		prindw("Socket file does not exist.");
+	}
+	if (my $client = $my_socket->accept()) {
+		printa("Accepted client connection on socket.");
+		$client->recv($msg, 1024);
+		printa("Received message from client: $msg");
+		if ($msg =~ /(\w+), (.*?)$/) {
+			my $nick = $1;
+			my $timertag = $2;
+			my $servertag = $timers->{$nick}->{$timertag}->{server};
+			my $target = $timers->{$nick}->{$timertag}->{target};
+			printa("Got message from socket: servertag: $servertag, target: $target");
+			msg_to_channel($servertag, $target);
+		}
+	}
 }
 
 sub msg_to_channel {
@@ -83,17 +107,20 @@ sub event_pubmsg {
 	my ($unit, $value, $note);
 
 	if ($msg =~ /^!muistuta ([1-9])\s?h ?(.*)$/ || $msg =~ /^!muistuta ([1-9])\s?t ?(.*)$/) {
-		# 1-9 hours. Try to keep script loaded in irssi until that.
+		# 1-9 hours. Use irssi timer functions. Try to keep script loaded in irssi until the end.
 		$unit = 'hours';
 		$value = $1;
 		$note = $2;
 
 		$timers->{$nick}->{$counter++} = {
-			'tag' => Irssi::timeout_add_once(($value*1000*60*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$counter.', '.$note),
-			'note' => $note,
-			'value' => $value,
-			'unit' => $unit,
-			'added' => time,
+			'server' => $server->{tag},
+			'target' => $target,
+			'nick'   => $nick,
+			'tag'    => Irssi::timeout_add_once(($value*1000*60*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$counter.', '.$note),
+			'note'   => $note,
+			'value'  => $value,
+			'unit'   => $unit,
+			'added'  => time,
 		};
 		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. (${value}h)");
 	} elsif ($msg =~ /^!muistuta (\d+)\s?sek ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?s ?(.*)$/) {
@@ -103,6 +130,9 @@ sub event_pubmsg {
 		$note = $2;
 
 		$timers->{$nick}->{$counter++} = {
+			'server' => $server->{tag},
+			'target' => $target,
+			'nick' => $nick,
 			'tag' => Irssi::timeout_add_once(($value*1000), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$counter.', '.$note),
 			'note' => $note,
 			'value' => $value,
@@ -116,37 +146,49 @@ sub event_pubmsg {
 		$value = $1;
 		$note = $2;
 		create_at_command($server, $target, $nick, $value, $unit, $note);
+		chomp(my $at_time = `date --date="$value $unit" +"%Y-%m-%d %H:%M"`);
 
-		$server->command("msg -channel $target jeh juu koitan muistaa muistuttaa.. (${value}h)");
+		$server->command("msg -channel $target jeh juu koitan muistaa muistuttaa.. (${value}h, $at_time)");
 	} elsif ($msg =~ /^!muistuta (\d+)\s?kk ?(.*)$/) {
 		# months
 		$unit = 'months';
 		$value = $1;
 		$note = $2;
+		chomp(my $cron_minute = `date --date="$value $unit" +"%M"`);
 		chomp(my $cron_hour = `date --date="$value $unit" +"%H"`);
 		chomp(my $cron_day = `date --date="$value $unit" +"%d"`);
 		chomp(my $cron_month = `date --date="$value $unit" +"%m"`);
+		chomp(my $cron_year = `date --date="$value $unit" +"%Y"`);
+		printa("cron_minute: $cron_minute, cron_hour: $cron_hour, cron_day: $cron_day, cron_month: $cron_month, cron_year: $cron_year");
+		my $target_time = "$cron_year-$cron_month-$cron_day $cron_hour:$cron_minute";
 		$note = parse_bad($note);
-		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
-		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan.. (${value}kk)");
+		create_cronjob($server, $target, $nick, "$cron_minute", $cron_hour, $cron_day, $cron_month, $note);
+		$server->command("msg -channel $target öh juu koitan muistaa muistuttaa.. Tallensinkohan.. (${value}kk, $target_time)");
 	} elsif ($msg =~ /^!muistuta (\d+)\s?pv ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?d ?(.*)$/) {
 		# days
 		$unit = 'days';
 		$value = $1;
 		$note = $2;
+
+		chomp(my $cron_minute = `date --date="$value $unit" +"%M"`);
 		chomp(my $cron_hour = `date --date="$value $unit" +"%H"`);
 		chomp(my $cron_day = `date --date="$value $unit" +"%d"`);
 		chomp(my $cron_month = `date --date="$value $unit" +"%m"`);
+		chomp(my $cron_year = `date --date="$value $unit" +"%Y"`);
+		printa("cron_minute: $cron_minute, cron_hour: $cron_hour, cron_day: $cron_day, cron_month: $cron_month, cron_year: $cron_year");
+		my $target_time = "$cron_year-$cron_month-$cron_day $cron_hour:$cron_minute";
 		$note = parse_bad($note);
-		create_cronjob($server, $target, $nick, "0", $cron_hour, $cron_day, $cron_month, $note);
+		create_cronjob($server, $target, $nick, $cron_minute, $cron_hour, $cron_day, $cron_month, $note);
 
-		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan... (${value}pv)");
+		$server->command("msg -channel $target ööh juu koitan muistaa muistuttaa.. Tallensinkohan... (${value}pv, $target_time)");
 	} elsif ($msg =~ /^!muistuta (\d+)\s?min ?(.*)$/ || $msg =~ /^!muistuta (\d+)\s?m ?(.*)$/) {
+		# minutes
 		prind("$msg from: $target, $nick");
 		$unit = 'minutes';
 		$value = $1;
 		$note = $2;
 		$note = parse_bad($note);
+		create_at_command($server, $target, $nick, $value, $unit, $note);
 		$timers->{$nick}->{$counter++} =  {
 			'tag' => Irssi::timeout_add_once(($value*1000*60), \&timer_func, $server->{tag}.', '.$target.', '.$nick.', '.$counter.', '.$note),
 			'note' => $note,
@@ -211,13 +253,17 @@ sub remove_timer {
 sub create_at_command {
 	my ($server, $target, $nick, $value, $unit, $note, @rest) = @_;
 	my $time = $value . ' ' . $unit;
-	my $command = 'echo "echo \"'.$server->{tag}.', '.$target.', '.$nick.', '.$note.'\" | nc -U '.$socket_file.'" | at now +'.$time . ' 2>/dev/null';
+	my $timertag = 'at_command_' . $counter++;
+	my $command = 'echo "echo \"' . $nick . ',' . $timertag . '\" | nc -U ' . $socket_file . ' | at now +'.$time . ' 2>/dev/null';
 	create_window($window_name);
 	chomp(my $retval = `$command`);
 
 	printa("At-command created: ".$command.", retval: ". $retval);
-	$timers->{$nick}->{$counter++} = {
-		'tag' => 'at_command_' . $counter,
+	$timers->{$nick}->{$timertag} = {
+		'server' => $server->{tag},
+		'target' => $target,
+		'nick' => $nick,
+		'tag' => $timertag,
 		'note' => $note,
 		'value' => $value,
 		'unit' => $unit,
@@ -235,7 +281,10 @@ sub create_cronjob {
 	Irssi::command("exec -name create_cronjob -interactive $commandline");
 
 	$timers->{$nick}->{$counter++} =  {
-		'tag' => 'cronjob',
+		'server' => $server->{tag},
+		'target' => $target,
+		'nick' => $nick,
+		'tag' => 'cronjob_' . $counter,
 		'note' => $note,
 		'value' => "$min $hour $dom $mo *",
 		'unit' => 'cronjob',
@@ -243,23 +292,7 @@ sub create_cronjob {
 	};
 }
 
-# check the socket for data and act upon it
-sub check_sock {
-	my $msg;
-	if (my $client = $my_socket->accept()) {
-		$client->recv($msg, 1024);
-		if ($msg =~ /(.*?), (.*?), (.*?), (.*?), (.*)$/) {
-			my $tag = $1;
-			my $target = $2;
-			my $nick = $3;
-			my $counter = $4;
-			my $note = $5;
-			prind("Got message from socket: tag: $tag, target: $target, nick: $nick, counter: $counter, note: $note");
-			remove_timer($nick, $counter);
-			msg_to_channel($tag, $target, $nick, $note);
-		}
-	}
-}
+
 
 sub print_muistutukset {
 	my ($data, @rest) = @_;
@@ -281,14 +314,14 @@ sub print_muistutukset {
 		my $queue = $7;
 		my $owner = $8;
 		$value =~ s/^(\d+) //;
-		$value =~ s/a \w*$//;
-		printa(__LINE__ . " time_str: " . $value);
+		$value =~ s/ a \w*$//;
+		printa(__LINE__ . " pid: $pid, weekday: $weekday, owner: $owner, time_str: " . $value . ", strptime format: %a %b %d %H:%M:%S %Y");
 		my $timepiece = Time::Piece->strptime($value, "%a %b %d %H:%M:%S %Y");
 		my $unixtime = $timepiece->epoch;
 		my $hourminutes = $timepiece->strftime("%H:%M");
-		printa(__LINE__ . " parsed time: " . $timepiece->strftime("%Y-%m-%d %H:%M:%S") . ", unixtime: $unixtime, gmtime: " . gmtime->epoch . ', hourminutes: ' . $hourminutes);
+		#printa(__LINE__ . " parsed time: " . $timepiece->strftime("%Y-%m-%d %H:%M:%S") . ", unixtime: $unixtime, gmtime: " . gmtime->epoch . ', hourminutes: ' . $hourminutes);
 		my $in = $unixtime - gmtime->epoch;
-		printa(__LINE__ . ": unixtime: $unixtime, now: " . time . ", in: $in seconds, " . $in / 60 . " minutes, " . $in / 3600 . " hours, " . $in / 86400 . " days");
+		#printa(__LINE__ . ": unixtime: $unixtime, now: " . time . ", in: $in seconds, " . $in / 60 . " minutes, " . $in / 3600 . " hours, " . $in / 86400 . " days");
 		my $in_str = $in < 60
 			? $in . ' seconds'
 			: $in < 3600
@@ -301,14 +334,14 @@ sub print_muistutukset {
 
 	}
 	foreach my $user (keys(%{$timers})) {
-		foreach my $index (keys(%{$timers->{$user}})) {
-			my $when_str = get_when_string($user, $index);
+		foreach my $key (keys(%{$timers->{$user}})) {
+			my $when_str = get_when_string($user, $key);
 
-			printa("$user muistutus #$index: " . $timers->{$user}->{$index}->{'note'} . 
-				", added: " . strftime("%Y-%m-%d %H:%M:%S", localtime($timers->{$user}->{$index}->{'added'})) . 
+			printa("$user muistutus #$key: " . $timers->{$user}->{$key}->{'note'} . 
+				", added: " . strftime("%Y-%m-%d %H:%M:%S", localtime($timers->{$user}->{$key}->{'added'})) . 
 				", when: " . $when_str .
-				", value: " . $timers->{$user}->{$index}->{'value'} . ' ' . $timers->{$user}->{$index}->{'unit'} .
-				', note: ' . $timers->{$user}->{$index}->{'note'});
+				", value: " . $timers->{$user}->{$key}->{'value'} . ' ' . $timers->{$user}->{$key}->{'unit'} .
+				', note: ' . $timers->{$user}->{$key}->{'note'});
 		}
 
 	}
@@ -343,6 +376,12 @@ sub prind {
 	print("%G".$IRSSI{name}.">%n " . $msg);
 }
 
+# print warning messages
+sub prindw {
+	my ($text, @rest) = @_;
+	printa("\0034" . $IRSSI{name} . ">\003 " . $text);
+}
+
 # print to active window
 sub printa {
 	my ($msg, @rest) = @_;
@@ -363,10 +402,7 @@ sub da {
 	return;
 }
 
-sub prindw {
-	my ($text, @rest) = @_;
-	print "\0034" . $IRSSI{name} . ">\003 " . $text;
-}
+
 
 
 my $timer_socket = Irssi::timeout_add(500, \&check_sock, []);
