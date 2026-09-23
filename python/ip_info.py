@@ -179,7 +179,6 @@ def normalize_ip_address(ip):
 		log_to_file(f"Invalid IP address {ip}: {e}")
 		return None
 
-
 def parse_proxy_list_entry(line):
 	"""
 	Parse one proxy list line and return (ip_object, port_or_none).
@@ -272,7 +271,6 @@ def _ping_ip(ip):
 	except Exception:
 		return None
 
-
 def ipinfo_io(ip):
 	"""
 	Fetches IP information from ipinfo.io API.
@@ -290,6 +288,63 @@ def ipinfo_io(ip):
 	except Exception as e:
 		log_to_file(f"Failed to get info from ipinfo.io for {ip}: {e}")
 		return None, None, None, None, None
+
+def whois_ip(ip):
+	"""
+	Run whois for an IP address and return the ASN operator/organization.
+	"""
+	if normalize_ip_address(ip) is None:
+		return None
+
+	try:
+		completed = subprocess.run(
+			['whois', ip],
+			capture_output=True,
+			text=True,
+			timeout=4
+		)
+	except FileNotFoundError:
+		log_to_file("Failed to run whois: whois command not found")
+		return None
+	except subprocess.TimeoutExpired:
+		log_to_file(f"Failed to run whois for {ip}: command timed out")
+		return None
+	except Exception as e:
+		log_to_file(f"Failed to run whois for {ip}: {e}")
+		return None
+
+	if completed.returncode != 0:
+		error_text = completed.stderr.strip() or completed.stdout.strip()
+		log_to_file(f"whois failed for {ip}: {error_text}")
+		return None
+
+	field_priority = (
+		'cidr',
+		'organization',
+		#'orgname',
+		#'organisation',
+		#'netname',
+		#'descr',
+		#'owner',
+	)
+	found_fields = {}
+	results = []
+	for line in completed.stdout.splitlines():
+		if ':' not in line or line.lstrip().startswith(('%', '#')):
+			continue
+		field, value = line.split(':', 1)
+		field = field.strip().lower()
+		value = value.strip()
+		if value and field in field_priority and field not in found_fields:
+			#found_fields[field] = re.sub(r'\s+', ' ', value)
+			found_fields[field] = value
+
+	for field in field_priority:
+		if field in found_fields:
+			fieldname = field.capitalize()
+			results.append(f"{fieldname}: {found_fields[field]}")
+
+	return results
 
 def get_geoip_info(ip):
 	"""
@@ -381,6 +436,7 @@ def check_dnsbl_lists(ip):
 	"""
 	Check IP address against configured DNSBL zones and append matches to output.
 	Running against each dnsbl_hosts can be slow, so consider limiting the list if speed is a concern.
+	We are running each dnsbl_hosts in parallel.
 	"""
 	parsed_ip = _normalize_ip_for_dnsbl(ip)
 	if not parsed_ip:
@@ -452,17 +508,19 @@ def main():
 		download_proxy_lists()
 
 	info_func = format_ipinfo_output if use_ipinfo_io else format_local_geoip_output
-	with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+	with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
 		info_future = executor.submit(info_func, ip)
 		ping_future = executor.submit(format_ping_output, ip)
 		proxy_future = executor.submit(check_if_ip_in_proxy_lists, ip)
 		dnsbl_future = executor.submit(check_dnsbl_lists, ip) if use_dnsbl else None
+		whois_future = executor.submit(whois_ip, ip)
 
 		output_buffer.extend(info_future.result())
 		output_buffer.extend(ping_future.result())
 		output_buffer.extend(proxy_future.result())
 		if dnsbl_future:
 			output_buffer.extend(dnsbl_future.result())
+		output_buffer.extend(whois_future.result())
 
 	if output_buffer:
 		print(', '.join(output_buffer))
