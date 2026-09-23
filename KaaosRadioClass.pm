@@ -46,6 +46,7 @@ our $scriptDir = $ENV{HOME}.'/.irssi/scripts';
 # tsfile, time span.. save value of current time there. For flood protect.
 my $tsfile = "$scriptDir/ts";
 my $djlist = "$scriptDir/dj_list.txt";
+my $logfile = $scriptDir . '/logs/kaaosradio_debug.log';
 
 my $DEBUG = 0;
 
@@ -608,7 +609,7 @@ sub df {
 	my ($text, @rest) = @_;
 	my $timestring = strftime("%Y-%m-%d %H:%M:%S", localtime);
 	$text = "[$timestring] $text";
-	my $logfile = $scriptDir . '/logs/kaaosradio_debug.log';
+	
 	addLineToFile($logfile, $text);
 	return;
 }

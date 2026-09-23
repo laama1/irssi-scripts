@@ -67,6 +67,8 @@ my $DEBUG = 1;
 #my $pid;
 my $server_t;   # for fork processes
 my $target_t;   # for fork processes
+my $alv = 1.255;  # tax 1 + 25.5 %
+my $marginal = 2.93; # tax snt / kwh
 
 #my $sahkohintaurl = 'https://api.porssisahko.net/v1/price.json?date=';   # 2023-08-18&hour=14';
 
@@ -81,7 +83,10 @@ my $katkodata = {};
 my $forked = 0;
 my $borked = 0;
 #my $forked_sk = 0;
-
+my $sahkokatkobuffer = {
+    timestamp => 0,
+    data => ""
+};
 my $apikey;
 our $localdir = $ENV{HOME}."/.irssi/scripts/irssi-scripts/";
 open( AK, '<', $localdir . 'fingrid_api.key') or die "$!";
@@ -201,12 +206,12 @@ sub pub_msg {
 
     $msg = Encode::decode('UTF-8', $msg);
 	if ($msg =~ /^\!help sähkö/sgi) {
-		return if KaaosRadioClass::floodCheck();
+		return if floodCheck();
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /^\!sähkö$/sgi || $msg =~ /^\!sahko$/sgi) {
         #prind("sähkö request from $nick on channel $target") if $DEBUG;
-		return if KaaosRadioClass::floodCheck();
+		return if floodCheck();
 		$forked = 0;	# DIRTY HACK
         $target_t = $target;
         $server_t = $serverrec;
@@ -217,14 +222,14 @@ sub pub_msg {
 	} elsif ($msg =~ /^\!sahkokatko[t]? (.*)/sgi || $msg =~ /^\!sähkökatko[t]? (.*)/sgi) {
         my $searchword = $1;
         #prind('got: '. $searchword) if $DEBUG;
-        return if KaaosRadioClass::floodCheck();
+        return if floodCheck();
         #prind("sähkökatkot request from $nick on channel $target, search for: $searchword");
         $target_t = $target;
         $server_t = $serverrec;
         do_sahkokatkot($searchword);
         prind("!sähkökatko request from $nick on channel $target, done");
     } elsif ($msg =~ /^!sähkökatko[t]?$/sgi || $msg =~ /^!sahkokatko[t]?$/sgi) {
-        return if KaaosRadioClass::floodCheck();
+        return if floodCheck();
         #prind("sähkökatkot request from $nick on channel $target");
         $target_t = $target;
         $server_t = $serverrec;
@@ -264,7 +269,8 @@ sub do_fingrid {
 
 sub do_sahkonhinta {
     return if $forked;
-    prind("Fetching price data...");
+    prind("Fetching price data...2");
+    df("Fetching price data...");
     my ($rh, $wh);
     pipe($rh, $wh);  # read handle, write handle
     my $timestamp = DateTime->now(time_zone => 'Europe/Helsinki');
@@ -285,7 +291,7 @@ sub do_sahkonhinta {
         process_price_data($pricedata, $timestamp, $timestamp2, $timestamp3);
         return;
     }
-    KaaosRadioClass::df(__LINE__ . " fg: sahkohinta_api_url: " . get_sahkohinta_api_url());
+    df(__LINE__ . " fg: sahkohinta_api_url: " . get_sahkohinta_api_url()) if $DEBUG;
     my $pid = fork();
     $forked = 1;
 
@@ -294,7 +300,7 @@ sub do_sahkonhinta {
     } elsif ($pid == 0) {
         # child process
         $pricedata = fetch_price_data2();
-        KaaosRadioClass::df(__LINE__ . " fg: " . Dumper(\$pricedata));
+        #df(__LINE__ . " fg: " . Dumper(\$pricedata)) if $DEBUG;
         print $wh encode_json($pricedata) if $pricedata;
         close $wh;
         POSIX::_exit(1); # Exit child process
@@ -311,39 +317,40 @@ sub do_sahkonhinta {
 sub do_sahkokatkot($) {
     my ($searchword, @rest) = @_;
     #return if $forked_sk;
+    my $timestamp = localtime;
     prind(__LINE__ . ": Fetching power outage data...") if $DEBUG;
     my $h = HTTP::Headers->new;
     $h->header('Accept-Encoding' => 'gzip,deflate,br', 'Host' => 'sqtb-api.azureedge.net');
-    my $jsondata = KaaosRadioClass::getJSON($katkourl, $h);
-    KaaosRadioClass::df(__LINE__ . " fg: " . Dumper $jsondata) if $DEBUG;
+    my $jsondata = getJSON($katkourl, $h);
+    df(__LINE__ . " fg: " . Dumper $jsondata) if $DEBUG;
     if ($jsondata ne '-1') {
         my $printstring = parse_sahkokatkot_data($searchword, $jsondata);
+        msg_channel($printstring);
+        $sahkokatkobuffer->{timestamp} = $timestamp;
+        $sahkokatkobuffer->{data} = $jsondata;
+    } elsif ($sahkokatkobuffer->{timestamp} > 0 && $sahkokatkobuffer->{timestamp} - $timestamp < 120) {
+        my $printstring = parse_sahkokatkot_data($searchword, $sahkokatkobuffer->{data});
         msg_channel($printstring);
     } else {
         msg_channel("Sähkökatkotietoja ei saatu.");
     }
 }
 
-sub create_timestamps {
-
-}
 
 sub parse_sahkokatkot_data {
     my ($searchword, $jsondata, @rest) = @_;
     my $json_areas = $jsondata->{areas};
     my $json_companies = $jsondata->{companies};
-    my $printstring = '';
+    my $printstring = 'Näytetään 5 suurinta. Katkoja/kokonaisasiakasmäärä (suluissa päivän max). ';
     my %result_hash;
 
+=pod
     foreach my $element (@$json_areas) {
-
         my $area = $element->{name};
         my $alias = $element->{alias};
-        
         my $faults = $element->{fault} || 0;
         my $maxday = $element->{maxday};
         my $url = $element->{outagemap} || '';
-
         $result_hash{$area} =  {
             'alias' => $alias,
             'faults' => $faults,
@@ -351,19 +358,21 @@ sub parse_sahkokatkot_data {
             'url' => $url
         }
     }
-
+=cut
     foreach my $element (@$json_companies) {
         my $company = $element->{name};
         my $alias = $element->{alias};
         my $faults = $element->{fault} || 0;
         my $maxday = $element->{maxday} || 0;
         my $url = $element->{outagemap} || '';
+        my $customers = $element->{customers} || 0;
 
         $result_hash{$company} =  {
             'alias' => $alias,
             'faults' => $faults,
             'maxday' => $maxday,
-            'url' => $url
+            'url' => $url,
+            'customers' => $customers
         }
     }
 
@@ -375,9 +384,10 @@ sub parse_sahkokatkot_data {
         my $faults = $value->{faults};
         my $maxday = $value->{maxday};
         my $url = $value->{url};
-        if ($searchword eq '') {
+        my $customers = $value->{customers};
+        if ($searchword eq '' && $faults > 0) {
             prind(__LINE__ . " area/city: " . $key) if $DEBUG;
-            $printstring .= "\002$key:\002 Sähköttä nyt: $faults (max tänään: $maxday) $url ";
+            $printstring .= "\002$key:\002 $faults/$customers ($maxday) $url - ";
         }
         $index++;
         last if $index > 5; # max 5 items
@@ -439,29 +449,34 @@ sub fetch_price_data2 {
     #my $url = get_sahkohinta_api_url();
     my $url = create_sahkohinta_tanaan_url();
     my $json_data = '-1';
-    KaaosRadioClass::df(__LINE__ . " fg: Fetching price data from URL: $url") if $DEBUG;
+    df(__LINE__ . " fg: Fetching price data from URL: $url") if $DEBUG;
     my $h = HTTP::Headers->new;
     $h->header('User-Agent' => 'curl/8.15.0');
-    $json_data = KaaosRadioClass::getJSON($url, $h);
+    $json_data = getJSON($url, $h);
     if ($json_data ne '-1' and $json_data ne '-2') {
-        foreach my $data (@$json_data) {
-            #my $timestamp = $data->{aikaleima_suomi};
-            #my $price = $data->{hinta};
+        my @sorted_data = sort {
+            $a->{EUR_per_kWh} <=> $b->{EUR_per_kWh}
+        } @$json_data;
+
+        $pricedata->{'cheapest_price'} = $sorted_data[0]->{EUR_per_kWh};
+        $pricedata->{'cheapest_timestamp'} = $sorted_data[0]->{time_start};
+        $pricedata->{'most_expensive_price'} = $sorted_data[-1]->{EUR_per_kWh};
+        $pricedata->{'most_expensive_timestamp'} = $sorted_data[-1]->{time_start};
+        foreach my $data (@sorted_data) {
             my $timestamp = $data->{time_start};
             my $price = $data->{EUR_per_kWh};
             $pricedata->{$timestamp} = $price;
-            KaaosRadioClass::df(__LINE__ . " fg: Fetched price data: $timestamp => $price") if $DEBUG;
         }
         return $pricedata;
     } else {
-        KaaosRadioClass::df(__LINE__ . " fg: JSON data not found. " . $json_data) if $DEBUG;
+        df(__LINE__ . " fg: JSON data not found. " . $json_data) if $DEBUG;
     }
     return undef;
 }
 
 sub pipe_input_price($$$$$) {
     my ($rh, $pipetage, $time1, $time2, $time3) = @{$_[0]};
-    KaaosRadioClass::df(__LINE__ . " fg: pipe_input_price called... pipetage: " . Dumper(\$pipetage) . ', time1: ' . $time1 . ', time2: ' . $time2 . ', time3: ' . $time3) if $DEBUG;
+    df(__LINE__ . " fg: pipe_input_price called... pipetage: " . Dumper(\$pipetage) . ', time1: ' . $time1 . ', time2: ' . $time2 . ', time3: ' . $time3) if $DEBUG;
     my $data;
     {
         select($rh);
@@ -472,21 +487,21 @@ sub pipe_input_price($$$$$) {
     }
 
     Irssi::input_remove($$pipetage);
-    KaaosRadioClass::df(__LINE__ . " fg: pipe_input_price data received: " . Dumper(\$data)) if $DEBUG;
+    df(__LINE__ . " fg: pipe_input_price data received: " . Dumper(\$data)) if $DEBUG;
     return unless $data;
 
 	my $jsoni = JSON->new->utf8;
 	$jsoni->convert_blessed(1);
     $jsoni = decode_json($data);
     $pricedata = decode_json($data);
-    KaaosRadioClass::df(__LINE__ . ' fg: jsoni: ' . Dumper $jsoni) if $DEBUG;
+    df(__LINE__ . ' fg: jsoni: ' . Dumper $jsoni) if $DEBUG;
     process_price_data($pricedata, $time1, $time2, $time3);
     $forked = 0;
 }
 
 sub pipe_input_fingrid($$$$) {
     my ($rh, $pipetage, $time1, $time2) = @{$_[0]};
-    KaaosRadioClass::df(__LINE__ . " fg: pipe input fingrid called... pipetage: " . Dumper(\$pipetage)) if $DEBUG;
+    df(__LINE__ . " fg: pipe input fingrid called... pipetage: " . Dumper(\$pipetage)) if $DEBUG;
     my $data;
     {
         select($rh);
@@ -498,7 +513,7 @@ sub pipe_input_fingrid($$$$) {
 
     Irssi::input_remove($$pipetage);
     $borked = 0;
-    KaaosRadioClass::df(__LINE__ . " fg: pipe_input_fingrid data received: " . Dumper(\$data)) if $DEBUG;
+    df(__LINE__ . " fg: pipe_input_fingrid data received: " . Dumper(\$data)) if $DEBUG;
     return unless $data;
     msg_channel($data);
 }
@@ -517,7 +532,7 @@ sub pipe_input_katkot($$) {
 
     Irssi::input_remove($$pipetage);
     #$forked_sk = 0;
-    KaaosRadioClass::df(__LINE__ . " fg: pipe_input_katkot data received: " . Dumper(\$data)) if $DEBUG;
+    df(__LINE__ . " fg: pipe_input_katkot data received: " . Dumper(\$data)) if $DEBUG;
     return unless $data;
     msg_channel($data);
 }
@@ -527,18 +542,40 @@ sub process_price_data($$$$) {
     my $msg = 'Pörssisähkön hintatietoa ei saatu.';
     my $timenow_dt = DateTime->now(time_zone => 'Europe/Helsinki');
     my $timenow = $timenow_dt->strftime('%H:00');
-    KaaosRadioClass::df(__LINE__ . " fg: " . Dumper $pricedata) if $DEBUG;
+
+    my $cheapest_price = $pricedata->{'cheapest_price'};
+    my $cheapest_time = $pricedata->{'cheapest_timestamp'};
+    
+    my $most_expensive_price = $pricedata->{'most_expensive_price'};
+    my $most_expensive_time = $pricedata->{'most_expensive_timestamp'};
+
+    df(__LINE__ . " fg: cheapest price: " . Dumper($cheapest_price)) if $DEBUG;
+    df(__LINE__ . " fg: most expensive price: " . Dumper($most_expensive_price)) if $DEBUG;
+
+
+    #df(__LINE__ . " fg: first price item: " . Dumper($pricedata)) if $DEBUG;
+    #df(__LINE__ . " fg: last price item: " . Dumper($pricedata[-1])) if $DEBUG;
     if (defined $pricedata->{$time1}) {
-        my $price1 = sprintf("%.2f", $pricedata->{$time1}*100);
-        $msg = "\002Pörssisähkön hinta (Alv 0%, 1h ka.) (klo. $timenow):\002 " . $price1 . 'c/kWh';
+        my $price1 = sprintf("%.2f", $pricedata->{$time1}*100*$alv);
+        $msg = "\002Pörssisähkön hinta (Alv 25,5%, 1h ka.) (klo. $timenow):\002 " . $price1 . 'c/kWh';
     }
     if (defined $pricedata->{$time2}) {
-        my $price2 = sprintf("%.2f", $pricedata->{$time2}*100);
+        my $price2 = sprintf("%.2f", $pricedata->{$time2}*100*$alv);
         $msg .= ", \002+1h:\002 " . $price2 . 'c/kWh';
     }
 	if (defined $pricedata->{$time3}) {
-		my $price3 = sprintf("%.2f", $pricedata->{$time3}*100);
+		my $price3 = sprintf("%.2f", $pricedata->{$time3}*100*$alv);
 		$msg .= ", \002+2h:\002 " . $price3 . 'c/kWh';
+    }
+    if (defined $cheapest_price) {
+        my $cheapest = sprintf("%.2f", $cheapest_price*100*$alv);
+        my $cheapest_hour = $cheapest_time =~ /T(\d{2}):/ ? $1 : '';
+        $msg .= ", \002Halvin (klo. $cheapest_hour):\002 " . $cheapest . 'c/kWh';
+    }
+    if (defined $most_expensive_price) {
+        my $most_expensive = sprintf("%.2f", $most_expensive_price*100*$alv);
+        my $most_expensive_hour = $most_expensive_time =~ /T(\d{2}):/ ? $1 : '';
+        $msg .= ", \002Kallein (klo. $most_expensive_hour):\002 " . $most_expensive . 'c/kWh';
     }
     msg_channel($msg);
 }
@@ -546,10 +583,10 @@ sub process_price_data($$$$) {
 sub fetch_fingrid_api_data {
     my ($url, $firstTime, @rest) = @_;
     sleep(2) unless $firstTime;
-    KaaosRadioClass::df(__LINE__ . " fg: fingrid url: $url") if $DEBUG;
+    df(__LINE__ . " fg: fingrid url: $url") if $DEBUG;
     my $h = HTTP::Headers->new;
     $h->header('x-api-key' => $apikey);
-    return KaaosRadioClass::getJSON($url, $h);
+    return getJSON($url, $h);
 }
 
 sub timeout_start {
