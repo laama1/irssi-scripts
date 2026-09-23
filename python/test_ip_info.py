@@ -146,15 +146,23 @@ class TestIpInfoMain(unittest.TestCase):
                 return []
             return []
 
+        def fake_whois(test_ip):
+            if test_ip == "127.0.0.2":
+                return ["Organization: Local Test"]
+            if test_ip == "1.1.1.1":
+                return ["Organization: Cloudflare, Inc."]
+            return []
+
         out = io.StringIO()
         with patch.object(ip_info, "use_ipinfo_io", True), \
              patch.object(ip_info, "use_dnsbl", True), \
-             patch.object(ip_info, "check_age_of_files", return_value=0), \
+             patch.object(ip_info, "check_age_of_proxy_lists", return_value=0), \
              patch.object(ip_info, "download_proxy_lists"), \
              patch.object(ip_info, "format_ipinfo_output", side_effect=fake_info_output), \
              patch.object(ip_info, "format_ping_output", side_effect=fake_ping_output), \
              patch.object(ip_info, "check_if_ip_in_proxy_lists", side_effect=fake_proxy_check), \
              patch.object(ip_info, "check_dnsbl_lists", side_effect=fake_dnsbl_check), \
+             patch.object(ip_info, "whois_ip", side_effect=fake_whois), \
              patch.object(sys, "argv", ["ip_info.py", ip]), \
              redirect_stdout(out):
             ip_info.output_buffer.clear()
@@ -174,6 +182,7 @@ class TestIpInfoMain(unittest.TestCase):
             "socks4: 127.0.0.2:4145",
             "DNSBL dnsbl.dronebl.org: 127.0.0.1",
             "DNSBL rbl.ircbl.org: 127.0.0.2",
+            "Organization: Local Test",
         ]
         for part in expected_parts:
             self.assertIn(part, line)
@@ -187,6 +196,7 @@ class TestIpInfoMain(unittest.TestCase):
             "Org: AS13335 Cloudflare, Inc.",
             "Hostname: one.one.one.one",
             "Ping: 1.40 ms",
+            "Organization: Cloudflare, Inc.",
         ]
         for part in expected_parts:
             self.assertIn(part, line)
@@ -195,15 +205,15 @@ class TestIpInfoMain(unittest.TestCase):
 
 class TestIpInfoIpv6AndDnsblHelpers(unittest.TestCase):
     def test_normalize_ip_for_dnsbl_maps_ipv4_mapped_ipv6(self):
-        parsed = ip_info.normalize_ip_for_dnsbl("::ffff:127.0.0.2")
+        parsed = ip_info._normalize_ip_for_dnsbl("::ffff:127.0.0.2")
         self.assertEqual(str(parsed), "127.0.0.2")
 
     def test_get_dnsbl_reverse_name_ipv4(self):
-        parsed = ip_info.normalize_ip_for_dnsbl("1.2.3.4")
+        parsed = ip_info._normalize_ip_for_dnsbl("1.2.3.4")
         self.assertEqual(ip_info.get_dnsbl_reverse_name(parsed), "4.3.2.1")
 
     def test_get_dnsbl_reverse_name_ipv6(self):
-        parsed = ip_info.normalize_ip_for_dnsbl("2001:db8::1")
+        parsed = ip_info._normalize_ip_for_dnsbl("2001:db8::1")
         reverse_name = ip_info.get_dnsbl_reverse_name(parsed)
         self.assertTrue(reverse_name.startswith("1.0.0.0"))
         self.assertTrue(reverse_name.endswith("8.b.d.0.1.0.0.2"))
@@ -225,7 +235,7 @@ class TestIpInfoIpv6AndDnsblHelpers(unittest.TestCase):
                 handle.write("[2606:4700:4700::1111]:443\n")
 
             with patch.object(ip_info, "proxy_file_list", {proxy_path: "test://proxy"}), \
-                 patch.object(ip_info, "nmap_given_port", return_value=None):
+                 patch.object(ip_info, "_nmap_given_port", return_value=None):
                 matches = ip_info.check_if_ip_in_proxy_lists("2606:4700:4700::1111")
 
             self.assertEqual(matches, ["socks4: [2606:4700:4700::1111]:443"])
@@ -246,8 +256,32 @@ class TestIpInfoIpv6AndDnsblHelpers(unittest.TestCase):
         with patch.object(ip_info.dns.resolver, "Resolver", return_value=FakeResolver()):
             matches = ip_info.query_dnsbl_host("2.0.0.127", "dnsbl.example.org")
 
-        self.assertIn("DNSBL dnsbl.example.org A: 127.0.0.2", matches)
-        self.assertIn("DNSBL dnsbl.example.org AAAA: ::1", matches)
+        self.assertIn("DNSBL matched dnsbl.example.org A: 127.0.0.2", matches)
+        self.assertIn("DNSBL matched dnsbl.example.org AAAA: ::1", matches)
+
+
+class TestWhoisIp(unittest.TestCase):
+    def test_whois_ip_returns_requested_fields(self):
+        completed = subprocess.CompletedProcess(
+            args=["whois", "8.8.8.8"],
+            returncode=0,
+            stdout=(
+                "CIDR:           8.8.8.0/24\n"
+                "NetName:        GOGL\n"
+                "Organization:   Google LLC (GOGL)\n"
+            ),
+            stderr="",
+        )
+
+        with patch.object(ip_info.subprocess, "run", return_value=completed):
+            self.assertEqual(
+                ip_info.whois_ip("8.8.8.8"),
+                ["Cidr: 8.8.8.0/24", "Organization: Google LLC (GOGL)"],
+            )
+
+    def test_whois_ip_returns_empty_list_for_invalid_ip(self):
+        with patch.object(ip_info, "log_to_file"):
+            self.assertEqual(ip_info.whois_ip("not-an-ip"), [])
 
 
 @unittest.skipUnless(
@@ -259,14 +293,14 @@ class TestIpInfoLive(unittest.TestCase):
     proxy_filenames = ("socks4.txt", "socks5.txt", "http.txt")
 
     def _delete_proxy_list_files(self):
-        base_dir = os.path.dirname(self.script_path)
+        base_dir = os.path.join(os.path.dirname(self.script_path), "proxy_lists")
         for filename in self.proxy_filenames:
             file_path = os.path.join(base_dir, filename)
             if os.path.exists(file_path):
                 os.remove(file_path)
 
     def _assert_proxy_list_files_exist(self):
-        base_dir = os.path.dirname(self.script_path)
+        base_dir = os.path.join(os.path.dirname(self.script_path), "proxy_lists")
         for filename in self.proxy_filenames:
             file_path = os.path.join(base_dir, filename)
             self.assertTrue(

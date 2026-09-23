@@ -294,7 +294,7 @@ def whois_ip(ip):
 	Run whois for an IP address and return the ASN operator/organization.
 	"""
 	if normalize_ip_address(ip) is None:
-		return None
+		return []
 
 	try:
 		completed = subprocess.run(
@@ -305,18 +305,18 @@ def whois_ip(ip):
 		)
 	except FileNotFoundError:
 		log_to_file("Failed to run whois: whois command not found")
-		return None
+		return []
 	except subprocess.TimeoutExpired:
 		log_to_file(f"Failed to run whois for {ip}: command timed out")
-		return None
+		return []
 	except Exception as e:
 		log_to_file(f"Failed to run whois for {ip}: {e}")
-		return None
+		return []
 
 	if completed.returncode != 0:
 		error_text = completed.stderr.strip() or completed.stdout.strip()
 		log_to_file(f"whois failed for {ip}: {error_text}")
-		return None
+		return []
 
 	field_priority = (
 		'cidr',

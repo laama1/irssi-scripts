@@ -1,6 +1,7 @@
 # Python Tools
 
 This folder contains the `ip_info.py` utility and its test suite.
+There is also the `youtube_transcript.py` project.
 
 ## ip_info.py
 
@@ -8,12 +9,13 @@ This folder contains the `ip_info.py` utility and its test suite.
 
 Current features:
 - Geo/IP metadata lookup (via `ipinfo.io` or local GeoLite2 DBs)
-- Ping latency check
-- Reverse DNS lookup
-- Proxy list matching (`socks4.txt`, `socks5.txt`, `http.txt`)
-- Optional Nmap check when a matching proxy entry includes a port
+- `ping` latency check
+- Reverse DNS lookup using a python library
+- Proxy list matching against `socks4.txt`, `socks5.txt`, `http.txt`
+- Optional `nmap` check when a matching proxy entry includes a port
 - DNSBL checks with parallel lookups
 - IPv4 and IPv6 support (including AAAA DNSBL queries)
+- `whois` command support
 
 ## Requirements
 
