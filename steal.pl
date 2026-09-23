@@ -21,7 +21,7 @@ $VERSION = '2025-09-13';
     changed     => $VERSION
 );
 
-my $helptext = 'Usage: !steal, !steal top, !steal set <unit> <target>';
+my $helptext = 'Usage: !steal, !steal top, !steal set <unit> <target>, !bank';
 # default values:
 my $steal_target = 'Putin';
 my $monetary_unit = 'rubles';
@@ -38,7 +38,30 @@ sub sayit {
 
 sub event_pubmsg {
     my ($server, $msg, $nick, $address, $target) = @_;
-    if ($msg =~ /^!steal set\s+(\w+) (.*)$/) {
+    if ($msg =~ /^!bank$/) {
+        $dbh = KaaosRadioClass::connectSqlite($database_file);
+        if (!$dbh) {
+            prindw("Could not open database $database_file");
+            sayit($server, $target, "Could not open steal database.");
+            return;
+        }
+
+        my $total = line_exists();
+        if (!defined $total) {
+            sayit($server, $target, "No stolen $monetary_unit found for $steal_target to bank.");
+            KaaosRadioClass::closeDB($dbh);
+            return;
+        }
+
+        my $banked = save_to_bank($total);
+        KaaosRadioClass::closeDB($dbh);
+        if ($banked eq 'error') {
+            sayit($server, $target, "Could not bank stolen $monetary_unit for $steal_target.");
+            return;
+        }
+        sayit($server, $target, "$nick banked $banked $monetary_unit from $steal_target.");
+        return;
+    } elsif ($msg =~ /^!steal set\s+(\w+) (.*)$/) {
         ($monetary_unit, $steal_target) = ($1, $2);
         sayit($server, $target, "Steal target set to $steal_target with unit $monetary_unit");
         return;
@@ -50,16 +73,43 @@ sub event_pubmsg {
         return;
     }
     if ($msg =~ /^!steal$/) {
-        my $amount = int(rand(120)) + 1; # Steal 1-120
         $dbh = KaaosRadioClass::connectSqlite($database_file);
+        if (!$dbh) {
+            prindw("Could not open database $database_file");
+            sayit($server, $target, "Could not open steal database.");
+            return;
+        }
 
         #print __LINE__ . ": DBH: " . Dumper($dbh) if $DEBUG;
         my $total = 0;
+        my $existing_total = line_exists();
+
+        if (int(rand(40)) == 0) {
+            my $bank = get_bank_amount();
+            my $confiscated = defined $existing_total ? int($existing_total - $bank) : 0;
+            $confiscated = 0 if $confiscated < 0;
+
+            if (defined $existing_total) {
+                my $new_total = confiscate_unbanked_money($bank);
+                KaaosRadioClass::closeDB($dbh);
+                if ($new_total eq 'error') {
+                    sayit($server, $target, "Police 👮 stopped the steal, but database update failed.");
+                    return;
+                }
+            } else {
+                KaaosRadioClass::closeDB($dbh);
+            }
+
+            sayit($server, $target, "Police 👮 stopped $nick! Confiscated $confiscated $monetary_unit from $steal_target. Bank still has $bank $monetary_unit.");
+            return;
+        }
+
+        my $amount = int(rand(120)) + 1; # Steal 1-120
         
-        if ($total = line_exists()) {
+        if (defined $existing_total) {
             #print __LINE__ . ": Line exists for $steal_target with unit $monetary_unit, increasing value by $amount" if $DEBUG;
             #increase_value($dbh, $amount, $total);
-            $total = increase_value($amount, $total);
+            $total = increase_value($amount, $existing_total);
         } else {
             #print __LINE__ . ": Line does not exist for $steal_target with unit $monetary_unit, creating new line with $amount" if $DEBUG;
             #$total = create_new_line($dbh, $amount);
@@ -67,6 +117,7 @@ sub event_pubmsg {
         }
 
         #my $total = get_total_amount($dbh);
+        KaaosRadioClass::closeDB($dbh);
         sayit($server, $target, "$nick stole $amount $monetary_unit from $steal_target! Total stolen: $total $monetary_unit");
     } elsif ($msg =~ /^!steal top$/) {
         my @top = get_top_ten();
@@ -84,10 +135,31 @@ sub create_sqlite_db {
         close $fh;
     }
     my $dbh = DBI->connect("dbi:SQLite:dbname=$database_file","","");
-    $dbh->do("CREATE TABLE IF NOT EXISTS steals (id INTEGER PRIMARY KEY, unit TEXT NOT NULL, target TEXT NOT NULL, total_amount INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, latest_steal DATETIME )");
+    $dbh->do("CREATE TABLE IF NOT EXISTS steals (id INTEGER PRIMARY KEY, unit TEXT NOT NULL, target TEXT NOT NULL, total_amount INTEGER, bank INTEGER DEFAULT 0, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, latest_steal DATETIME )");
+    ensure_bank_column($dbh);
     $dbh->do("CREATE UNIQUE INDEX IF NOT EXISTS idx_steals_target_unit ON steals(target, unit)");
     $dbh->disconnect();
     prind("SQLite database initialized at $database_file");
+    return;
+}
+
+sub ensure_bank_column {
+    my ($dbh) = @_;
+    my $sth = $dbh->prepare("PRAGMA table_info(steals)");
+    $sth->execute();
+
+    my $has_bank = 0;
+    while (my $column = $sth->fetchrow_hashref()) {
+        if ($column->{name} eq 'bank') {
+            $has_bank = 1;
+            last;
+        }
+    }
+    $sth->finish();
+
+    if (!$has_bank) {
+        $dbh->do("ALTER TABLE steals ADD COLUMN bank INTEGER DEFAULT 0");
+    }
     return;
 }
 
@@ -136,6 +208,38 @@ sub create_new_line {
         print "Created new line for $steal_target with $total $monetary_unit";
     }
     return $total;
+}
+
+sub save_to_bank {
+    my ($total) = @_;
+    my $sql = "UPDATE steals SET bank = ? WHERE unit = ? AND target = ?";
+    my $rv = writeToOpenDB($dbh, $sql, int($total), $monetary_unit, $steal_target);
+    if($rv ne 0) {
+        prindw("DBI Error: $rv");
+        return 'error';
+    } else {
+        prind("Saved $total $monetary_unit to bank for $steal_target");
+    }
+    return $total;
+}
+
+sub get_bank_amount {
+    my $sql = "SELECT bank FROM steals WHERE unit = ? AND target = ? LIMIT 1";
+    my @data = readLineFromOpenDB($dbh, $sql, $monetary_unit, $steal_target);
+    return scalar(@data) > 0 && defined $data[0] ? int($data[0]) : 0;
+}
+
+sub confiscate_unbanked_money {
+    my ($bank) = @_;
+    my $sql = "UPDATE steals SET total_amount = ?, latest_steal = CURRENT_TIMESTAMP WHERE unit = ? AND target = ?";
+    my $rv = writeToOpenDB($dbh, $sql, int($bank), $monetary_unit, $steal_target);
+    if($rv ne 0) {
+        prindw("DBI Error: $rv");
+        return 'error';
+    } else {
+        prind("Police confiscated unbanked $monetary_unit for $steal_target, total reset to bank amount $bank");
+    }
+    return $bank;
 }
 
 sub get_top_ten {
