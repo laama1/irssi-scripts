@@ -73,7 +73,7 @@ my $timediff = 3600;    # 1h in seconds. length of lastlog history
 my $json = JSON->new;
 $json->convert_blessed(1);
 
-$VERSION = "2.9";
+$VERSION = "3.0";
 %IRSSI = (
     authors     => 'laama',
     contact     => 'laama@8-b.fi',
@@ -81,7 +81,7 @@ $VERSION = "2.9";
     description => 'OpenAI chatgpt api script',
     license     => 'BSD',
     url         => 'https://bot.8-b.fi',
-    changed     => '2025-12-29',
+    changed     => '2026-09-24',
 );
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -148,7 +148,7 @@ sub make_json_obj_f {
                 push @{ $data->{messages}}, { role => 'user', content => $unit->{message} };
                 push @{ $data->{messages}}, { role => 'assistant', content => $unit->{answer} };
             }
-        }
+}
     } else {
         undef $chathistory->{$nick}->{history};
         $chathistory->{$nick}->{floodcount} = 0;
@@ -251,11 +251,11 @@ sub format_markdown {
     my $color_s = "\00311"; # 11 = mint
     my $color_s2 = "\0038"; # 8 = yellow
     my $color_e = "\003";   # color end tag
-    $text =~ s/\n/ /ug;                         # newlines to spaces
+    $text =~ s/\n/ /ug;                                 # newlines to spaces
     $text =~ s/\*\*(.*?)\*\*/${bold}${1}${bold}/ug;     # bold
-    $text =~ s/\s{2,}/ /ug;                         # multiple spaces to single space
+    $text =~ s/\s{2,}/ /ug;                             # multiple spaces to single space
     $text =~ s/\`\`\`(.*?)\`\`\`/${color_s}${1}${color_e}/ug;    # code quote
-    $text =~ s/\`(.*?)\`/${color_s2}${1}${color_e}/ug;   # inline code
+    $text =~ s/\`(.*?)\`/${color_s2}${1}${color_e}/ug;  # inline code
     $text =~ s/`(.*?)`/${color_s2}${1}${color_e}/ug;    # inline code (alt)
 
     # replace links [text](url)
@@ -386,10 +386,11 @@ sub frank {
     $msg = Encode::decode('UTF-8', $msg);
 
     if ($msg =~ /^$mynick[\:,]? (.*)/ug ) {
-        my $textcall = $1;
+        #my $textcall = $1;
+        my $textcall = "$nick: $1";
         return if check_flood($nick, $channel);
 
-       
+
         for (0..2) {
             #if (my $answer = make_call($textcall, $nick)) {
             # @todo run in background process
@@ -424,6 +425,7 @@ sub make_vision_json {
     } else {
         # visionmodel
         #$data = {prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
+       
         $data = { model => $visionmodel, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json", quality => 'hd'}; # dall-e-3 minimum size
     }
     
@@ -760,7 +762,11 @@ sub get_prompt {
         # use default prompt instead
         $settings->{prompt}->{$network}->{$who} = $systemsg;
     }
-    return $settings->{prompt}->{$network}->{$who};
+    if ($settings->{floodprot}->{$who} == 0) {
+        return $settings->{prompt}->{$network}->{$who};        
+    }
+    
+    return $systemsg_start . ' ' . $settings->{prompt}->{$network}->{$who};
 }
 
 # if $nick is OP or VOICE or HALFOP
@@ -768,6 +774,13 @@ sub ifop {
 	my ($server, $channel, $nick) = @_;
 	my $nickrec = get_nickrec($server, $channel, $nick);
 	return ($nickrec->{op} == 1 || $nickrec->{voice} == 1 || $nickrec->{halfop} == 1) ? 1 : 0;
+}
+
+sub get_nickrec {
+	my ($server, $channel, $nick) = @_;
+	return unless defined $server && defined $channel && defined $nick;
+	my $chanrec = $server->channel_find($channel);
+	return $chanrec ? $chanrec->nick_find($nick) : undef;
 }
 
 sub event_privmsg {
@@ -816,6 +829,7 @@ sub event_pubmsg {
     return if ($nick eq $mynick);	#self-test
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
+        $newprompt = Encode::decode('UTF-8', $newprompt);       # test
         if (length $newprompt > 1) {
             return if check_flood($nick, $target);
             set_prompt($target, $server->{tag}, $newprompt);
@@ -880,18 +894,22 @@ sub event_pubmsg {
 
 sub make_search_request {
     my ($server, $query, $target) = @_;
-    my $url = 'https://api.openai.com/v1/chat/completions';
-    my $urii = URI->new($url);
+    #my $url = 'https://api.openai.com/v1/chat/completions';
+    my $urii = URI->new($apiurl);
     my $newua = LWP::UserAgent->new;
     $newua->default_headers($headers);
     my $prompt = get_prompt($target, $server->{tag});
     my $data = {
         model => $web_search_model,
-        max_completion_tokens => 260,
-        messages => [
-            { role => 'user', content => $query },
-            { role => 'system', content => $prompt }
-        ]
+        tools => [
+        	{ type => 'web_search', search_context_size => 'low' }
+        ],
+        input => $query
+        ##max_completion_tokens => 360,
+        #messages => [
+        #    { role => 'user', content => $query },
+        #    { role => 'system', content => $prompt }
+        #]
     };
     my $request = encode_json($data);
     my $res = $newua->post($urii, Content => $request);
@@ -906,11 +924,16 @@ sub make_search_request {
         my $model_used = $json_decd->{model};
         my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, model: ' . $model_used . ')';
 
-        if (defined $json_decd->{choices}[0]->{message}->{content}) {
-            my $answer = $json_decd->{choices}[0]->{message}->{content};
-            prindd(__LINE__ . ' answer:');
-            prindd($answer);
-            return $answer . $infoline;
+        #if (defined $json_decd->{choices}[0]->{message}->{content}) {
+        if (defined $json_decd->{output}) {
+            foreach my $output (@{$json_decd->{output}}) {
+                if ($output->{type} eq 'message' && defined $output->{content}[0]->{text}) {
+                    my $answer = $output->{content}[0]->{text};
+                    prindd(__LINE__ . ' answer:');
+                    prindd($answer);
+                    return $answer . $infoline;
+                }
+            }
         } else {
             prindw("No content in response.");
         }
@@ -1228,6 +1251,7 @@ Irssi::signal_add_last('message private', 'event_privmsg');
 #Irssi::signal_add_last('setup saved', 'save_settings');
 Irssi::settings_add_bool($IRSSI{name}, 'floodprot', '1');
 Irssi::settings_add_str($IRSSI{name}, 'franklin_prompt', $systemsg);
+Irssi::settings_add_str($IRSSI{name}, 'franklin_image_model', $visionmodel);
 prind("v.$VERSION loaded");
 prind("new commands: !floodprot 1/0");
 prind("              !prompt \"new prompt\"");
