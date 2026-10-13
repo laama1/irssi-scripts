@@ -81,6 +81,11 @@ my $google_apikeyfile = $irssidir. '/scripts/youtube_apikey';
 my $google_apikey = KaaosRadioClass::readLastLineFromFilename($google_apikeyfile);
 my $howDrunk = 0;
 my $dontprint = 0;
+my $lastUrl = {
+	chan => '',
+	url => '',
+	time => 0,
+};
 
 #my $twitterurl = 'https://xcancel.com';
 my $twitterurl = 'https://farside.link/nitter';
@@ -568,7 +573,8 @@ sub signal_emitters {
 		$url =~ /xcancel.com(.*)\/status\/(.*)/i || 
 		$url =~ /nitter.poast.org(.*)\/status\/(.*)/i ||
 		$url =~ /fixupx.com(.*)\/status\/(.*)/i ||
-		$url =~ /xitter.cf(.*)\/status\/(.*)/i) {
+		$url =~ /xitter.cf(.*)\/status\/(.*)/i || 
+		$url =~ /nitter.freedit.eu(.*)\/status\/(.*)/i) {
 		# twitter status
 		my $id = $2;
 		Irssi::signal_emit('twitter_search_id', $server, $target, $id);
@@ -595,6 +601,13 @@ sub signal_emitters {
 		return 1;
 	}
 
+	if ($url =~ /youtube.com\/channel\/([^\/?#]+)$/) {
+		# channel url is similar as creator url, same API endpoint
+		my $channel_id = $1;
+		Irssi::signal_emit('sig_youtube_channel_id', $server, $target, $channel_id);
+		prind("Youtube channel signal emited!! $channel_id");
+		return 1;
+	}
 	if ($url =~ /youtube\.com\/.*[\?\&]v=([^\&]*)/ || 
 		$url =~ /youtu\.be\/([^\?\&]*)\b/ || 
 		#$url =~ /invidious*\/.*[\?\&]v=([^\&]*)/ || 
@@ -734,13 +747,22 @@ sub sig_msg_pub {
 		return;
 	}
 
+	$newUrlData->{url} = url_conversion($newUrlData->{url});
+	my $now = time();
+	if ($target eq $lastUrl->{chan} && $newUrlData->{url} eq $lastUrl->{url} && $now - $lastUrl->{time} < 60) {
+		clearUrlData();
+		return;
+	}
+	$lastUrl->{url} = $newUrlData->{url};
+	$lastUrl->{time} = $now;
+	$lastUrl->{chan} = $target;
+
 	# check if flooding too fast
 	if (KaaosRadioClass::floodCheck() > 0) {
 		clearUrlData();
 		return;
 	}
 	set_useragent(1);			# set default user agent
-	$newUrlData->{url} = url_conversion($newUrlData->{url});
 	$newUrlData->{fetchurl} = $newUrlData->{url};	# this variable will be the url that will be executed
 	$newUrlData->{nick} = $nick;
 	$newUrlData->{chan} = $target;
@@ -1151,6 +1173,9 @@ Irssi::signal_register($signal_config_hash51);
 
 my $signal_config_hash52 = { 'sig_youtube_creator_id' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash52);
+
+my $signal_config_hash53 = { 'sig_youtube_channel_id' => [ qw/iobject string string/ ] };
+Irssi::signal_register($signal_config_hash53);
 
 my $signal_config_hash6 = { 'sig_imgur_api' => [ qw/iobject string string/ ] };
 Irssi::signal_register($signal_config_hash6);
