@@ -1,9 +1,10 @@
 #!/usr/bin/python
 """
 ip_info.py
-version: 1.0
+version: 1.1
+date: 2026-09-23
 author: laama
-LLM: vs code agent GPS-5.3 codex
+LLM: vs code agent GPT-5.3 codex (and up)
 Usage:
   python ip_info.py <ip-address>
 
@@ -19,7 +20,7 @@ This script takes an IPv4 or IPv6 address as a parameter,
 - Checks the IP against DNSBL lists.
 - Keeps proxy lists updated by downloading them from GitHub if they are older than 1 day.
 
-Requests (ipinfo, ping, dns lookup, proxy lookup from files) will be done in parallel to save time.
+Requests (ipinfo, ping, dns lookup, proxy lookup from files, whois) will be done in parallel to save time.
 
 Requires:
 - Python 3.x
@@ -82,6 +83,7 @@ dnsbl_hosts = [
 
 # Collect output fragments during checks and print them as one comma-separated line at the end.
 output_buffer = []
+nmap_cache = []
 
 def ensure_logs_dir():
 	"""
@@ -224,9 +226,14 @@ def parse_proxy_list_entry(line):
 def _nmap_given_port(ip, port):
 	"""
 	Use simple nmap command to scan ip and port, return the result line if success.
+	Use nmap_cache to avoid redundant scans, because the ip found in proxy lists may be scanned multiple times otherwise.
 	"""
+	if (nmap_cache[(ip, port)]):
+		log_to_file(f"Using cached nmap result for {ip}:{port}")
+		return nmap_cache[(ip, port)]
 	try:
 		cmd = ['nmap']
+		cmd.append('-Pn')
 		try:
 			if ipaddress.ip_address(ip).version == 6:
 				cmd.append('-6')
@@ -245,8 +252,10 @@ def _nmap_given_port(ip, port):
 						next_line = re.sub(r'\s+', ' ', lines[i + 1].strip())
 					break
 			if next_line and next_line.startswith(str(port)):
+				nmap_cache[(ip, port)] = next_line
 				return next_line
 
+		nmap_cache[(ip, port)] = None
 		return None
 	except Exception as e:
 		log_to_file(f"Failed to run nmap on {ip}:{port}: {e}")
@@ -422,7 +431,7 @@ def query_dnsbl_host(reversed_ip, dnsbl_host):
 		try:
 			answers = resolver.resolve(query_name, record_type)
 			for answer in answers:
-				matches.append(f"DNSBL matched {dnsbl_host} {record_type}: {answer}")
+				matches.append(f"{dnsbl_host} {record_type}: {answer}")
 		except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
 			continue
 		except dns.exception.Timeout:
@@ -453,6 +462,16 @@ def check_dnsbl_lists(ip):
 			matches.extend(future.result())
 
 	return matches
+
+def format_dnsbl_output(ip):
+	"""
+	Fetch DNSBL matches for the given IP and return formatted output fragments.
+	"""
+	results = []
+	results.extend(check_dnsbl_lists(ip))
+	if results:
+		results.insert(0, "DNSBL matches")
+	return results
 
 def format_ipinfo_output(ip):
 	"""
@@ -512,7 +531,7 @@ def main():
 		info_future = executor.submit(info_func, ip)
 		ping_future = executor.submit(format_ping_output, ip)
 		proxy_future = executor.submit(check_if_ip_in_proxy_lists, ip)
-		dnsbl_future = executor.submit(check_dnsbl_lists, ip) if use_dnsbl else None
+		dnsbl_future = executor.submit(format_dnsbl_output, ip) if use_dnsbl else None
 		whois_future = executor.submit(whois_ip, ip)
 
 		output_buffer.extend(info_future.result())

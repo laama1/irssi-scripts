@@ -143,7 +143,7 @@ class TestIpInfoMain(unittest.TestCase):
                     "DNSBL rbl.ircbl.org: 127.0.0.2",
                 ]
             if test_ip == "1.1.1.1":
-                return []
+                return ["DNSBL matches"]
             return []
 
         def fake_whois(test_ip):
@@ -197,10 +197,11 @@ class TestIpInfoMain(unittest.TestCase):
             "Hostname: one.one.one.one",
             "Ping: 1.40 ms",
             "Organization: Cloudflare, Inc.",
+            "DNSBL matches",
         ]
         for part in expected_parts:
             self.assertIn(part, line)
-        self.assertNotIn("DNSBL ", line)
+        self.assertNotIn("DNSBL matched ", line)
 
 
 class TestIpInfoIpv6AndDnsblHelpers(unittest.TestCase):
@@ -258,6 +259,14 @@ class TestIpInfoIpv6AndDnsblHelpers(unittest.TestCase):
 
         self.assertIn("DNSBL matched dnsbl.example.org A: 127.0.0.2", matches)
         self.assertIn("DNSBL matched dnsbl.example.org AAAA: ::1", matches)
+
+    def test_check_dnsbl_lists_reports_empty_matches(self):
+        with patch.object(ip_info, "dnsbl_hosts", ["dnsbl.example.org"]), \
+             patch.object(ip_info, "query_dnsbl_host", return_value=[]):
+            self.assertEqual(
+                ip_info.check_dnsbl_lists("1.1.1.1"),
+                ["DNSBL matches"],
+            )
 
 
 class TestWhoisIp(unittest.TestCase):
