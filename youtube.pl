@@ -35,6 +35,8 @@ my $apiurl_playlist_items = "https://www.googleapis.com/youtube/v3/playlistItems
 my $apiurl_playlist = "https://www.googleapis.com/youtube/v3/playlists?part=snippet%2CcontentDetails%2Cstatus&key=" . $apikey;
 my $apiurl_channel = "https://www.googleapis.com/youtube/v3/channels?part=snippet%2Cstatistics&key=" . $apikey;
 
+# channel example: https://www.youtube.com/channel/UCfyuDg7cIVtg04zg3XRlQHQ
+
 #my $invidiousUrl = 'https://invidious.private.coffee';
 #my $invidiousUrl = 'https://farside.link/invidious';
 #my $invidiousUrl ='https://invidious.protokolla.fi';
@@ -110,6 +112,45 @@ sub sig_youtube_playlist {
     $server->command("msg $target " . $newUrlData->{title} . $newUrlData->{extra});
 }
 
+sub sig_youtube_channel {
+    my ($server, $target, $channel_handle) = @_;
+    return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
+    prind("got signal \002sig_youtube_channel\002. Target: $target, chatnet: $server->{chatnet}, channel: $channel_handle");
+    my $url = $apiurl_channel . "&id=" . $channel_handle;
+    my $text = format_channel_from_json($url);
+    $server->command("msg $target " . $text);
+}
+
+sub format_channel_from_json {
+    my $url = shift;
+    my $jsondata = getJSON($url);
+
+    if ($jsondata eq '-1' || $jsondata eq '-2') {
+        prindw('youtube api failed!');
+        return 0;
+    }
+
+    if (not defined $jsondata->{items}[0]) {
+        prindw('channel not found from API...');
+        return 1;
+    }
+
+    my $channel = $jsondata->{items}[0];
+    my $title = $channel->{snippet}->{title};
+    my $published = format_time_ago($channel->{snippet}->{publishedAt});
+    my $channel_id = $channel->{id};
+    my $display_handle = $channel->{snippet}->{customUrl};
+    my $subs = defined $channel->{statistics}->{subscriberCount}
+        ? $fi->format_number($channel->{statistics}->{subscriberCount})
+        : 'hidden';
+    my $videos = $fi->format_number($channel->{statistics}->{videoCount});
+    my $views = $fi->format_number($channel->{statistics}->{viewCount});
+
+    my $msg = "\0030,5 ▶ \003 Channel: $title [$display_handle, $published, $subs subs, $videos videos, $views views]";
+    my $invidious_url = $invidiousUrl . '/channel/' . $channel_id;
+    return $msg . " -- proxy: $invidious_url";
+}
+
 sub sig_youtube_creator {
     my ($server, $target, $creator_handle) = @_;
     return unless KaaosRadioClass::is_enabled_channel('urltitle_enabled_channels', $server->{chatnet}, $target);
@@ -120,33 +161,8 @@ sub sig_youtube_creator {
 
     prind("got signal \002sig_youtube_creator\002. Target: $target, chatnet: $server->{chatnet}, creator: $creator_handle");
     my $url = $apiurl_channel . "&forHandle=" . $creator_handle;
-    my $jsondata = KaaosRadioClass::getJSON($url);
-
-    if ($jsondata eq '-1' || $jsondata eq '-2') {
-        prindw('youtube api failed!');
-        return 0;
-    }
-
-    if (not defined $jsondata->{items}[0]) {
-        prindw('creator not found from API...');
-        return 1;
-    }
-
-    my $channel = $jsondata->{items}[0];
-    my $title = $channel->{snippet}->{title};
-    #prind(__LINE__ . ' publishedAt: ' . $channel->{snippet}->{publishedAt}) if $DEBUG;
-    my $published = format_time_ago($channel->{snippet}->{publishedAt});
-    my $channel_id = $channel->{id};
-    my $display_handle = $channel->{snippet}->{customUrl} || ('@' . $creator_handle);
-    my $subs = defined $channel->{statistics}->{subscriberCount}
-        ? $fi->format_number($channel->{statistics}->{subscriberCount})
-        : 'hidden';
-    my $videos = $fi->format_number($channel->{statistics}->{videoCount});
-    my $views = $fi->format_number($channel->{statistics}->{viewCount});
-
-    my $msg = "\0030,5 ▶ \003 Creator: $title [$display_handle, $published, $subs subs, $videos videos, $views views]";
-    my $invidious_url = $invidiousUrl . '/channel/' . $channel_id;
-    $server->command("msg $target " . $msg . " -- proxy: $invidious_url");
+    my $text = format_channel_from_json($url);
+    $server->command("msg $target " . $text);
 }
 
 sub cmd_ytcreator {
@@ -182,4 +198,5 @@ Irssi::command_bind('ytcreator', 'cmd_ytcreator');
 Irssi::signal_add('sig_youtube_search_id', 'sig_youtube');
 Irssi::signal_add('sig_youtube_playlist_id', 'sig_youtube_playlist');
 Irssi::signal_add('sig_youtube_creator_id', 'sig_youtube_creator');
+Irssi::signal_add('sig_youtube_channel_id', 'sig_youtube_channel');
 prind($IRSSI{name}." v. $VERSION loaded.");
