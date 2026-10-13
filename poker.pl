@@ -4,7 +4,7 @@ use utf8;
 use Irssi;
 use IO::File;
 use DBI;
-$VERSION = '0.02.06';
+$VERSION = '0.02.07';
 %IRSSI = (
 	authors			=> 'LAama1',
 	contact			=> 'laama@8u.fi',
@@ -274,7 +274,7 @@ sub ask_question {
         my $hand_str = format_hand_with_colors(@hand);
         my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
         my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
-        $server->command("msg $target $nick, Your hand:$hand_str - $result_text");
+        $server->command("msg $target $nick, Your hand: $hand_str - $result_text");
         restart_inactivity_timer($server, $target);
         
         return;
@@ -299,7 +299,7 @@ sub ask_question {
         my $hand_str = format_hand_with_colors(@new_hand);
         my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
         my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
-        $server->command("msg $target $nick, Your new hand:$hand_str - $result_text");
+        $server->command("msg $target $nick, Your new hand: $hand_str - $result_text");
         restart_inactivity_timer($server, $target);
         return;
     } else {
@@ -329,8 +329,9 @@ sub announce_round_winner {
     my $winning_hand = $result->{winning_hand} || 'High Card';
     if (scalar(@winners) == 1) {
         my $winner = $winners[0];
-        my $cards_text = format_hand_with_colors(@{ $winner->{cards} || [] });
-        $server->command("msg $target Round winner: $winner->{nick} with $winning_hand ($cards_text)");
+        #my $cards_text = format_hand_with_colors(@{ $winner->{cards} || [] });
+        #$server->command("msg $target Round winner: $winner->{nick} with $winning_hand ($cards_text)");
+        $server->command("msg $target Round finished. Winner: $winner->{nick} with $winning_hand");
         return;
     }
 
@@ -376,7 +377,7 @@ sub table_inactivity_timeout {
     delete $table_timers->{$target};
 
     if (defined $server) {
-        $server->command("msg $target No card actions for 60 seconds. Auto-shuffling this table.");
+        #$server->command("msg $target No card actions for 60 seconds. Auto-shuffling this table.");
     }
 }
 
@@ -402,12 +403,15 @@ sub format_hand_with_colors {
     for my $i (0..$#hand) {
         if ($hand[$i] =~ /(♦|♥)$/) {
             # red cards. add space because otherwise the card number will mix with color code.
-            $hand[$i] = "\0034 " . $hand[$i] . "\003";  # \0034 is red in IRC color codes
+            $hand[$i] = "\0034,0 " . $hand[$i] . "\003";  # \0034 is red in IRC color codes
+        } else {
+            # black cards
+            $hand[$i] = "\0031,0 " . $hand[$i] . "\003";  # \0030 is black in IRC color codes
         }
     }
-    my $return_str = join(", ", @hand);
+    my $return_str = join(" ", @hand);
     # double space when red card
-    $return_str =~ s/,\s+(\0034)/,$1/g;
+    #$return_str =~ s/,\s+(\0034)/,$1/g;
     return $return_str;
 }
 

@@ -79,7 +79,7 @@ elif [ -f "$CACHE_FOLDER/$IPADDR-0" ]; then {
 	exit 0
 };
 elif [ -f "$CACHE_FOLDER/$IPADDR-1" ]; then {
-	echo -n CACHED: $IPADDR not found in any DNSBLs.
+	echo -n "CACHED: $IPADDR not found in any DNSBLs."
 	exit 1
 }; fi
 

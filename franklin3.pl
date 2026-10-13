@@ -125,79 +125,6 @@ my $default_tts_vibe = 'smooth';
 # read prompts from DB
 read_all_prompts_from_db();
 
-# privmsg
-sub make_json_obj_f {
-    my ($text, $nick, @rest) = @_;
-
-    my $prompt = get_prompt($nick, 'private');
-    $timediff = 3600;    # 1h in seconds
-
-    if (defined $chathistory->{$nick}->{timestamp}) {
-        $timediff = (time - $chathistory->{$nick}->{timestamp});
-    }
-    my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            #{ role => 'system', content => $prompt, name => $botnick }
-            { role => 'system', content => $prompt }
-        ]
-    };
-
-    if ($timediff < 3600 && defined $chathistory->{$nick}->{history}) {
-        foreach my $history ($chathistory->{$nick}->{history}) {
-            foreach my $unit (@$history) {
-                #push @{ $data->{messages}}, { role => 'user', content => $unit->{message}, name => $nick };
-                push @{ $data->{messages}}, { role => 'user', content => $unit->{message} };
-                push @{ $data->{messages}}, { role => 'assistant', content => $unit->{answer} };
-            }
-}
-    } else {
-        undef $chathistory->{$nick}->{history};
-        $chathistory->{$nick}->{floodcount} = 0;
-    }
-
-    push @{ $data->{messages}}, { role => 'user', content => $text, name => $nick};
-    return encode_json($data);
-}
-
-# pubmsg
-sub make_json_obj_f2 {
-    my ($text, $nick, $channel, $server, @rest) = @_;
-    my $usernick = 'Matti';
-    my $prompt = get_prompt($channel, $server->{tag});
-    $timediff = 3600;    # 1h in seconds
-
-    # add system prompt and some parameters first
-    my $data = { model => $model, temperature => $heat, presence_penalty => -1.0, messages => [
-            { role => 'system', content => $prompt, name => $botnick }
-        ]
-    };
-    my $maxcount = 0;
-    if (defined $chathistory->{$channel}) {
-        my @timestamps = sort { $a <=> $b } keys %{ $chathistory->{$channel} };
-
-        foreach my $timestamp (@timestamps) {
-            if ($timestamp < time - $timediff) {
-                delete $chathistory->{$channel}->{$timestamp};
-                next;
-            }
-            prindd(__LINE__ . ": history (Timestamp: $timestamp):");
-            prindd(Dumper $chathistory->{$channel}->{$timestamp});
-
-            if (defined $chathistory->{$channel}->{$timestamp}) {
-                #push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} };
-                push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$timestamp}->{message} };
-                #push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
-                push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$timestamp}->{answer} };
-            }
-            $maxcount++;
-        }
-    }
-
-    #push @{ $data->{messages}}, { role => "user", content => $text, name => $usernick};
-    push @{ $data->{messages}}, { role => "user", content => $text };
-
-    return encode_json($data);
-}
-
 # pubmsg, gpt-5
 sub make_json_obj_f3 {
     my ($text, $nick, $channel, $server, @rest) = @_;
@@ -311,7 +238,6 @@ sub make_call_public {
     my ($text, $nick, $channel, $server, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
-    #my $request = make_json_obj_f2($text, $nick, $channel, $server);
     my $request = make_json_obj_f3($text, $nick, $channel, $server);
 
     my $res = $ua->post($uri, Content => $request);
@@ -458,33 +384,6 @@ sub make_vision_preview_json {
     return encode_json($data);
 }
 
-# describe image (deprecated)
-sub make_vision_preview_json2 {
-    my ($url, $searchprompt, @rest) = @_;
-    debu(__LINE__ . ": make_vision_preview_json2 called");
-    if ($searchprompt eq '') {
-        $searchprompt = 'Describe this image in 40 words?';
-    }
-    my $data = {
-        #model => $visionmodel,
-        model => $model,
-        max_completion_tokens => 300,
-        messages => [{
-            role => "user",
-            content => [
-                {
-                    type => "text",
-                    text => $searchprompt
-                },
-                {
-                    type => "image_url",
-                    image_url => {url => $url}
-                }
-            ]
-        }]
-    };
-    return encode_json($data);
-}
 
 # text to speech
 sub tts {
@@ -790,16 +689,16 @@ sub event_privmsg {
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
-            $server->command("msg $nick Sinun nykyinen system prompt: " . get_prompt($nick, 'private'));
+            $server->command("msg $nick Sinun nykyinen system prompt: " . $settings->{prompt}->{'private'}->{$nick});
             set_prompt($nick, 'private', $newprompt);
-            $server->command("msg $nick Sinun uusi system prompt (tallennettu myös tietokantaan tulevaa käyttöä varten): " . get_prompt($nick, 'private'));
+            $server->command("msg $nick Sinun uusi system prompt (tallennettu myös tietokantaan tulevaa käyttöä varten): " . $settings->{prompt}->{'private'}->{$nick});
         } else {
-            $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt($nick, 'private'));
+            $server->command("msg $nick Sinun nykyinen system prompt on: " . $settings->{prompt}->{'private'}->{$nick});
         }
         return;
     }
     if ($msg =~ /^\!prompt/) {
-        $server->command("msg $nick Sinun nykyinen system prompt on: " . get_prompt($nick, 'private'));
+        $server->command("msg $nick Sinun nykyinen system prompt on: " . $settings->{prompt}->{'private'}->{$nick});
         return;
     }
     if ($msg =~ /^\!floodprot (\d+)/) {
@@ -837,7 +736,7 @@ sub event_pubmsg {
         }
         return;
     } elsif ($msg =~ /^\!prompt/) {
-        $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt($target, $server->{tag}));
+        $server->command("msg -channel $target Nykyinen system prompt on: " . $settings->{prompt}->{$server->{tag}}->{$target});
         return;
     }
 

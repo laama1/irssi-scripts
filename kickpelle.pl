@@ -11,6 +11,7 @@ use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
 use KaaosRadioClass;		# LAama1 30.12.2016
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
+use Encode;
 
 $VERSION = '2023-01-09';
 %IRSSI = (
@@ -86,7 +87,7 @@ sub getStats {
 sub ADDBADWORD {
 	my ($badsword, @rest) = @_;
 	# TODO: sanitize badsword
-	$badsword = encode('utf8', $badsword);
+	$badsword = encode_utf8($badsword);
 	if ($badsword ~~ @badwords) {
 		return 1;
 	}

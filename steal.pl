@@ -59,7 +59,7 @@ sub event_pubmsg {
             sayit($server, $target, "Could not bank stolen $monetary_unit for $steal_target.");
             return;
         }
-        sayit($server, $target, "$nick banked $banked $monetary_unit from $steal_target.");
+        sayit($server, $target, "$nick banked $banked $monetary_unit stolen from $steal_target.");
         return;
     } elsif ($msg =~ /^!steal set\s+(\w+) (.*)$/) {
         ($monetary_unit, $steal_target) = ($1, $2);

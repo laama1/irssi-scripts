@@ -6,6 +6,7 @@ use LWP::UserAgent;
 #use URI::Encode;
 use Data::Dumper;
 use JSON;
+use HTML::Entities qw(decode_entities);
 use vars qw($VERSION %IRSSI);
 use Data::Dumper;
 use lib Irssi::get_irssi_dir() . '/scripts/irssi-scripts';	# LAama1 2024-07-26
@@ -278,7 +279,7 @@ sub print_line_from_search_result {
 	$actor = "\002Actors:\002 ".$param->{Actors}. " ";
 	$plot = "\002Plot:\002 ".$param->{Plot}. " " if ($param->{Plot} ne 'N/A');
 	$rating = "\002Rate:\002 ".$param->{imdbRating}." (".$param->{imdbVotes}.")" if ($param->{imdbRating} ne 'N/A');
-	return "$title $title2, ${actor}${plot}${rating}, $link";
+	return decode_entities("$title $title2, ${actor}${plot}${rating}, $link");
 }
 
 # first search

@@ -26,6 +26,7 @@ $VERSION = '2025-11-23';
 # nitter instances: https://github.com/zedeus/nitter/wiki/Instances
 # nitter.42l.fr nitter.pussthecat.org nitter.eu nitter.net nitter.dark.fail nitter.cattube.org nitter.actionsack.com
 # nitter.mailstation.de nitter.namazso.eu nitter.himiko.cloud nitter.domain.glass nitter.unixfox.eu
+# nitter.freedit.eu
 
 my $localdir = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/';
 my $bearer_token = readLastLineFromFilename($localdir . 'twitter_bearer_token.key');
