@@ -22,7 +22,7 @@ our $database = $localdir . "franklin3.db";
 
 #my $apiurl = "https://api.openai.com/v1/completions";
 my $visionapiurl = 'https://api.openai.com/v1/chat/completions';
-my $apiurl = 'https://api.openai.com/v1/responses';
+my $apiurl = 'https://api.openai.com/v1/responses'; # responses API
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
 my $outputdir = '/var/www/html/bot/dale/';
@@ -128,14 +128,22 @@ read_all_prompts_from_db();
 # pubmsg, gpt-5
 sub make_json_obj_f3 {
     my ($text, $nick, $channel, $server, @rest) = @_;
-    my $usernick = 'Matti';
-    my $prompt = get_prompt($channel, $server);
+
+    my $prompt = get_prompt($channel, $server, 0);
     $timediff = 3600;    # 1h in seconds
 
     # add system prompt and some parameters first
-    my $data = { model => $model, input => [
-            { role => 'system', content => $prompt}
-        ]
+    my $data = {
+                    model => $model,
+                    store => JSON::PP::false,
+                    max_output_tokens => 10240,
+                    reasoning => {'effort' => 'high'},
+                    input => [
+                    {
+                        role => 'system',
+                        content => $prompt
+                    }
+                    ]
     };
     my $maxcount = 0;
     if (defined $chathistory->{$channel}) {
@@ -146,20 +154,19 @@ sub make_json_obj_f3 {
                 delete $chathistory->{$channel}->{$timestamp};
                 next;
             }
-            #prindd(__LINE__ . ": history (Timestamp: $timestamp):");
-            #prindd(Dumper $chathistory->{$channel}->{$timestamp});
 
             if (defined $chathistory->{$channel}->{$timestamp}) {
-                #push @{ $data->{messages}}, { role => 'user', content => $chathistory->{$channel}->{$history}->{message}, name => $chathistory->{$channel}->{$history}->{nick} };
                 push @{ $data->{input}}, { role => 'user', content => $chathistory->{$channel}->{$timestamp}->{message} };
-                #push @{ $data->{messages}}, { role => 'assistant', content => $chathistory->{$channel}->{$history}->{answer}, name => $chathistory->{$channel}->{$history}->{nick} };
                 push @{ $data->{input}}, { role => 'assistant', content => $chathistory->{$channel}->{$timestamp}->{answer} };
             }
             $maxcount++;
         }
     }
 
-    push @{ $data->{input}}, { role => "user", content => $text };
+    push @{ $data->{input}}, {
+        role => 'user',
+        content => $text
+    };
 
     return encode_json($data);
 }
@@ -316,7 +323,6 @@ sub frank {
         my $textcall = "$nick: $1";
         return if check_flood($nick, $channel);
 
-
         for (0..2) {
             #if (my $answer = make_call($textcall, $nick)) {
             # @todo run in background process
@@ -329,6 +335,7 @@ sub frank {
                 last;
             }
             # retry
+            prind("Retrying make_call_public for $textcall");
             sleep 1;
         }
     }
@@ -359,6 +366,7 @@ sub make_vision_json {
 }
 
 sub make_vision_preview_json {
+    # analyze an image
     my ($url, $searchprompt, @rest) = @_;
     debu(__LINE__ . ": make_vision_preview_json called");
     if ($searchprompt eq '') {
@@ -367,6 +375,7 @@ sub make_vision_preview_json {
     my $data = {
         model => $model,
         max_completion_tokens => 300,
+        store => JSON::PP::false,
         messages => [{
             role => "user",
             content => [
@@ -656,12 +665,12 @@ sub set_prompt {
 }
 
 sub get_prompt {
-    my ($who, $network, @rest) = @_;
+    my ($who, $network, $short, @rest) = @_;
     if (not defined $settings->{prompt}->{$network}->{$who}) {
         # use default prompt instead
         $settings->{prompt}->{$network}->{$who} = $systemsg;
     }
-    if ($settings->{floodprot}->{$who} == 0) {
+    if ($settings->{floodprot}->{$who} == 0 || $short == 1) {
         return $settings->{prompt}->{$network}->{$who};        
     }
     
@@ -736,7 +745,7 @@ sub event_pubmsg {
         }
         return;
     } elsif ($msg =~ /^\!prompt/) {
-        $server->command("msg -channel $target Nykyinen system prompt on: " . $settings->{prompt}->{$server->{tag}}->{$target});
+        $server->command("msg -channel $target Nykyinen system prompt on: " . get_prompt($target, $server->{tag}, 1));
         return;
     }
 
@@ -797,7 +806,7 @@ sub make_search_request {
     my $urii = URI->new($apiurl);
     my $newua = LWP::UserAgent->new;
     $newua->default_headers($headers);
-    my $prompt = get_prompt($target, $server->{tag});
+    my $prompt = get_prompt($target, $server->{tag}, 0);
     my $data = {
         model => $web_search_model,
         tools => [
