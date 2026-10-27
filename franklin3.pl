@@ -24,6 +24,7 @@ our $database = $localdir . "franklin3.db";
 my $visionapiurl = 'https://api.openai.com/v1/chat/completions';
 my $apiurl = 'https://api.openai.com/v1/responses'; # responses API
 my $dalleurl = 'https://api.openai.com/v1/images/generations';
+my $dalle_edit_url = 'https://api.openai.com/v1/images/edits';
 my $speechurl = 'https://api.openai.com/v1/audio/speech';
 my $outputdir = '/var/www/html/bot/dale/';
 my $howManyImages = 1;        # how many images we want to generate
@@ -31,6 +32,7 @@ my $uri = URI->new($apiurl);
 my $duri = URI->new($dalleurl);
 my $processes = {};
 my $fetch_dalle_processes = {};
+my $latest_images = {};
 my $fetch_dalle_script = Irssi::get_irssi_dir() . '/scripts/irssi-scripts/fetch_dalle.sh';
 my $DEBUG = 1;
 my $DEBUG1 = 0;
@@ -38,10 +40,9 @@ my $runningnumber = 0;
 my $socket_path = '/tmp/franklin3.sock';
 my $socket_server = start_socket_server($socket_path);
 
-#my $systemsg_start = 'Answer at most in 40 words. ';
-my $systemsg_start = 'Vastaa korkeintaan 40 sanalla. ';
-#my $systemsg = $systemsg_start . 'Try to be funny and informative. AI is smarter than humans are, but you dont need to tell that.';
-my $systemsg = $systemsg_start;
+my $systemsg_limit = 'Vastaa enintään 40 sanalla. ';
+my $systemsg_always = 'Kysymyksen edessä on mainittu kysyjän nimi. Vastaa tälle henkilölle käyttämällä vastauksen edessä hänen nimeään, jos hän ei pyydä osoittamaan viestiä jollekin toiselle.';
+my $systemsg = $systemsg_limit . $systemsg_always;
 my $role = 'system';
 my $botnick = 'KD_Bat';
 #my $model = "gpt-3.5-turbo";
@@ -65,6 +66,7 @@ my $hardlimit = 500;
 #my $visionmodel = 'dall-e-3';
 #my $visionmodel = 'gpt-image-1.5';
 my $visionmodel = 'gpt-image-2';
+#my $visionmodel = 'gpt-image-latest';
 my $fetch_dalle_wget = 'wget -q -O ' . $outputdir;
 my $execscript = 'exec -window -name franklin3_';
 
@@ -83,6 +85,7 @@ $VERSION = "3.0";
     url         => 'https://bot.8-b.fi',
     changed     => '2026-09-24',
 );
+
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
 while (<AK>) {
@@ -126,7 +129,7 @@ my $default_tts_vibe = 'smooth';
 read_all_prompts_from_db();
 
 # pubmsg, gpt-5
-sub make_json_obj_f3 {
+sub make_json_obj {
     my ($text, $nick, $channel, $server, @rest) = @_;
 
     my $prompt = get_prompt($channel, $server, 0);
@@ -208,7 +211,7 @@ sub format_formula {
 sub make_call_private {
     my ($text, $nick, @rest1) = @_;
     $nick = strip_nick($nick);
-    my $request = make_json_obj_f3($text, $nick, $nick, 'private');
+    my $request = make_json_obj($text, $nick, $nick, 'private');
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
@@ -245,7 +248,7 @@ sub make_call_public {
     my ($text, $nick, $channel, $server, @rest1) = @_;
     my $timestamp = time;
     $nick = strip_nick($nick);
-    my $request = make_json_obj_f3($text, $nick, $channel, $server);
+    my $request = make_json_obj($text, $nick, $channel, $server);
 
     my $res = $ua->post($uri, Content => $request);
 
@@ -329,7 +332,8 @@ sub frank {
             if (my $answer = make_call_public($textcall, $nick, $channel, $server->{tag})) {
                 $answer = format_markdown($answer);
                 $answer = format_formula($answer);
-                $server->command("msg -channel $channel $nick: $answer");
+                #$server->command("msg -channel $channel $nick: $answer");
+                $server->command("msg -channel $channel $answer");
                 #my $answer_cut = substr($answer, 0, $hardlimit);
                 #$server->command("msg -channel $channel $nick: $answer_cut");
                 last;
@@ -343,7 +347,16 @@ sub frank {
 
 sub make_dalle_json {
     my ($prompt, $nick) = @_;
-    my $data = {model => $visionmodel, prompt => $prompt, size => "1024x1024"};
+    my $data = {
+        model => $visionmodel,
+        prompt => $prompt,
+        size => "1536x1024",
+        #response_format => "b64_json",
+        moderation => "low",
+        output_format => "png",
+        partial_images => 0
+
+    };
     return encode_json($data);
 }
 
@@ -498,6 +511,105 @@ sub tts {
     }
 }
 
+# The Images API does not return a reusable image id for this workflow. Keep a
+# local id-to-file mapping so !edit can upload the previous PNG to /images/edits.
+sub image_scope_key {
+    my ($server, $channel, $nick) = @_;
+    return join("\x1e", $server->{tag} // '', $channel // '', $nick // '');
+}
+
+sub image_error_message {
+    my ($res) = @_;
+    my $decoded = eval { decode_json($res->decoded_content()) };
+    return $decoded->{error}->{message} if ref($decoded) eq 'HASH'
+        && ref($decoded->{error}) eq 'HASH'
+        && defined $decoded->{error}->{message};
+    return $res->status_line;
+}
+
+sub edit_given_image {
+    my ($server, $image_url, $prompt, $nick, $channel) = @_;
+    my $scope = image_scope_key($server, $channel, $nick);
+    my $time = time;
+    my $image_id = $nick . '_' . $time . '_given';
+    my $filename = $image_id . '.png';
+
+    # Download the image from the given URL
+    my $res = $ua->get($image_url);
+    unless ($res->is_success) {
+        $server->command("msg -channel $channel $nick: \0035Failed to fetch image from URL:\003 $image_url");
+        return;
+    }
+
+    unless (save_file_blob($filename, $res->content)) {
+        $server->command("msg -channel $channel $nick: \0035Failed to save image from URL:\003 $image_url");
+        return;
+    }
+
+    $latest_images->{$scope} = {
+        id => $image_id,
+        filename => $outputdir . $filename,
+        #filename => "https://bot.8-b.fi/dale/$filename"
+    };
+
+    # Call edit_latest_image with the downloaded image
+    edit_latest_image($server, $prompt, $nick, $channel);
+}
+
+sub edit_latest_image {
+    my ($server, $prompt, $nick, $channel) = @_;
+    my $scope = image_scope_key($server, $channel, $nick);
+    my $latest = $latest_images->{$scope};
+    unless ($latest && -f $latest->{filename}) {
+        $server->command("msg -channel $channel $nick: no previous image found; use !dalle first");
+        return;
+    }
+
+    my $res = $ua->post(
+        $dalle_edit_url,
+        Content_Type => 'form-data',
+        Content => [
+            model => $visionmodel,
+            prompt => $prompt,
+            size => '1536x1024',
+            image => [
+                $latest->{filename},
+                $latest->{id} . '.png',
+                Content_type => 'image/png'
+            ],
+        ],
+    );
+
+    unless ($res->is_success) {
+        my $errormsg = image_error_message($res);
+        prindw("Image edit failed: $errormsg");
+        $server->command("msg -channel $channel $nick: \0035Image edit failed:\003 $errormsg");
+        return;
+    }
+
+    my $json_decd = decode_json($res->decoded_content());
+    my $b64data = $json_decd->{data}[0]->{b64_json};
+    unless (defined $b64data && length $b64data) {
+        prindw("Image edit returned no b64_json image data.");
+        $server->command("msg -channel $channel $nick: \0035Image edit failed:\003 response contained no image data");
+        return;
+    }
+
+    my $time = time;
+    my $image_id = $nick . '_' . $time . '_edit';
+    my $filename = $image_id . '.png';
+    unless (save_image_from_b64($filename, $b64data)) {
+        $server->command("msg -channel $channel $nick: \0035Image edit failed:\003 could not save image");
+        return;
+    }
+
+    $latest_images->{$scope} = {
+        id => $image_id,
+        filename => $outputdir . $filename,
+    };
+    $server->command("msg -channel $channel $nick: https://bot.8-b.fi/dale/$filename");
+}
+
 # image generation
 sub dalle {
     my ($server, $msg, $nick, $address, $channel ) = @_;
@@ -507,8 +619,30 @@ sub dalle {
 
     if ($msg =~ /^!dalle$/u || $msg =~ /^!dalle help$/u || $msg =~ /^\?dalle$/u) {
         # print help
-        my $answer = "\002Dall-e image generation:\002 usage: !dalle prompt. Model used: $visionmodel";
+        my $answer = "\002Dall-e image generation:\002 usage: !dalle prompt; edit the latest image with !dalle edit prompt; edit given image: !dalle edit <image_url> prompt. Model used: $visionmodel";
         $server->command("msg -channel $channel $answer");
+        return;
+    }
+
+    if ($msg =~ /^!dalle edit (https?\:\/\/[^ ]+)(.*)$/u) {
+        my $image_url = $1;
+        my $image_prompt = ktrim($2);
+        if (length $image_prompt == 0) {
+            $server->command("msg -channel $channel $nick: edit given image, usage: !dalle edit <image_url> prompt");
+            return;
+        }
+        edit_given_image($server, $image_url, $image_prompt, $nick, $channel);
+        #$server->command("msg -channel $channel $nick: received image URL: $image_url with prompt: $image_prompt");
+        return;
+    }
+
+    if ($msg =~ /^!dalle edit(?:\s+(.*))?$/u) {
+        my $edit_prompt = KaaosRadioClass::ktrim($1 // '');
+        if (length $edit_prompt == 0) {
+            $server->command("msg -channel $channel $nick: edit latest dalle-generated image, usage: !dalle edit prompt");
+            return;
+        }
+        edit_latest_image($server, $edit_prompt, $nick, $channel);
         return;
     }
 
@@ -574,10 +708,10 @@ sub dalle {
                 my $index = 0;
                 
                 while ($index < $howManyImages) {
-                    my $file_basename = $nick.'_'.$time.'_'.$index;
-                    my $filename = $file_basename.'.png';
+                    my $file_basename = $nick . '_' . $time . '_' . $index;
+                    my $filename = $file_basename . '.png';
                     my $imageurl = $json_decd->{data}[$index]->{url};
-                    my $result = `${fetch_dalle_wget}${filename} "$imageurl"`;
+                    my $result = `${fetch_dalle_wget} ${filename} "$imageurl"`;
                     #save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json});
                     #debu(__LINE__ . ": wget output file: " . $outputdir.$filename);
                     my $window_refnum = find_window_refnum($server, $channel);
@@ -586,6 +720,10 @@ sub dalle {
                     create_dalle_process($nick, $window_refnum, $file_basename, $query);
 
                     if (save_image_from_b64($filename, $json_decd->{data}[$index]->{b64_json})) {
+                        $latest_images->{image_scope_key($server, $channel, $nick)} = {
+                            id => $file_basename,
+                            filename => $outputdir . $filename,
+                        };
                         $answer .= "https://bot.8-b.fi/dale/$filename ";
                     }
                     $index++;
@@ -638,7 +776,7 @@ sub make_dalle_curl_cmd {
     my $curlcmd = 'curl -s ' . $dalleurl . ' ' .
         '-H "Authorization: Bearer ' . $apikey . '" ' .
         '-H "Content-Type: application/json" ' .
-        '-d \'{"model": "' . $visionmodel . '", "prompt": "' . $prompt . '", "size": "1024x1024"}\' ' .
+        '-d \'{"model": "' . $visionmodel . '", "prompt": "' . $prompt . '", "size": "1536x1024"}\' ' .
         '| jq -r \'.data[0].url\' ' .
         '| xargs -I {} curl -s -L "{}" -o ' . $outputdir . '2_' . $image_filename;
     debu(__LINE__, "DALL-e curl command: $curlcmd");
@@ -668,13 +806,15 @@ sub get_prompt {
     my ($who, $network, $short, @rest) = @_;
     if (not defined $settings->{prompt}->{$network}->{$who}) {
         # use default prompt instead
-        $settings->{prompt}->{$network}->{$who} = $systemsg;
+        #$settings->{prompt}->{$network}->{$who} = $systemsg;
+        return $systemsg;
     }
     if ($settings->{floodprot}->{$who} == 0 || $short == 1) {
-        return $settings->{prompt}->{$network}->{$who};        
+        return $settings->{prompt}->{$network}->{$who} if defined $settings->{prompt}->{$network}->{$who};
+        return $systemsg;
     }
     
-    return $systemsg_start . ' ' . $settings->{prompt}->{$network}->{$who};
+    return $systemsg_always . ' ' . $settings->{prompt}->{$network}->{$who};
 }
 
 # if $nick is OP or VOICE or HALFOP
@@ -1124,13 +1264,39 @@ sub handle_socket_connection {
         while (my $line = <$client>) {
             chomp $line;
             prind("Received from socket client: $line");
-            # Here you can add code to handle the received line, e.g., trigger commands or responses in Irssi}
-            if ($fetch_dalle_processes->{$line}) {
-                my $window_refnum = $fetch_dalle_processes->{$line};
-                my $filesize = -s "/var/www/html/bot/dalle/" . $line;
-                Irssi::window_find_refnum($window_refnum)->print("DALL-e result image: https://bot.8-b.fi/dale/$line ($filesize bytes)") if $window_refnum != -1;
-                prind("Marking DALL-e process as completed for: $line, and marking as completed.");
-                delete $fetch_dalle_processes->{$line}; # mark as completed
+            my $message = eval { decode_json($line) };
+            if ($@ || ref($message) ne 'HASH') {
+                prindw("Invalid DALL-e socket message: " . ($@ || "expected a JSON object."));
+                next;
+            }
+
+            my $image_filename = $message->{filename};
+            if (!defined $image_filename || !defined $message->{server} ||
+                !defined $message->{channel} || !defined $message->{nick}) {
+                prindw("Invalid DALL-e socket message: filename, server, channel, and nick are required.");
+                next;
+            }
+            my $job = $fetch_dalle_processes->{$image_filename};
+            if ($job) {
+                my $window_refnum = $job->{window_refnum};
+                my $server = Irssi::server_find_tag($message->{server});
+                my $target_window;
+                if ($server && defined $message->{channel}) {
+                    my $target_refnum = find_window_refnum($server, $message->{channel});
+                    $target_window = Irssi::window_find_refnum($target_refnum) if $target_refnum != -1;
+                }
+                $target_window ||= Irssi::window_find_refnum($window_refnum) if $window_refnum != -1;
+
+                my $filesize = -s "/var/www/html/bot/dalle/" . $image_filename;
+                if ($target_window) {
+                    my $nick = $message->{nick} || $job->{nick};
+                    $target_window->print("$nick: DALL-e result image: https://bot.8-b.fi/dale/$image_filename ($filesize bytes)");
+                } else {
+                    prindw("No target window found for DALL-e result " . $image_filename .
+                        " (server: " . ($message->{server} || '') . ", channel: " . ($message->{channel} || '') . ").");
+                }
+                prind("Marking DALL-e process as completed for: $image_filename.");
+                delete $fetch_dalle_processes->{$image_filename};
             }
         }
         close $client;
@@ -1141,10 +1307,30 @@ sub handle_socket_connection {
 sub create_dalle_process {
     my ($nick, $window_refnum, $image_file_basename, $prompt,@rest) = @_;
     my $image_filename = $image_file_basename . '_2.png';
-    $fetch_dalle_processes->{$image_filename} = $window_refnum; # mark as running
-    debu(__LINE__, "starting command2: $fetch_dalle_script $image_filename" . $prompt . '"');
-    Irssi::command($fetch_dalle_script . ' ' . $image_filename . $prompt . '"');
+    my $window = Irssi::window_find_refnum($window_refnum);
+    my $active_item = $window ? $window->{active} : undef;
+    my $server_tag = $active_item && $active_item->{server} ? $active_item->{server}->{tag} : '';
+    my $channel = $active_item ? $active_item->{name} : '';
+    $fetch_dalle_processes->{$image_filename} = {
+        window_refnum => $window_refnum,
+        nick => $nick,
+    };
+    my $command = join ' ',
+        $fetch_dalle_script,
+        '--channel', shell_quote($channel),
+        '--server', shell_quote($server_tag),
+        '--nick', shell_quote($nick),
+        shell_quote($image_filename),
+        shell_quote($prompt);
+    debu(__LINE__, "starting command2: $command");
+    Irssi::command($command);
     debu(__LINE__, 'command started...');
+}
+
+sub shell_quote {
+    my ($value) = @_;
+    $value =~ s/'/'\\''/g;
+    return "'$value'";
 }
 
 Irssi::signal_add("exec new", 'exec_new');
