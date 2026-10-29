@@ -5,11 +5,12 @@ use Irssi;
 use IO::File;
 use DBI;
 $VERSION = '0.02.07';
+my $DEBUG = 1;
 %IRSSI = (
 	authors			=> 'LAama1',
 	contact			=> 'laama@8u.fi',
 	name			=> 'poker',
-	description		=> 'Poker simulator that will give 5 random cards from the deck when you write !poker. All played cards are removed from the deck until the deck is shuffled with command !shuffle.',
+	description		=> 'Poker simulator. Type !poker to join; new rounds wait 5 seconds for players before dealing 5 cards each. All played cards are removed from the deck until !shuffle.',
 	license			=> 'GNU GPL Version 2 or later',
 	url				=> 'http://www.enumerator.org/component/option,com_docman/task,view_category/Itemid,34/subcat,7/'	
 );
@@ -18,9 +19,9 @@ my $used_cards = {};
 my @deck = ();
 my $players = {};
 my $table_timers = {};
+my $waiting_for_players_timers = {};
 my $table_activity_seq = {};
 my $stats_db_file = Irssi::get_irssi_dir() . '/scripts/poker_stats.sqlite';
-my $DEBUG = 1;
 
 =pod
 
@@ -206,6 +207,7 @@ sub get_channel_rounds_played {
     }
 
     $dbh->disconnect;
+    prind("Channel: $target, Rounds played: $rounds");
     return $rounds;
 }
 
@@ -255,27 +257,21 @@ sub ask_question {
             : 'no player stats yet';
 
         $server->command("msg $target Poker stats for $target | rounds played: $rounds | top players: $players_text");
+        prind("Channel: $target, Stats requested, Rounds: $rounds, Top players: $players_text");
         return;
     } elsif (/^!poker/i) {
         my $is_new_round = (!defined $used_cards->{$target} || scalar(keys %{$used_cards->{$target}}) == 0) ? 1 : 0;
+        if ($is_new_round) {
+            announce_new_round($server, $target) if !defined $waiting_for_players_timers->{$target};
+            $waiting_for_players_timers->{$target}->{players}->{$nick} = 1;
+            return;
+        }
         if (defined $players->{$target}->{$nick}) {
+            # check if player already has a hand
             $server->command("msg $target $nick, You already have a hand. Use !hold command to hold cards and get new ones, or !shuffle to start a new round.");
             return;
         }
-        my @hand = get_five_random_cards($target, $nick);
-        if (scalar(@hand) == 1 && $hand[0] =~ /^No more cards in the deck/) {
-            $server->command("msg $target $hand[0]");
-            return;
-        }
-        add_hand_stats($target, $nick, $is_new_round);
-        #my $hand_str = join(", ", @hand);
-        # remove space after commas
-        
-        my $hand_str = format_hand_with_colors(@hand);
-        my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
-        my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
-        $server->command("msg $target $nick, Your hand: $hand_str - $result_text");
-        restart_inactivity_timer($server, $target);
+        deal_player_hand($server, $target, $nick, 0);
         
         return;
     } elsif (/^!shuffle/i) {
@@ -283,6 +279,7 @@ sub ask_question {
         clear_table_state($target);
         stop_inactivity_timer($target);
         $server->command("msg $target Deck shuffled. All cards are back in the deck. Time to start a new round.");
+        prind("$target, deck shuffled.");
         return;
     } elsif (/^!hold\s+((?:\d+\s*)+)$/i) {
         if (not defined $players->{$target}->{$nick}) {
@@ -309,8 +306,71 @@ sub ask_question {
 
 sub clear_table_state {
     my ($target) = @_;
+    my $waiting = delete $waiting_for_players_timers->{$target};
+    Irssi::timeout_remove($waiting->{timer}) if $waiting && defined $waiting->{timer};
     delete $used_cards->{$target};
     delete $players->{$target};
+}
+
+sub announce_new_round {
+    # announce new round and start 10 seconds waiting timer
+    my ($server, $target) = @_;
+    return if !defined $server || !defined $target;
+    my $number_of_games_played = get_channel_rounds_played($target) + 1;
+    return if defined $waiting_for_players_timers->{$target};
+    $table_activity_seq->{$target} = ($table_activity_seq->{$target} || 0) + 1;
+    my $seq = $table_activity_seq->{$target};
+
+    $server->command("msg $target A new round has started. Waiting for players!! Round #$number_of_games_played");
+    prind("$target, new Round #$number_of_games_played");
+    $waiting_for_players_timers->{$target} = {
+        players => {},
+        seq => $seq,
+        timer => Irssi::timeout_add_once(10_000, 'wait_for_new_players_timer', join("\x1f", $target, $server->{tag} || '', $seq)),
+    };
+}
+
+sub wait_for_new_players_timer {
+    my ($target, $server_tag, $seq) = split("\x1f", $_[0]);
+    return if !defined $target;
+    my $waiting = $waiting_for_players_timers->{$target};
+    return if !$waiting || $waiting->{seq} != $seq;
+    delete $waiting_for_players_timers->{$target};
+    my $server = Irssi::server_find_tag($server_tag);
+    if (!defined $server) {
+        prind("Cannot start round for $target: server $server_tag is unavailable.");
+        return;
+    }
+
+    my @nicks = sort keys %{ $waiting->{players} };
+    if (!@nicks) {
+        $server->command("msg $target No players joined. Round canceled.");
+        return;
+    }
+
+    # Otherwise, start the round and deal the cards to known players
+    $server->command("msg $target Round starting with players: " . join(', ', @nicks));
+    prind("$target, starting round with players: " . join(', ', @nicks));
+    my $is_new_round = 1;
+    foreach my $nick (@nicks) {
+        $is_new_round = 0 if deal_player_hand($server, $target, $nick, $is_new_round);
+    }
+}
+
+sub deal_player_hand {
+    my ($server, $target, $nick, $is_new_round) = @_;
+    my @hand = get_five_random_cards($target, $nick);
+    if (scalar(@hand) == 1 && $hand[0] =~ /^No more cards in the deck/) {
+        $server->command("msg $target $hand[0]");
+        return 0;
+    }
+    add_hand_stats($target, $nick, $is_new_round);
+    my $hand_str = format_hand_with_colors(@hand);
+    my ($is_winning, $hand_name) = check_player_winning_hand($target, $nick);
+    my $result_text = $is_winning ? "Winning hand: $hand_name" : "No winning hand ($hand_name)";
+    $server->command("msg $target $nick, Your hand: $hand_str - $result_text");
+    restart_inactivity_timer($server, $target);
+    return 1;
 }
 
 sub announce_round_winner {
@@ -332,11 +392,13 @@ sub announce_round_winner {
         #my $cards_text = format_hand_with_colors(@{ $winner->{cards} || [] });
         #$server->command("msg $target Round winner: $winner->{nick} with $winning_hand ($cards_text)");
         $server->command("msg $target Round finished. Winner: $winner->{nick} with $winning_hand");
+        prind("$target, round finished. Winner: $winner->{nick} with $winning_hand");
         return;
     }
 
     my $winner_nicks = join(', ', map { $_->{nick} } @winners);
     $server->command("msg $target Round tied: $winner_nicks with $winning_hand");
+    prind("$target, round tied: $winner_nicks with $winning_hand");
 }
 
 sub stop_inactivity_timer {
@@ -356,7 +418,7 @@ sub restart_inactivity_timer {
     my $server_tag = $server->{tag} || '';
     my $timer_data = join("\x1f", $target, $server_tag, $seq);
 
-    $table_timers->{$target} = Irssi::timeout_add_once(60_000, 'table_inactivity_timeout', $timer_data);
+    $table_timers->{$target} = Irssi::timeout_add_once(40_000, 'table_inactivity_timeout', $timer_data);
 }
 
 sub table_inactivity_timeout {
@@ -385,6 +447,7 @@ sub get_five_random_cards {
     my ($target, $nick) = @_;
     # when dealing fresh hands to players.
     if (scalar(keys %{$used_cards->{$target}}) > 48) {
+        prind("$target, no more cards in the deck.");
         return ("No more cards in the deck. Please shuffle the deck with !shuffle command.");
     }
     my @hand = ();
@@ -668,7 +731,19 @@ sub compare_current_players_hands {
 
 sub prind {
 	my ($text, @rest) = @_;
+    create_debug_window('poker.pl');
 	print("\0034" . $IRSSI{name} . ">\003 ". $text);
+}
+sub create_debug_window {
+    my ($window_name) = @_;
+    my $window = Irssi::window_find_name($window_name);
+    unless ($window) {
+        print("Create new window: $window_name");
+        Irssi::command("window new hidden");
+        Irssi::command("window name $window_name");
+        Irssi::active_win()->print("New window created: $window_name, num: " . Irssi::active_win()->{refnum});
+    }
+    Irssi::command("window goto $window_name");
 }
 
 init_stats_db();
