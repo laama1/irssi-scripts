@@ -1,5 +1,4 @@
 # irssi-scripts
--only Perl scripts
 
 -Old and new scripts, mostly WIP (work in progress)
 
@@ -26,8 +25,9 @@
 ### hamqsl:
 - Encode
 
-### fingripd.pl:
+### fingrid.pl:
 - Encode
+- DateTime::Format::ISO8601
 
 ### hamqsl.pl:
 - XML::LibXML
@@ -41,6 +41,18 @@
 
 ### msg_telegram.pl
 - URI::Encode
+
+### poker.pl
+- Run the test from this directory using: `prove -v t/poker.t` (does not work yet)
+
+### sahkohinnat.pl
+- Requires DBI, DBD::SQLite, DateTime, DateTime::Format::ISO8601, JSON, and LWP.
+- Creates `scripts/sahkohinnat.sqlite` under the Irssi configuration directory.
+  Each successful fetch saves the API's 15-minute prices in the `prices` table;
+  repeated intervals are updated rather than duplicated. `start_utc` and `end_utc`
+  are Unix timestamps in UTC, and `price` is the API price in cents/kWh, including VAT.
+  Stored prices are historical records and are not used as an offline cache.
+- Run the storage test using `prove -v t/sahkohinnat.t`.
 
 ### urltitle3.pl:
 - Encode

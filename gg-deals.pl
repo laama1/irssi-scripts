@@ -280,7 +280,7 @@ sub prind {
 }
 sub prindw {
 	my ($text, @rest) = @_;
-	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+	print "\0034" . $IRSSI{name} . " warning>\003 " . $text;
 }
 
 Irssi::settings_add_str('gg_deals', 'gg_deals_url', '');

@@ -191,7 +191,7 @@ sub prind {
 sub prindw {
     # print warning
     my ($text, @test) = @_;
-    print("\0034" . $IRSSI{name} . ">\003 ". $text);
+    print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
 }
 
 Irssi::command_bind('ytcreator', 'cmd_ytcreator');

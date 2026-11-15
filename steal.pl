@@ -264,7 +264,7 @@ sub prind {
 
 sub prindw {
 	my ($text, @rest) = @_;
-	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+	print "\0034" . $IRSSI{name} . " warning>\003 " . $text;
 }
 
 create_sqlite_db();

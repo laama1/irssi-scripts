@@ -159,7 +159,7 @@ sub prind {
 
 sub prindw {
 	my ($text, @test) = @_;
-	print("\0034" . $IRSSI{name} . ">\003 ". $text);
+	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
 }
 
 Irssi::signal_add('sig_imgur_api', 'imgur_api');

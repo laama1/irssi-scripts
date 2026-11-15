@@ -554,8 +554,8 @@ sub changeCity {
 	} elsif ($city eq 'Hatanpää' || $city eq 'Hatanpaa') {
 		#$city = '🍻 Hatanpää';
 		$city = '🍺 Hatanpää';
-	} elsif ($city eq 'Fathiye' || $city eq 'Fathie') {
-		$city = 'Fathiye';
+	} elsif ($city eq 'Fathiye' || $city eq 'Fathie' || $city eq 'Fethiye') {
+		$city = '🐾 Fethiye';
 	}
 	return $city;
 }
@@ -1063,7 +1063,7 @@ sub prind {
 
 sub prindw {
 	my ($text, @rest) = @_;
-	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+	print "\0034" . $IRSSI{name} . " warning>\003 " . $text;
 }
 
 Irssi::settings_add_str('openweathermap', 'openweathermap_enabled_channels', '');
