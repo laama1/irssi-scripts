@@ -19,6 +19,17 @@ use KaaosRadioClass;
 our $localdir = $ENV{HOME}."/.irssi/scripts/";
 our $database = $localdir . "franklin3.db";
 
+$VERSION = "3.1";
+%IRSSI = (
+    authors     => 'laama',
+    contact     => 'laama+irssi@8-b.fi',
+    name        => 'Franklin3',
+    description => 'OpenAI chatgpt api script',
+    license     => 'BSD',
+    url         => 'https://bot.8-b.fi',
+    changed     => '2026-11-15',
+);
+
 
 #my $apiurl = "https://api.openai.com/v1/completions";
 my $visionapiurl = 'https://api.openai.com/v1/chat/completions';
@@ -41,8 +52,8 @@ my $socket_path = '/tmp/franklin3.sock';
 my $socket_server = start_socket_server($socket_path);
 
 my $systemsg_limit = 'Vastaa enintään 40 sanalla. ';
-my $systemsg_always = 'Kysymyksen edessä on mainittu kysyjän nimi. Vastaa tälle henkilölle käyttämällä vastauksen edessä hänen nimeään, jos hän ei pyydä osoittamaan viestiä jollekin toiselle.';
-my $systemsg = $systemsg_limit . $systemsg_always;
+my $systemsg_always = 'Kysymyksen edessä on mainittu kysyjän nimi kaksoipisteellä erotettuna kysymyksestä. Vastaa tälle henkilölle käyttämällä vastauksesi alussa hänen nimeään, mikäli hän ei pyydä osoittamaan vastausta jollekin toiselle.';
+my $default_prompt = $systemsg_limit . $systemsg_always;
 my $role = 'system';
 my $botnick = 'KD_Bat';
 #my $model = "gpt-3.5-turbo";
@@ -57,7 +68,7 @@ my $model = 'gpt-5.5-2026-04-23';
 # gpt-4o-search-preview
 # gpt-4o-mini-search-preview
 # deprecated: gpt-4o-search-preview
-my $web_search_model = 'gpt-5.6-terra';
+my $web_search_model = 'gpt-6.1-terra';
 
 my $heat  = 0.4;
 my $hardlimit = 500;
@@ -75,16 +86,6 @@ my $timediff = 3600;    # 1h in seconds. length of lastlog history
 my $json = JSON->new;
 $json->convert_blessed(1);
 
-$VERSION = "3.0";
-%IRSSI = (
-    authors     => 'laama',
-    contact     => 'laama@8-b.fi',
-    name        => 'Franklin3',
-    description => 'OpenAI chatgpt api script',
-    license     => 'BSD',
-    url         => 'https://bot.8-b.fi',
-    changed     => '2026-09-24',
-);
 
 our $apikey;
 open(AK, '<', $localdir . "franklin_api.key") or die $IRSSI{name}."> could not read API-key: $!";
@@ -102,10 +103,14 @@ unless (-e $database) {
 	}
 	close FILE;
 	create_prompt_table();
-	prind("Database file created.");
+    create_settings_table();
+	prindd("Database file created.");
 }
 
 my $chathistory = {};
+my $prompts = {};
+# Settings:
+# floodprot, is channel-specific setting for flood protection. Doesnt save the network, so it's the same in every network (with identical channel name)
 my $settings = {};
 my $headers = HTTP::Headers->new;
 $headers->header("Content-Type"  => "application/json");
@@ -125,8 +130,9 @@ my @tts_vibes = (
 );
 my $default_tts_vibe = 'smooth';
 
-# read prompts from DB
+# read prompts and settings from DB
 read_all_prompts_from_db();
+read_settings_from_db();
 
 # pubmsg, gpt-5
 sub make_json_obj {
@@ -134,6 +140,7 @@ sub make_json_obj {
 
     my $prompt = get_prompt($channel, $server, 0);
     $timediff = 3600;    # 1h in seconds
+    debu(__LINE__, "Prompt: " . $prompt . ". Request text: " . $text);
 
     # add system prompt and some parameters first
     my $data = {
@@ -215,13 +222,13 @@ sub make_call_private {
     my $res = $ua->post($uri, Content => $request);
 
     if ($res->is_success) {
-        #prindd(__LINE__ . ": got success response from API.");
-        #prindd(Dumper $res);
+        debu(__LINE__, "got success response from API.");
+        debu(__LINE__, Dumper($res));
         my $json_rep  = $res->content();
         my $headers = $res->headers();
         my $json_decd = decode_json($json_rep);
-        #prindd(__LINE__ . ": headers:");
-        #prindd(Dumper $headers);
+        debu(__LINE__, "headers:");
+        debu(__LINE__, Dumper($headers));
         my $total_tokens = $json_decd->{usage}->{total_tokens};
         my $processing_time = $headers->{'openai-processing-ms'};
         my $model_used = $json_decd->{model};
@@ -236,8 +243,8 @@ sub make_call_private {
         return $answered;
     } elsif ($res->code == 400) {
         prindw("got error 400.");
-        #prindd(Dumper $res->{error});
-        #prindd(Dumper $res);
+        debu(__LINE__, Dumper($res->{error}));
+        debu(__LINE__, Dumper($res));
     } else {
 		prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
@@ -256,8 +263,8 @@ sub make_call_public {
         my $json_rep  = $res->content();
         my $headers = $res->headers();
         my $json_decd = decode_json($json_rep);
-        prindd(__LINE__ . ": got success response from API.") if $DEBUG1;
-        prindd(Dumper $json_decd) if $DEBUG1;
+        debu(__LINE__, "got success response from API.") if $DEBUG1;
+        debu(__LINE__, Dumper($json_decd)) if $DEBUG1;
 
         my $total_tokens = $json_decd->{usage}->{total_tokens};
         my $processing_time = $headers->{'openai-processing-ms'};
@@ -285,8 +292,8 @@ sub make_call_public {
         return $answered . $infoline;
     } elsif ($res->code >= 400) {
         prindw("got error " . $res->code);
-        prindw(Dumper $res->{error});
-        prindd(Dumper $res);
+        prindw(Dumper($res->{error}));
+        debu(__LINE__, Dumper($res));
         #return "\003Error:\003 " . $res->{error}->{message};
         return "\003Error:\003 " . $res->{error};
     } else {
@@ -304,13 +311,8 @@ sub get_channel_title {
 
 sub check_flood {
     my ($nick, $channel, @rest) = @_;
-    if (not defined $settings->{floodprot}->{$channel} or $settings->{floodprot}->{$channel} == 0) {
-        $settings->{floodprot}->{$channel} = 0;
-        #print (__LINE__ . ": Floodprot initilized");
-    } else {
-        return 1 if KaaosRadioClass::floodCheck(3);
-        return 1 if KaaosRadioClass::Drunk($nick);
-    }
+    return 1 if KaaosRadioClass::floodCheck(3);
+    return 1 if KaaosRadioClass::Drunk($nick);
     return 0;
 }
 
@@ -339,7 +341,7 @@ sub frank {
                 last;
             }
             # retry
-            prind("Retrying make_call_public for $textcall");
+            prindd("Retrying make_call_public for $textcall");
             sleep 1;
         }
     }
@@ -362,7 +364,7 @@ sub make_dalle_json {
 
 sub make_vision_json {
     my ($prompt, $nick) = @_;
-    debu(__LINE__ . ": make_vision_json called with model: $model");
+    debu(__LINE__, "make_vision_json called with model: $model");
     my $data = '';
     if ($model =~ /4/) {
         $data = { model => $model, prompt => $prompt, n => $howManyImages, size => "1024x1024", response_format => "b64_json"};
@@ -381,13 +383,13 @@ sub make_vision_json {
 sub make_vision_preview_json {
     # analyze an image
     my ($url, $searchprompt, @rest) = @_;
-    debu(__LINE__ . ": make_vision_preview_json called");
+    debu(__LINE__, "make_vision_preview_json called");
     if ($searchprompt eq '') {
         $searchprompt = 'Describe this image?';
     }
     my $data = {
         model => $model,
-        max_completion_tokens => 300,
+        max_completion_tokens => 1300,
         store => JSON::PP::false,
         messages => [{
             role => "user",
@@ -421,7 +423,7 @@ sub tts {
         $answer .= " \002OpenAI TTS vibes:\002 ";
         $answer .= join(', ', @tts_vibes);
         $server->command("msg -channel $channel $answer");
-        $server->command("msg -channel $channel $nick: text-to-speech usage: !tts voice vibe text .. or !tts voice/vibe text ..");
+        $server->command("msg -channel $channel $nick: text-to-speech usage: !tts [voice] [vibe] text .. or !tts voice/vibe text ..");
         return;
     }
 
@@ -436,21 +438,21 @@ sub tts {
             $query = "$voicemodel $vibe $query";
             $voicemodel = $default_tts_voice;
             $vibe = $default_tts_vibe;
-            prindd(__LINE__ . ": using default voice and vibe. query: $query");
+            debu(__LINE__, "using default voice and vibe. query: $query");
         } elsif (grep { $_ eq lcfirst($voicemodel) } @tts_voices) {
             # voicemodel found in first param
             $voicemodel = lcfirst($voicemodel);
             $query = "$vibe $query";
             $vibe = $default_tts_vibe;
-            prindd(__LINE__ . ": voicemodel found as first param: $voicemodel, query: $query");
+            debu(__LINE__, "voicemodel found as first param: $voicemodel, query: $query");
         } elsif (grep { $_ eq lcfirst($voicemodel) } @tts_vibes) {
             # vibe found in voicemodel place
             $query = "$vibe $query";
             $vibe = lcfirst($voicemodel);
             $voicemodel = $default_tts_voice;
-            prindd(__LINE__ . ": vibe found as first param: $vibe");
+            debu(__LINE__, "vibe found as first param: $vibe");
         } else {
-            prindd(__LINE__ . ": something went wrong parsing tts params.");
+            debu(__LINE__, "something went wrong parsing tts params.");
         }
 
         if (grep { $_ eq lcfirst($vibe) } @tts_vibes) {
@@ -459,7 +461,7 @@ sub tts {
 
         #$answer = "\002Voice:\002 $voicemodel, \002Vibe:\002 $vibe, \002Query:\002 $query, ";
         $answer = "\002Voice:\002 $voicemodel, \002Vibe:\002 $vibe, ";
-        prindd(__LINE__ . ": voicemodel: $voicemodel, vibe: $vibe, query: $query");
+        debu(__LINE__, "voicemodel: $voicemodel, vibe: $vibe, query: $query");
 
         my $data = { model => "tts-1-hd", voice => $voicemodel, vibe => $vibe,  input => $query, response_format => "mp3"};
         my $request = encode_json($data);
@@ -475,8 +477,8 @@ sub tts {
             }
 
         } else {
-            prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
-            prindd(Dumper $res);
+            prinddw('Failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
+            debu(__LINE__, Dumper($res));
         }
         return;
     }
@@ -486,7 +488,7 @@ sub tts {
         my $voicemodels = ['onyx'];
         my $answer = "\002OpenAI TTS results:\002 ";
         foreach my $voicemodel (@$voicemodels) {
-            prindd(__LINE__ . ' voicemodel: ' . $voicemodel . ', query: ' . $query);
+            debu(__LINE__, "voicemodel: " . $voicemodel . ", query: " . $query);
             my $data = { model => "tts-1-hd", voice => $voicemodel, input => $query, response_format => "mp3"};
             my $request = encode_json($data);
             my $res = $ua->post($speechurl, Content => $request);
@@ -502,8 +504,8 @@ sub tts {
                 }
 
             } else {
-                prindd(__LINE__ . ' failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
-                prindd(Dumper $res);
+                prindw('Failed to fetch data. '. $res->status_line . ', HTTP error code: ' . $res->code);
+                debu(__LINE__, Dumper($res));
             }
         }
         $server->command("msg -channel $channel $answer") if $answer;
@@ -619,7 +621,7 @@ sub dalle {
 
     if ($msg =~ /^!dalle$/u || $msg =~ /^!dalle help$/u || $msg =~ /^\?dalle$/u) {
         # print help
-        my $answer = "\002Dall-e image generation:\002 usage: !dalle prompt; edit the latest image with !dalle edit prompt; edit given image: !dalle edit <image_url> prompt. Model used: $visionmodel";
+        my $answer = "\002Dall-e image generation:\002 usage: !dalle <prompt>; edit the latest image with !dalle edit <prompt>; edit given image: !dalle edit <image_url> <prompt>. Model used: $visionmodel";
         $server->command("msg -channel $channel $answer");
         return;
     }
@@ -650,7 +652,7 @@ sub dalle {
         # image guessing 2024-02-13
         my $imagesearchurl = $1;
         my $question = $2;
-        prind("Creating a dalle request... image url: $imagesearchurl, question: $question");
+        debu(__LINE__, "Creating a dalle request... image url: $imagesearchurl, question: $question");
         my $request_content = make_vision_preview_json($imagesearchurl, $question);
 
         # @todo fork or something
@@ -665,8 +667,8 @@ sub dalle {
             my $processing_time = $response_headers->{'openai-processing-ms'};
             my $model_used = $json_decoded->{model};
             my $infoline = " (tok: " . $total_tokens . ', ' . $processing_time . ' ms, model: ' . $model_used . ')';
-            prind(__LINE__ . ": vision preview response:");
-            prindd(Dumper $json_decoded);
+            debu(__LINE__, "vision preview response:");
+            debu(__LINE__, Dumper($json_decoded));
             if (defined $json_decoded->{choices}[0]->{finish_reason} &&
                 $json_decoded->{choices}[0]->{finish_reason} eq 'length') {
 
@@ -674,7 +676,7 @@ sub dalle {
             } elsif (defined $json_decoded->{choices}[0]->{message}->{content}) {
                 $answer = $json_decoded->{choices}[0]->{message}->{content} . $infoline;
                 $server->command("msg -channel $channel $answer");
-                prind("success: " . $answer);
+                debu(__LINE__, "success: " . $answer);
             }
         } elsif ($res->is_error) {
             my $errormsg = decode_json($res->decoded_content())->{error}->{message};
@@ -686,7 +688,7 @@ sub dalle {
 
     } elsif ($msg =~ /^!dalle (.*)/u ) {
         my $query = $1;
-        prind("Creating a dalle request... prompt: $query");
+        prindd("Creating a dalle request... prompt: $query");
         my $request = make_dalle_json($query, $nick);
         #my $request = make_vision_json($query, $nick);
         
@@ -750,10 +752,10 @@ sub save_image_from_b64 {
     my ($filename, $b64data, @rest) = @_;
     my $decoded_data = decode_base64($b64data);
     if (save_file_blob($filename, $decoded_data) >= 0) {
+        debu(__LINE__, "saved image file: " . $outputdir.$filename);
         return 1;
-        debu(__LINE__ . ": saved image file: " . $outputdir.$filename);
     } else {
-        prindw(__LINE__ . ": failed to save image file: " . $outputdir.$filename);
+        prindw("Failed to save image file: " . $outputdir.$filename);
     }
     return 0;
 }
@@ -766,7 +768,6 @@ sub start_cmd {
     
     my $fullcmd = $execscript . $window_number . '_' . $nick . ' ' . $cmd;
     debu(__LINE__, "starting command1: $fullcmd");
-    #debu(__LINE__, "started command: $fullcmd");
     Irssi::command($fullcmd);
 }
 
@@ -795,26 +796,58 @@ sub save_file_blob {
 sub set_prompt {
     my ($who, $network, $newprompt, @rest) = @_;
     $newprompt =~ s/[\"]*//ug;
+    $newprompt = Encode::decode('UTF-8', $newprompt);       # test encoding
     $newprompt = KaaosRadioClass::ktrim($newprompt);
-    $settings->{prompt}->{$network}->{$who} = $newprompt;
+    
+    $prompts->{$network}->{$who} = $newprompt;
     $chathistory->{$who} = undef;   # reset chat history on prompt change
     add_prompt_to_db($network, $who, $newprompt);
-    prind("New $who prompt: $newprompt");
+    prindd("New $who prompt: $newprompt");
 }
 
 sub get_prompt {
     my ($who, $network, $short, @rest) = @_;
-    if (not defined $settings->{prompt}->{$network}->{$who}) {
-        # use default prompt instead
-        #$settings->{prompt}->{$network}->{$who} = $systemsg;
-        return $systemsg;
+    if (not defined $prompts->{$network}->{$who}) {
+        # use default prompt. floodprotection is enabled by default for new channels
+        debu(__LINE__, "Using default prompt for $who on $network");
+        $settings->{floodprot}->{$who} = 1;  # enable flood protection by default for new channels
+        return $default_prompt if $short == 0;
+        return $systemsg_limit if $short == 1;
     }
+
+    if ($short == 0 && defined $prompts->{$network}->{$who} && 
+        (
+            not defined $settings->{floodprot}->{$who} ||
+            $settings->{floodprot}->{$who} == 1
+        )
+    ) {
+        # Flood protection is enabled. Answer using at most 40 words
+        debu(__LINE__, "short: $short, prompt: " . $prompts->{$network}->{$who});
+        return $default_prompt . ' ' . $prompts->{$network}->{$who};
+    }
+
     if ($settings->{floodprot}->{$who} == 0 || $short == 1) {
-        return $settings->{prompt}->{$network}->{$who} if defined $settings->{prompt}->{$network}->{$who};
-        return $systemsg;
+        debu(__LINE__, "floodprot: " . $settings->{floodprot}->{$who} . ", short: $short");
+        return $prompts->{$network}->{$who} if defined $prompts->{$network}->{$who};
+        return $default_prompt;
     }
-    
-    return $systemsg_always . ' ' . $settings->{prompt}->{$network}->{$who};
+    # default prompt for everyone
+    debu(__LINE__, "Using default prompt for $who on $network");
+    return $systemsg_always . ' ' . $prompts->{$network}->{$who};
+}
+
+# print all prompts to franklin3 window
+sub cmd_prompts {
+    my ($data, $server, $witem) = @_;
+    print Dumper($prompts);
+    debu(__LINE__, Dumper($prompts));
+    for my $network (keys %$prompts) {
+        prindd("network $network");
+        for my $who (keys %{$prompts->{$network}}) {
+            prindd("who $who");
+            prindd("Prompt for $who on $network: " . $prompts->{$network}->{$who});
+        }
+    }
 }
 
 # if $nick is OP or VOICE or HALFOP
@@ -838,22 +871,22 @@ sub event_privmsg {
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
         if (length $newprompt > 1) {
-            $server->command("msg $nick Sinun nykyinen system prompt: " . $settings->{prompt}->{'private'}->{$nick});
+            $server->command("msg $nick Sinun nykyinen system prompt: " . $prompts->{'private'}->{$nick});
             set_prompt($nick, 'private', $newprompt);
-            $server->command("msg $nick Sinun uusi system prompt (tallennettu myös tietokantaan tulevaa käyttöä varten): " . $settings->{prompt}->{'private'}->{$nick});
+            $server->command("msg $nick Sinun uusi system prompt (tallennettu myös tietokantaan tulevaa käyttöä varten): " . $prompts->{'private'}->{$nick});
         } else {
-            $server->command("msg $nick Sinun nykyinen system prompt on: " . $settings->{prompt}->{'private'}->{$nick});
+            $server->command("msg $nick Sinun nykyinen system prompt on: " . $prompts->{'private'}->{$nick});
         }
         return;
     }
     if ($msg =~ /^\!prompt/) {
-        $server->command("msg $nick Sinun nykyinen system prompt on: " . $settings->{prompt}->{'private'}->{$nick});
+        $server->command("msg $nick Sinun nykyinen system prompt on: " . $prompts->{'private'}->{$nick});
         return;
     }
     if ($msg =~ /^\!floodprot (\d+)/) {
         my $floodprot = $1;
         $settings->{floodprot}->{$nick} = $floodprot;
-        $server->command("msg $nick Floodprot asetettu: $floodprot");
+        $server->command("msg $nick Floodprotection asetettu: $floodprot");
         return;
     }
     return if ($msg =~ /^\!/);              # other !commands
@@ -864,7 +897,7 @@ sub event_privmsg {
     if (my $text = make_call_public($msg, $nick, $nick, 'private')) {
         $text = format_markdown($text);
         $text = format_formula($text);
-        prind(__LINE__ . ": private call answer: $text");
+        debu(__LINE__, "private call answer: $text");
         $server->command("msg $nick $text");
     } else {
         $server->command("msg $nick *pier*");
@@ -877,7 +910,7 @@ sub event_pubmsg {
     return if ($nick eq $mynick);	#self-test
     if ($msg =~ /^\!prompt (.*)$/) {
         my $newprompt = KaaosRadioClass::ktrim($1);
-        $newprompt = Encode::decode('UTF-8', $newprompt);       # test
+        
         if (length $newprompt > 1) {
             return if check_flood($nick, $target);
             set_prompt($target, $server->{tag}, $newprompt);
@@ -894,21 +927,21 @@ sub event_pubmsg {
         if (ifop($server, $target, $nick)) {
             $settings->{floodprot}->{$target} = $floodprot;
             if ($floodprot) {
-                $server->command("msg -channel $target Floodprotect päällä, kanavalla: $target");
+                $server->command("msg -channel $target ChatGPT Floodprotection päällä, kanavalla: $target");
             } else {
-                $server->command("msg -channel $target Floodprotect pois päältä, kanavalla: $target");
+                $server->command("msg -channel $target ChatGPT Floodprotection pois päältä, kanavalla: $target");
             }
         }
-        prind("$nick commanded: $msg");
+        prindd("$nick from $target commanded: $msg");
         return;
-    } elsif ($msg =~ /^\!floodprot/) {
-        if ($settings->{floodprot}->{$target} == 0) {
-            $server->command("msg -channel $target Floodprotect pois päältä, kanavalla: $target");
+    } elsif ($msg =~ /^\!floodprot/ || $msg =~ /^\?floodprot/) {
+        if (not defined $settings->{floodprot}->{$target} || $settings->{floodprot}->{$target} == 0) {
+            $server->command("msg -channel $target ChatGPT Floodprotection pois päältä, kanavalla: $target");
             $settings->{floodprot}->{$target} = 0;
         } else {
-            $server->command("msg -channel $target Floodprotect päällä, kanavalla: $target");
+            $server->command("msg -channel $target ChatGPT Floodprotection päällä, kanavalla: $target");
         }
-        prind("$nick commanded: $msg");
+        prindd("$nick from $target commanded: $msg");
         return;
     }
 
@@ -928,7 +961,10 @@ sub event_pubmsg {
             }
         }
     } elsif ($msg =~ /^!test (.*)/ || $msg =~ /^!search (.*)/) {
-        my $answer = make_search_request($server, $1, $target);
+        my $query = $1;
+        return if check_flood($nick, $target);
+        $query = KaaosRadioClass::ktrim($query);
+        my $answer = make_search_request($server, $query, $target);
         if (defined $answer) {
             $answer = format_markdown($answer);
             $answer = format_formula($answer);
@@ -964,8 +1000,8 @@ sub make_search_request {
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        prindd(__LINE__ . ' response in decoded json:');
-        prindd(Dumper $json_decd);
+        debu(__LINE__, "response in decoded json:");
+        debu(__LINE__, Dumper($json_decd));
         my $response_headers = $res->headers();
         my $total_tokens = $json_decd->{usage}->{total_tokens};
         my $processing_time = $response_headers->{'openai-processing-ms'};
@@ -977,8 +1013,8 @@ sub make_search_request {
             foreach my $output (@{$json_decd->{output}}) {
                 if ($output->{type} eq 'message' && defined $output->{content}[0]->{text}) {
                     my $answer = $output->{content}[0]->{text};
-                    prindd(__LINE__ . ' answer:');
-                    prindd($answer);
+                    debu(__LINE__, "answer:");
+                    debu(__LINE__, $answer);
                     return $answer . $infoline;
                 }
             }
@@ -986,13 +1022,13 @@ sub make_search_request {
             prindw("No content in response.");
         }
     } elsif ($res->is_error) {
-        prindd(__LINE__ . ' response:');
-        prindd(Dumper $res);
+        debu(__LINE__, "response:");
+        debu(__LINE__, Dumper($res));
         my $errormsg = decode_json($res->decoded_content())->{error}->{message};
         prindw("Error: $errormsg");
     } else {
-        prindd(__LINE__ . ' response:');
-        prindd(Dumper $res);
+        debu(__LINE__, "response:");
+        debu(__LINE__, Dumper($res));
         prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
     }
     return undef;
@@ -1008,16 +1044,16 @@ sub make_web_request {
         input => $query 
     };
     my $request = encode_json($data);
-    prindd(__LINE__ . ' JSON request:');
-    prindd($request);
+    debu(__LINE__, "JSON request:");
+    debu(__LINE__, $request);
     my $res = $ua->post($uri, Content => $request);
     if ($res->is_success) {
         my $json_rep  = $res->content();
         my $json_decd = decode_json($json_rep);
-        prindd(__LINE__ . ' response in decoded json0:');
-        prindd(Dumper $json_decd->{output}[0]);
-        prindd(__LINE__ . ' response in decoded json1:');
-        prindd(Dumper $json_decd->{output}[1]);
+        debu(__LINE__, "response in decoded json0:");
+        debu(__LINE__, Dumper($json_decd->{output}[0]));
+        debu(__LINE__, "response in decoded json1:");
+        debu(__LINE__, Dumper($json_decd->{output}[1]));
         if (defined $json_decd->{output}[0]->{content}[0]->{text}) {
             my $answer = $json_decd->{output}[0]->{content}[0]->{text};
             return $answer;
@@ -1028,13 +1064,13 @@ sub make_web_request {
             prindw("No content in response.");
         }
     } elsif ($res->is_error) {
-        prindd(__LINE__ . ' response:');
-        prindd(Dumper $res);
+        debu(__LINE__, "response:");
+        debu(__LINE__, Dumper($res));
         my $errormsg = decode_json($res->decoded_content())->{error}->{message};
         prindw("Error: $errormsg");
     } else {
-        prindd(__LINE__ . ' response:');
-        prindd(Dumper $res);
+        debu(__LINE__, "response:");
+        debu(__LINE__, Dumper($res));
         prindw("failed to fetch data. ". $res->status_line . ", HTTP error code: " . $res->code);
 
     }
@@ -1042,36 +1078,56 @@ sub make_web_request {
 }
 
 sub save_settings {
-    # TODO: save settings
-    #Irssi::
+    Irssi::settings_set_str('franklin_prompt', $default_prompt);
+    Irssi::settings_set_str('franklin_settings', encode_json($settings));
+    save_settings_to_db();
     return;
 }
 
-# print debug messages
-sub prindd() {
-    # print debug messages2
+sub create_window {
+    my ($window_name) = @_;
+    my $window = Irssi::window_find_name($window_name);
+    unless ($window) {
+        printt("Create new window: $window_name");
+        Irssi::command("window new hidden");
+        Irssi::command("window name $window_name");
+		debu(__LINE__, "Window created: " . Irssi::active_win()->{name});
+    }
+    Irssi::command("window goto $window_name");
+}
+
+# print status messages
+sub prindd {
     my ($text, @rest) = @_;
-    if ($DEBUG) {
-        print $IRSSI{name} . " debug dump> " . $text;
+    if ($text) {
+        create_window('franklin3');
+        Irssi::active_win()->print("\00311" . $IRSSI{name} . ">\003 " . $text);
     }
 }
 
-# print to status window
+# print to franklin3 window, don't call "create_window" here
 sub prind {
 	my ($text, @rest) = @_;
-	print "\00311" . $IRSSI{name} . ">\003 " . $text;
+	Irssi::active_win()->print("\00311" . $IRSSI{name} . ">\003 " . $text);
+}
+
+sub printt {
+    my ($text, @rest) = @_;
+    print("\00311" . $IRSSI{name} . ">\003 " . $text);
 }
 
 sub prindw {
 	my ($text, @rest) = @_;
-	print "\0034" . $IRSSI{name} . ">\003 " . $text;
+    create_window('franklin3');
+	Irssi::active_win()->print("\0034" . $IRSSI{name} . " warning>\003 " . $text);
 }
 
+# print debug messages
 sub debu {
-	my ($line, $text, @rest) = @_;
+	my ($linenbr, $text, @rest) = @_;
 	return unless $DEBUG;
 	create_window('franklin3');
-	Irssi::active_win()->print($IRSSI{name}.":$line> " . $text);
+	Irssi::active_win()->print("\00310" .$IRSSI{name}.":$linenbr debug>\003 " . $text);
 }
 
 # read prompt from database per channel or per user
@@ -1080,6 +1136,15 @@ sub read_prompt_from_db {
     my $selectcmd = "SELECT prompt FROM prompts WHERE network = ? AND channel = ?";
     my $result = KaaosRadioClass::bindSQL($database, $selectcmd, ($network, $channel));
     return $result;
+}
+
+sub read_settings_from_db {
+    #my $selectcmd = "SELECT value FROM settings WHERE key = ?";
+    my $selectcmd = "SELECT * FROM settings WHERE key = ?";
+    my @result = KaaosRadioClass::readLineFromDataBase($database, $selectcmd, 'franklin_settings');
+    $settings = decode_json(@result[1]);
+    debu(__LINE__, 'decoded settings: ' . Dumper($settings));
+    #return @result ? decode_json($result[0]->[0]) : undef;
 }
 
 sub read_all_prompts_from_db {
@@ -1091,10 +1156,10 @@ sub read_all_prompts_from_db {
         my $network = $row->[0];
         my $who = $row->[1];
         my $prompt = $row->[2];
-        $settings->{prompt}->{$network}->{$who} = $prompt;
+        $prompts->{$network}->{$who} = $prompt;
     }
 
-    print Dumper $settings->{prompt};
+    #debu(__LINE__, Dumper($prompts));
 }
 
 # add or replace prompt to database per channel or per user
@@ -1102,27 +1167,30 @@ sub add_prompt_to_db {
     my ($network, $channel, $prompt, @rest) = @_;
     my $insertcmd = "INSERT OR REPLACE INTO prompts (network, channel, prompt) VALUES (?, ?, ?)";
     my $result = KaaosRadioClass::insertSQL($database, $insertcmd, ($network, $channel, $prompt));
-    prind("Prompt '$prompt' saved to database for ${channel} @ ${network} : " . $result);
+    prindd("Prompt '$prompt' saved to database for ${channel}@${network}") if $result > 0;
+    return $result;
+}
+
+sub save_settings_to_db {
+    my $settings_json = encode_json($settings);
+    my $insertcmd = "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)";
+    my $result = KaaosRadioClass::insertSQL($database, $insertcmd, ('franklin_settings', $settings_json));
+    prindd("Settings saved to database.");
     return $result;
 }
 
 # create SQLite table for per channel prompts.
 sub create_prompt_table {
+    prindd("Creating prompts table.. ");
     my $tablecmd = "CREATE TABLE IF NOT EXISTS prompts (network TEXT, channel TEXT, prompt TEXT, PRIMARY KEY (network, channel))";
     my $result = KaaosRadioClass::writeToDB($database, $tablecmd);
-    prind('Creating table.. ' . $result);
 }
 
-sub create_window {
-    my ($window_name) = @_;
-    my $window = Irssi::window_find_name($window_name);
-    unless ($window) {
-        prind("Create new window: $window_name");
-        Irssi::command("window new hidden");
-        Irssi::command("window name $window_name");
-		debu(__LINE__, "Window created: " . Irssi::active_win()->{name});
-    }
-    Irssi::command("window goto $window_name");
+# create SQLite table for storing settings
+sub create_settings_table {
+    prindd("Creating settings table.. ");
+    my $tablecmd = "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)";
+    my $result = KaaosRadioClass::writeToDB($database, $tablecmd);
 }
 
 sub exec_new {
@@ -1145,7 +1213,7 @@ sub exec_new {
 		$winnum = $1;
 		#$itemcount = $2;
 		$nick = $2;
-        prind('exec_new process_name: ' . $process_name . ', winnum: ' . $winnum . ', nick: ' . $nick);
+        debu(__LINE__, 'exec_new process_name: ' . $process_name . ', winnum: ' . $winnum . ', nick: ' . $nick);
 		my $target_window = Irssi::window_find_refnum($winnum);
         #print(__LINE__ . ': exec_new winnum: ' . $winnum . ', nick: ' . $nick . ', target_window: ' . Dumper($target_window));
 		if (defined $target_window) {
@@ -1174,13 +1242,13 @@ sub exec_input {
 	}
 
 	$text =~ s/\t+/  /g;
-	#prind('exec_input text: ' . $text);
+	debu(__LINE__, 'exec_input text: ' . $text);
 	debu(__LINE__, Dumper($res));
 }
 
 sub exec_remove {
 	my ($res, $status, @rest) = @_;
-    print __LINE__ . ' exec_remove: ' . Dumper($res);
+    debu(__LINE__, 'exec_remove: ' . Dumper($res));
 	my $process_name = $res->{name};
 	if ($process_name !~ /^franklin3/) {
 		return;
@@ -1251,19 +1319,19 @@ sub start_socket_server {
         Listen => 1,
     ) or die "Can't create socket server: $!";
     $handle = Irssi::input_add(fileno($socket_server), Irssi::INPUT_READ, \&handle_socket_connection, $socket_server);
-    prind("Socket server started, listening at $socket_path");
+    prindd("Socket server started, listening socket file $socket_path");
     return $socket_server;
 }
 
 sub handle_socket_connection {
     my ($socket_server) = @_;
-    prind("Handle socket server...");
+    debu(__LINE__, "Handle socket server...");
     my $client = $socket_server->accept();
     if ($client) {
-        prind("Client connected to socket server.");
+        debu(__LINE__, "Client connected to socket server.");
         while (my $line = <$client>) {
             chomp $line;
-            prind("Received from socket client: $line");
+            prindd("Received from socket client: $line");
             my $message = eval { decode_json($line) };
             if ($@ || ref($message) ne 'HASH') {
                 prindw("Invalid DALL-e socket message: " . ($@ || "expected a JSON object."));
@@ -1295,18 +1363,18 @@ sub handle_socket_connection {
                     prindw("No target window found for DALL-e result " . $image_filename .
                         " (server: " . ($message->{server} || '') . ", channel: " . ($message->{channel} || '') . ").");
                 }
-                prind("Marking DALL-e process as completed for: $image_filename.");
+                prindd("Marking DALL-e process as completed for: $image_filename.");
                 delete $fetch_dalle_processes->{$image_filename};
             }
         }
         close $client;
-        prind("Client disconnected from socket server.");
+        debu(__LINE__, "Client disconnected from socket server.");
     }
 }
 
 sub create_dalle_process {
     my ($nick, $window_refnum, $image_file_basename, $prompt,@rest) = @_;
-    my $image_filename = $image_file_basename . '_2.png';
+    my $image_filename = $image_file_basename . '_3.png';
     my $window = Irssi::window_find_refnum($window_refnum);
     my $active_item = $window ? $window->{active} : undef;
     my $server_tag = $active_item && $active_item->{server} ? $active_item->{server}->{tag} : '';
@@ -1342,10 +1410,16 @@ Irssi::signal_add_last('message public', 'dalle' );
 Irssi::signal_add_last('message public', 'tts' );
 Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_privmsg');
-#Irssi::signal_add_last('setup saved', 'save_settings');
-Irssi::settings_add_bool($IRSSI{name}, 'floodprot', '1');
-Irssi::settings_add_str($IRSSI{name}, 'franklin_prompt', $systemsg);
-Irssi::settings_add_str($IRSSI{name}, 'franklin_image_model', $visionmodel);
-prind("v.$VERSION loaded");
-prind("new commands: !floodprot 1/0");
-prind("              !prompt \"new prompt\"");
+Irssi::signal_add_last('setup saved', 'save_settings');
+
+Irssi::command_bind('franklin_prompts', \&cmd_prompts, 'franklin');
+
+Irssi::settings_add_str($IRSSI{name}, 'franklin_prompt', $default_prompt);
+#Irssi::settings_add_str($IRSSI{name}, 'franklin_image_model', $visionmodel);
+#Irssi::settings_add_str($IRSSI{name}, 'franklin_text_model', $textmodel);
+Irssi::settings_add_str($IRSSI{name}, 'franklin_settings', '');
+printt("v.$VERSION loaded");
+printt("new commands: !floodprot 1/0");
+printt("              !prompt \"new prompt\"");
+printt("              !dalle \"prompt\"");
+printt("              !tts \"text\"");
