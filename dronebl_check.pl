@@ -9,15 +9,15 @@ use POSIX qw(strftime);
 use Socket qw(AF_INET6 inet_pton);
 
 use vars qw($VERSION %IRSSI);
-$VERSION = '0.3';
+$VERSION = '0.32';
 %IRSSI = (
     authors	=> 'LAama1',
     contact	=> '#kaaosradio.fi@IRCNet',
     name	=> 'dronebl_check',
     description	=> 'Check if somebody joined the channel from an open proxy.',
     license	=> 'BSD',
-    changed	=> '2026-08-04',
-    url		=> 'http://8-b.fi'
+    changed	=> '2026-10-28',
+    url		=> 'https://8-b.fi'
 );
 
 my $dronebl_address = 'https://';
@@ -56,7 +56,7 @@ sub create_window {
     my ($window_name) = @_;
     my $window = Irssi::window_find_name($window_name);
     unless ($window) {
-        prind("Create new window: $window_name");
+        print("Create new window: $window_name");
         Irssi::command("window new hidden");
         Irssi::command("window name $window_name");
         Irssi::active_win()->print("New window created: $window_name, num: " . Irssi::active_win()->{refnum});
@@ -69,16 +69,16 @@ sub ip_info {
     my ($ip, @rest) = @_;
     chomp(my $data = `${ipinfo_script} ${ip}`);
 
-    Irssi::active_win()->print("data from ip_info script:");
-    Irssi::active_win()->print($data);
+    prind("data from ip_info script:");
+    prind($data);
     return $data;
 }
 
 # when you join a channel
 sub event_chan_joined {
     my ($channel, @rest) = @_;
-    print "Jes. i joined: $channel->{name} on server: " . $channel->{server}->{chatnet};
-    print "--------------";
+    prind("CHAN JOIN event $channel->{name} on server: " . $channel->{server}->{chatnet});
+    prind("--------------");
     return 0;
 
 }
@@ -88,13 +88,10 @@ sub dronebl_check {
     chomp(my $data = `${scriptfile} ${ip}`);
 
     if ($data) {
-        #Irssi::active_win()->print("data from checkdns script for ip $ip: " . Dumper $data);
-        Irssi::active_win()->print("checkdnsbl.sh: " . $data);
+        prind("checkdnsbl.sh: " . $data);
     } else {
-        Irssi::active_win()->print("No data from checkdns script for ip: " . $ip);
+        prind("No data from checkdns script for ip: " . $ip);
     }
-    #Irssi::active_win()->print("------ end of dronebl check ------") if $DEBUG;
-
     return $data;
 }
 
@@ -104,15 +101,18 @@ sub dronebl_check {
 sub event_msg_joined {
     my ($server, $channel, $nick, $address, $account, $realname, @rest) = @_;
     my $network = $server->{chatnet};
-    create_window('dronebl_check');
-    Irssi::active_win()->print("------------------------------------------>");
-    #Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next... rest: " . Dumper \@rest);
-    Irssi::active_win()->print("$nick joined $channel, address: $address, account: $account, realname: $realname, network: $network. Do /whois $nick next...");
+    #create_window('dronebl_check');
+    prind("--->");
+    #prind("$nick joined $channel, address: $address, account: $account, realname: $realname. Do /whois $nick next... rest: " . Dumper \@rest);
+    prind("$nick joined $channel, network: $network, address: $address, account: $account, realname: $realname,
+    Do /whois $nick next...");
     my @ip_parts = split('@', $address);
 
     $memory->{$network}->{$nick}->{'host'} = $address;
     $memory->{$network}->{$nick}->{'channel'} = $channel;
-    $server->send_raw("whois $nick");   # whois will trigger event_311 signal later
+    if (not defined $memory->{$network}->{$nick}->{'realname'}) {
+        $server->send_raw("whois $nick");   # whois will trigger event_311 signal later
+    }
 
     my $host = $ip_parts[1];
     my $ident = $ip_parts[0];
@@ -121,17 +121,17 @@ sub event_msg_joined {
     my $is_hex_ident = is_hex_ident($ident);
     if ($is_hex_ident) {
         $real_ip = $is_hex_ident;
-        Irssi::active_win()->print("Converted cloaked ip from hex ident: " . $real_ip);
+        prind("Converted cloaked ip from hex ident: " . $real_ip);
     }
     my $is_ip_addr = is_ipaddress($host);
     if ($is_ip_addr ne 0) {
         $memory->{$network}->{$nick}->{'real_ip'} = $is_ip_addr;
         $real_ip = $is_ip_addr;
-        Irssi::active_win()->print("IP Address found from host: " . $real_ip);
+        prind("IP Address found from host: " . $real_ip);
         dronebl_check($is_ip_addr);
     } elsif (is_ipaddress($real_ip) > 0) {
         $memory->{$network}->{$nick}->{'real_ip'} = $real_ip;
-        Irssi::active_win()->print("Cloak is real IP: " . $real_ip);
+        prind("Cloak is real IP: " . $real_ip);
         dronebl_check($real_ip);
     } else {
         # resolve dns here if needed
@@ -142,7 +142,7 @@ sub event_msg_joined {
             dronebl_check($real_ip);
         }
     }
-    save_stuff($nick, $ident, $host, $real_ip);
+    #save_stuff($nick, $ident, $host, $real_ip) if length($real_ip) > 2;
 }
 
 sub is_hex_ident {
@@ -167,14 +167,16 @@ sub event_whois {
     my ($mynick, $nick, $ident, $host, $something, @realname) = split(" ", $data); # $mynick is mine, not his
     my $network = $server->{chatnet};
 
-    Irssi::active_win()->print("Event whois nick: $nick, ident: $ident, host: $host, server address: $srv_addr, something: $something, real name: " . join(' ', @realname));
+    prind("Event whois nick: $nick, ident: $ident, host: $host, server address: $srv_addr, something: $something, realname: " . join(' ', @realname));
     if (join(' ', @realname) =~ /\:Python IRC Client/) {
         my $user_channel = get_channel_for_user($nick, $host, $server);
-        Irssi::active_win()->print("Python detected in whois rest data for nick: $nick on channel: $user_channel. Kick and ban!");
+        prind("Python detected in whois rest data for nick: $nick on channel: $user_channel. Kick and ban!");
         $server->command("kick $user_channel $nick *Script detected*");
         #$server->send_raw("ban #kaaosradio $nick :*Script detected*");
         $server->command("mode $user_channel +b *!*@".$host);
     }
+    $memory->{$network}->{$nick}->{'ident'} = $ident;
+    $memory->{$network}->{$nick}->{'realname'} = join(' ', @realname);
 }
 
 sub get_channel_for_user {
@@ -234,16 +236,19 @@ sub do_resolve {
     my ($host, @rest) = @_;
     my $res = Net::DNS::Resolver->new;
     my $query = $res->search($host);
+    my @return_ips;
 
     if ($query) {
         foreach my $rr ($query->answer) {
             next unless ($rr->type eq "A" or $rr->type eq "AAAA");
-            Irssi::active_win()->print("Resolved IP address: " . $rr->address);
-            return $rr->address;
+            prind("Resolved IP address: " . $rr->address . ", for host: " . $host);
+            push @return_ips, $rr->address;
+            #return $rr->address;
         }
+        return @return_ips if @return_ips;
     } else {
         #warn "Query failed: ", $res->errorstring, "\n";
-        Irssi::active_win()->print("DNS resolve failed for host: " . $host . ", error: " . $res->errorstring);
+        prind("DNS resolve failed for host: " . $host . ", error: " . $res->errorstring);
     }
     return 0;
 }
@@ -251,9 +256,9 @@ sub do_resolve {
 sub save_stuff {
     my ($nick, $ident, $ip, $converted_ip, @channels) = @_;
     my $iso_time = strftime("%Y-%m-%dT%H:%M:%S%z", localtime);
-    Irssi::active_win()->print("Saving to statsfile: $statsfile. nick: $nick, ident: $ident, ip: $ip, converted_ip: $converted_ip");
+    prind("Saving to statsfile: $statsfile. nick: $nick, ident: $ident, ip: $ip, converted_ip: $converted_ip");
     KaaosRadioClass::addLineToFile($statsfile, $iso_time . ';' . $nick . ';' . $ident . ';' . $ip . ';' . $converted_ip . ';');
-    Irssi::active_win()->print("^^^^^^^^^^^^^^^^^^^ END ^^^^^^^^^^^^^^^^^^^^^^^^") if $DEBUG;
+    prind("<--") if $DEBUG;
 }
 
 sub add_enabled_channel_command {
@@ -282,13 +287,16 @@ sub remove_enabled_channel_command {
 
 sub prind {
 	my ($text, @test) = @_;
-	print("\00312" . $IRSSI{name} . ">\003 ". $text);
+    create_window('dronebl_check');
+	Irssi::active_win()->print("\00312" . $IRSSI{name} . ">\003 ". $text);
 }
 
 sub prindw {
 	my ($text, @test) = @_;
-	print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
+    create_window('dronebl_check');
+	Irssi::active_win()->print("\0034" . $IRSSI{name} . " warning>\003 ". $text);
 }
+
 create_window('dronebl_check');
 Irssi::settings_add_str('dronebl_check', 'dronebl_check_enabled_channels', '');
 Irssi::signal_add('channel joined', 'event_chan_joined');
