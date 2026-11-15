@@ -33,13 +33,13 @@ my $script_dir = Irssi::get_irssi_dir() . '/scripts';
 my $logs_dir = $script_dir . '/logs';
 my $logfile = $logs_dir . '/yle.log';
 my $kanava1 = '#salamolo';
-prind('Download dir: '.$download_dir);
+prindd('Download dir: '.$download_dir);
 my $processes = {};
 
 sub ensure_logs_dir {
 	if (!-d $logs_dir) {
 		make_path($logs_dir) or die "Cannot create logs dir $logs_dir: $!";
-		prind('Created logs dir: ' . $logs_dir);
+		prindd('Created logs dir: ' . $logs_dir);
 	}
 }
 
@@ -52,7 +52,7 @@ sub sig_msg_pub {
 		my $count = 0;
 		my $url = $1;
 		if ($count = cmd_check_if_exist($1)) {
-			create_window('yle-dl');
+			#create_window('yle-dl');
 			#debu(__LINE__ . ": Found $count items. Starting download.");
 			cmd_start_dl($1, $count, find_window_refnum($server, $target));
 			msg_to_salamolo($1);
@@ -84,7 +84,7 @@ sub find_window_refnum {
 	
 	foreach my $window (@windows) {
 		next if $window->{name} eq '(status)';
-		next unless $window->{active}->{type} eq 'CHANNEL';
+		next unless defined $window->{active}->{type} && $window->{active}->{type} eq 'CHANNEL';
 		next unless $window->{active}->{server}->{tag} eq $server_tag;
 
 		if($window->{active}->{name} eq $channel) {
@@ -106,7 +106,7 @@ sub print_window_data {
 # signal is sent from urltitle3.pl
 sub sig_yle_url {
 	my ($server, $target, $rimpsu, @rest) = @_;
-	prind('yle_url signal received, string: ' . $rimpsu);
+	print("\00311" . $IRSSI{name} . '>\003 yle_url signal received, string: ' . $rimpsu);
 	Irssi::signal_stop();
 	my ($region, $title, $desc) = get_title_desc($rimpsu);
 	if ($title or $desc) {
@@ -136,7 +136,7 @@ sub get_title_desc {
 		# TODO: tell something about the rest of the episodes too?
 		my $region = $item->{region};
 		my $title = $item->{episode_title} || $item->{title} || 'N/A';
-		prind('Episode title: ' . $title . ', episode description: ' . $item->{description});
+		prindd('Episode title: ' . $title . ', episode description: ' . $item->{description});
 		return $region, $title . $extrastring, $item->{description};
 	}
 }
@@ -145,7 +145,7 @@ sub create_window {
     my ($window_name) = @_;
     my $window = Irssi::window_find_name($window_name);
     unless ($window) {
-        prind("Create new window: $window_name");
+        #prindd("Create new window: $window_name");
         Irssi::command("window new hidden");
         Irssi::command("window name $window_name");
 		debu("Window created: " . Irssi::active_win()->{name});
@@ -158,7 +158,7 @@ sub cmd_check_if_exist {
 	my ($url, @rest) = @_;
 	create_window('yle-dl');
 	debu('Checking YLE url for metadata: '. $url);
-	my $temptime = time();
+	my $timenow = time();
 	my $output = `yle-dl -V --showmetadata ${url} 2>${logfile}`;
 	if ($output eq '') { return; }
 
@@ -168,7 +168,7 @@ sub cmd_check_if_exist {
 	
 	#debu(__LINE__ . ' JSON data: ' . Dumper($json));
 	my $resultcount = scalar @$json;
-	debu('Metadata found in ' . (time() - $temptime) . ' seconds. Itemcount: ' . $resultcount);
+	prindd('Metadata found in ' . (time() - $timenow) . ' seconds. Itemcount: ' . $resultcount);
 	return $resultcount;
 }
 
@@ -268,7 +268,7 @@ sub exec_input {
 	}
 
 	$text =~ s/\t/  /;
-	prind('exec_input text: ' . $text);
+	prindd('exec_input text: ' . $text);
 	debu(Dumper(__LINE__, $res));
 }
 
@@ -276,14 +276,15 @@ sub debu {
 	my ($text, @rest) = @_;
 	return unless $DEBUG;
 	create_window('yle-dl');
+	Irssi::active_win()->print("\00311" . $IRSSI{name} . " debug>\003 ". $text);
+}
+
+sub prindd {
+	my ($text, @test) = @_;
+	create_window('yle-dl');
 	Irssi::active_win()->print("\00311" . $IRSSI{name} . ">\003 ". $text);
 }
-
-sub prind {
-	my ($text, @test) = @_;
-	print("\00311" . $IRSSI{name} . ">\003 ". $text);
-}
-
+create_window('yle-dl');
 Irssi::signal_add("exec new", 'exec_new');
 Irssi::signal_add("exec remove", 'exec_remove');
 Irssi::signal_add("exec input", 'exec_input');
@@ -292,4 +293,4 @@ Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('yle_url', 'sig_yle_url');
 Irssi::command_bind('window_info', 'print_window_data', 'fetch_areena');
 ensure_logs_dir();
-prind('v. '. $IRSSI{changed} . ' loaded.');
+prindd('v. '. $IRSSI{changed} . ' loaded.');
