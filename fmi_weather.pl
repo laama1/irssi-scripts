@@ -29,6 +29,7 @@ Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
 my $DEBUG = 1;
 my $fmiURL = 'https://www.fmi.fi';
 my $socket_file = "/tmp/irssi_fmi_weather.sock";
+my $fmi_check_atq_script = Irssi::get_irssi_dir() . "/scripts/irssi-scripts/fmi_check_atq.sh";
 my $timeout_tag;
 my $last_meteo = '';
 fmi_update();
@@ -291,6 +292,19 @@ sub timeout_start {
 	$timeout_tag = Irssi::timeout_add(5000, 'check_sock', undef);      # every 5 seconds
 }
 
+sub remove_old_at_commands {
+	my $data = `$fmi_check_atq_script`;
+	prind("Old at commands:\n" . $data);
+	for my $line (split("\n", $data)) {
+		#prind("Old at command: $line");
+		if ($line =~ /$socket_file/) {
+			my ($pid) = $line =~ /^PID: (\d+)/;
+			prind("Removing old fmi-related at command with pid: $pid");
+			system("atrm $pid") if $pid;
+		}
+	}
+}
+
 Irssi::command_bind('fmi_update', \&fmi_update, 'fmi_weather');
 Irssi::command_bind('fmi_start', \&timeout_start, 'fmi_weather');
 Irssi::command_bind('fmi_stop', \&timeout_stop, 'fmi_weather');
@@ -298,6 +312,7 @@ Irssi::signal_add_last('message public', 'event_pubmsg');
 Irssi::signal_add_last('message private', 'event_priv');
 #Irssi::settings_add_str('fmi_weather', 'fmi_enabled_channels', '#salamolo');
 
+remove_old_at_commands();
 timeout_start();
 
 prind("v. $VERSION Loaded!");
