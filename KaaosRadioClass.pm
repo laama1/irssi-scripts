@@ -107,13 +107,19 @@ sub readLinesFromDataBase {
 	return @returnArray;
 }
 
-# connect to sqlite and return database handle
+# connect to sqlite and return database handle. the file must exist.
 sub connectSqlite {
 	my ($dbfile, @rest) = @_;
 	unless (-e $dbfile) {
 		return undef;						# return error
 	}
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile",'','', {RaiseError => 1, AutoCommit => 1});
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", '', '',
+	{
+		RaiseError => 1, 
+		AutoCommit => 1,
+		PrintError => 1,
+		#sqlite_string_mode => DBD_SQLITE_STRING_MODE_UNICODE_STRICT,
+	});
 	return $dbh if $dbh;
 	return undef;
 }
@@ -586,8 +592,19 @@ sub getJSON {
 
 sub getXML {
 	my ($url, @rest) = @_;
-    #my $url = 'http://www.hamqsl.com/solarxml.php';
-    #return XML::LibXML->load_xml(location => $url);
+	require XML::LibXML;
+	die "getXML requires a non-empty URL\n" if !defined $url || $url eq '';
+	my $response = fetchResponse($url);
+	die "getXML failed for $url: " . $response->status_line . "\n"
+		unless $response->is_success;
+
+	# Return a document; let the parser report malformed XML to the caller.
+	return XML::LibXML->load_xml(
+		string => $response->content,
+		no_network => 1,
+		load_ext_dtd => 0,
+		expand_entities => 0,
+	);
 }
 
 sub dp {
