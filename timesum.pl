@@ -1,5 +1,6 @@
-use Irssi;
 use strict;
+use Irssi;
+use Irssi::TextUI;
 use Data::Dumper;
 use vars qw($VERSION %IRSSI);
 
@@ -14,12 +15,16 @@ $VERSION="0.3.1";
 	url => 'https://8-b.fi',
 );
 
-# remove normal clock from irssi statusbar:
+# replace normal clock from irssi statusbar by removing original clock first:
 # /STATUSBAR REMOVEITEM time window
-# add this item to irssi statusbar:
+# and then add this item to irssi statusbar:
 # /STATUSBAR ADDITEM -priority 101 -before user timesum window
 
 my $sbitem;
+my $current_data = {
+    server => undef,
+    channel => undef
+};
 
 sub check_message {
     my ($server, $msg, $nick, $address, $channeli ) = @_;
@@ -30,10 +35,14 @@ sub check_message {
     if ($msg eq '!time') {
         my $hour = (localtime)[2];
         my $min = (localtime)[1];
+        $current_data->{server} = $server;
+        $current_data->{channel} = $channeli;
 
         prind(" $hour + $min = " . ($hour + $min) );
         $server->command("msg $channeli $hour + $min = " . ($hour + $min) );
         check_time();	# check if it's time to send a special message after responding to !time command
+        $current_data->{server} = undef;
+        $current_data->{channel} = undef;
     }
 }
 
@@ -48,7 +57,16 @@ sub check_time {
         msg_time_channels($hour, $min);
     }
 
-    #prind(" $hour + $min = " . ($hour + $min) );
+    if ($hour == 0 && $min == 7) {
+		msg_channels("Time to defuse the bomb!");
+    }
+
+    if (($hour == 1 && $min == 12) || ($hour == 9 && $min == 11)) {
+        msg_channels("It's $hour:$min! Call the police!");
+    }
+    if (($hour == 4 || $hour == 16) && $min == 19) {
+        msg_channels("It's 4:19! Earlybird! Almost 4:20! ⏰⏰⏰");
+    }
     if (($hour == 4 || $hour == 16) && $min == 20) {
         msg_channels("It's 4:20! Blaze it! 🔥🔥🔥");
     }
@@ -67,7 +85,7 @@ sub check_time {
     }
     # if number 1,2,3,4 all exist on some order in the time, it's sequential time
     if (
-        ($hour == 1 && $min == 23) || 
+        #($hour == 1 && $min == 23) || 
         ($hour == 12 && $min == 34) || 
         ($hour == 12 && $min == 43) || 
         ($hour == 13 && $min == 42) || 
@@ -102,7 +120,9 @@ sub check_time {
         msg_channels("It's 20:20! Perfect vision! 👓👓👓");
     }
     if (($hour == 4 && $min == 32) ||
+        ($hour == 4 && $min == 56) ||
         ($hour == 3 && $min == 21) ||
+        ($hour == 3 && $min == 45) ||
         ($hour == 2 && $min == 34) ||
         ($hour == 2 && $min == 10) ||
         ($hour == 5 && $min == 43) ||
@@ -116,6 +136,10 @@ sub check_time {
     }
     if ($hour == 0 && $min == 4) {
         msg_channels("It's 00:04! Still midnight! 🌑🌑🌑");
+    }
+
+    if ($hour == 13 && $min == 37) {
+        msg_channels("It's 13:37! Elite time! 🕹️🕹️🕹️");
     }
 }
 
@@ -142,6 +166,11 @@ sub msg_time_channels {
 sub msg_channels {
     # msg to every channel window
     my ($text) = @_;
+    my $server = $current_data->{server};
+    my $channel = $current_data->{channel};
+    return unless defined $server && defined $channel;
+    $server->command("msg $channel $text");
+    return;
 
     my @windows = Irssi::windows();
     foreach my $window (@windows) {
