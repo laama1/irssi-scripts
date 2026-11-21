@@ -66,7 +66,7 @@ log_to_file() {
 }
 
 # example command line to generate an image using the OpenAI API
-#curl -s https://api.openai.com/v1/images/generations -H "Authorization: Bearer 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" \
+#curl -s https://api.openai.com/v1/images/generations -H "Authorization: Bearer sk-..." \
 #-H "Content-Type: application/json" \
 #-d '{"model": "gpt-image-1", "prompt": "A cute baby sea otter", "size": "1024x1024"}'
 log_to_file "Starting, output file: $OUTPUT_FILE_NAME, prompt: $PROMPT"
