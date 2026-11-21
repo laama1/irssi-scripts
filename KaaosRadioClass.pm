@@ -306,7 +306,7 @@ sub floodCheck {
 	writeToFile($tsfile, $cur);
 	if ($cur - $last < $timedifference) {
 		print("Flood protection: Command ignored, last command was " . ($cur - $last) . " seconds ago.");
-		return 1;									# return 1, means "flooding"
+		return ($cur - $last);									# return 1, means "flooding"
 	}
 	return 0;
 }

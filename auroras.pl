@@ -39,18 +39,27 @@ sub pubmsg {
 	my ($serverrec, $msg, $nick, $address, $target) = @_;
 	my $mynick = quotemeta $serverrec->{nick};
 	return if ($nick eq $mynick);   #self-test
-	if ($msg =~ /(^\!help aurora)/gi || $msg =~ /(^\!help kuu)/) {
-		return if KaaosRadioClass::floodCheck() == 1;
+	if ($msg =~ /^\!help aurora/gi || $msg =~ /^\!help kuu/gi || $msg =~ /^\?aurora/gi) {
+		if (floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			return;
+		}
 		$serverrec->command("MSG $target " . getHelp);
 	} elsif ($msg =~ /(^\!aurora)/gi || $msg =~ /(^\!revontul.*)/gi) {
 		my $keyword = $1;
-		return if KaaosRadioClass::floodCheck() == 1;
+		if (floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			return;
+		}
 		my $string = fetchAuroraData();
 		$serverrec->command("MSG $target $string, url: $aurora_image") if $string;
 		Irssi::print("auroras.pl> $keyword request from $nick on channel $target. Answer: $string");
 	} elsif ($msg =~ /(^\!kuu)\b/i || $msg =~ /(^\!moon)/i) {
 		my $keyword = $1;
-		return if KaaosRadioClass::floodCheck() == 1;
+		if (floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			return;
+		}
 		my $outputstring = KaaosRadioClass::conway();
 		Irssi::print("auroras.pl> $keyword request from $nick on channel $target. Answer: $outputstring");
 		$serverrec->command("MSG $target \002Kuun vaihe:\002 $outputstring") if $outputstring;

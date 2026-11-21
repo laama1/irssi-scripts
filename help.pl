@@ -29,7 +29,10 @@ sub pubmsg {
 	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /(!help)/gi || $msg =~ /(\.help)/gi) {
         my $keyword = $1;
-		return if KaaosRadioClass::floodCheck() == 1;
+		if(floodCheck() > 0) {
+			$serverrec->command("MSG $target <flood>");
+			return;
+		}
 		my $help = $serverrec->{nick} . " ohje: ". getHelp();
 		$serverrec->command("MSG $target $help");
         Irssi::print($IRSSI{name} .": $keyword request from $nick on channel $target");

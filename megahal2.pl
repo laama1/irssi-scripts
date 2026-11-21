@@ -277,7 +277,7 @@ sub public_responder {
 
 	# If all the user wants is a haiku, just do it
 	if ($data =~ /^!haiku/ && $skip_oraakkeli_but_learn == 0) {
-		if (KaaosRadioClass::floodCheck(3) > 0) {
+		if (floodCheck(3) > 0) {
 			irssi_log("Haiku flood detected ($nick)! ..skip");
 			return;
 		}

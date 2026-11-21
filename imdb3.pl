@@ -60,8 +60,8 @@ sub event_privmsg {
 	my ($server, $msg, $nick, $address) = @_;
 	my $mynick = quotemeta $server->{nick};
 	return if ($nick eq $mynick);   #self-test
-	#return if KaaosRadioClass::floodCheck() == 1;
-	if ($msg =~ /!help imdb/i || $msg =~ /!imdb$/i) {
+	#return if floodCheck() == 1;
+	if ($msg =~ /^\!help imdb/i || $msg =~ /^\!imdb$/i || $msg =~ /^\?imdb/i) {
 		sayit($server, $nick, $helpmessage);
 		return;
 	}

@@ -402,8 +402,8 @@ sub sig_msg_pub {
 	dp("$myname nick: $nick, self: ".$server->{nick});
 	my @programinfos;
 
-	if (KaaosRadioClass::floodCheck() == 1) {				# return if flooding
-		$server->command("msg -channel $target flood..");
+	if (floodCheck() > 0) {				# return if flooding
+		$server->command("msg -channel $target <flood>");
 		return;
 	}
 	

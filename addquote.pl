@@ -64,7 +64,10 @@ sub parseQuote {
 	my ($msg, $nick, $target, $server, @rest) = @_;
 	if($msg =~ /^!aq (.{1,470})/gi) {
 		my $uusiquote = decode('UTF-8', $1);
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		KaaosRadioClass::addLineToFile($tiedosto, $uusiquote);
 		saveToDB($quotedb, 'QUOTES', $nick, $uusiquote, $target);
 		prind("$msg -- request from $nick on channel: $target");
@@ -72,14 +75,20 @@ sub parseQuote {
 		$server->command("msg $target :)");
 	} elsif ($msg =~ /^!rq (.{3,55})/gi) {
 		my $searchword = decode('UTF-8', $1);
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		my @answers = search_from_file($tiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
 			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rq/gi) {
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		my $data = KaaosRadioClass::readTextFile($tiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");
@@ -87,7 +96,10 @@ sub parseQuote {
 		}
 	} elsif ($msg =~ /^!aj (.*)/gi) {
 		my $uusivitsi = decode('UTF-8', $1);
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		KaaosRadioClass::addLineToFile($vitsitiedosto, $uusivitsi);
 		saveToDB($vitsidb, 'JOKES', $nick, $uusivitsi, $target);
 		prind("$msg request from $nick") if $DEBUG;
@@ -95,14 +107,20 @@ sub parseQuote {
 		$server->command("msg $target xD");
 	} elsif ($msg =~ /^!rj (.{3,55})/gi) {
 		my $searchword = decode('UTF-8', $1);
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		my @answers = search_from_file($vitsitiedosto, $searchword);
 		if (my $rimpsu = rand_line(@answers)) {
 			$server->command("MSG $target $rimpsu");
 			prind("answered: '$rimpsu' for $nick on channel: $target");
 		}
 	} elsif ($msg =~ /^!rj/gi) {
-		return if KaaosRadioClass::floodCheck();
+		if (floodCheck() > 0) {
+			$server->command("msg $target <flood>");
+			return;
+		}
 		my $data = KaaosRadioClass::readTextFile($vitsitiedosto);
 		if (my $rimpsu = rand_line(@$data)) {
 			$server->command("MSG $target $rimpsu");

@@ -25,7 +25,10 @@ sub pubmsg {
 	return if $nick eq 'kaaosradio';			# ignore this nick
 
 	if ($msg =~ /\!morse (.*)/ui) {
-		return if KaaosRadioClass::floodCheck() == 1;			# return if flooding
+		if (floodCheck() == 1) {
+			$serverrec->command("msg $target <flood>");
+			return;
+		}			# return if flooding
 		my $searchw = decode('ISO-8859-1', $1);
 		print("asciimorse> Searchword: ".$searchw);
 		my $morse = as_morse($searchw);

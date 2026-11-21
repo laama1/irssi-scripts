@@ -90,7 +90,7 @@ sub sig_msg_pub {
 	}
 	Irssi::print("Radio");
 	# check if flooding too fast
-	if (KaaosRadioClass::floodCheck() > 0) {
+	if (floodCheck() > 0) {
 		clearUrlData();
 		return;
 	}

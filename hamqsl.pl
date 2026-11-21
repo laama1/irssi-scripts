@@ -35,11 +35,17 @@ sub pub_msg {
     my $mynick = quotemeta $serverrec->{nick};
 	return if ($nick eq $mynick);   #self-test
 	if ($msg =~ /(!help hams)/sgi) {
-		return if KaaosRadioClass::floodCheck();
+		if(floodCheck() > 0) {
+			$serverrec->command("MSG $target <flood>");
+			return;
+		}
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /(!hams)/sgi) {
-		return if KaaosRadioClass::floodCheck();
+		if(floodCheck() > 0) {
+			$serverrec->command("MSG $target <flood>");
+			return;
+		}
 		my $xml = fetch_hams_data();
 		my $newdata = parse_hams_data($xml);
 		$serverrec->command("MSG $target $newdata");

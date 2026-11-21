@@ -24,7 +24,10 @@ sub pubmsg {
     return unless $target ~~ @targets;
 	my $nickindex = index $msg, $serverrec->{nick};
 	if ($nickindex >= 0 && $msg =~ /\?$/gi ) {
-		return if KaaosRadioClass::floodCheck() == 1;			# return if flooding
+		if(floodCheck() > 0) {			# return if flooding
+			$serverrec->command("MSG $target $nick: <flood>");
+			return;
+		}
 		$msg = decode('UTF-8', $msg);
 		my $querystr = substr $msg, ((length $serverrec->{nick}) +2);
 		my $urli = "https://www.lintukoto.net/viihde/oraakkeli/index.php?html&kysymys=${querystr}";

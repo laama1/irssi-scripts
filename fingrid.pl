@@ -196,12 +196,20 @@ sub pub_msg {
 
     $msg = Encode::decode('UTF-8', $msg);
 	if ($msg =~ /^\!help sähkö/sgi || $msg =~ /^\?s[aä]hk[oö]/sgi) {
-		return if floodCheck();
+		if(floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			prindd("Flood detected for $nick on channel $target");
+			return;
+		}
 		my $help = get_help();
 		$serverrec->command("MSG $target $help");
 	} elsif ($msg =~ /^\!s[aä]hk[oö]$/sgi) {
         #prindd("sähkö request from $nick on channel $target") if $DEBUG;
-		return if floodCheck();
+		if(floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			prindd("Flood detected for $nick on channel $target");
+			return;
+		}
 		$forked = 0;	# DIRTY HACK
         $target_t = $target;
         $server_t = $serverrec;
@@ -211,14 +219,22 @@ sub pub_msg {
 	} elsif ($msg =~ /^\!sahkokatko[t]? (.*)/sgi || $msg =~ /^\!sähkökatko[t]? (.*)/sgi) {
         my $searchword = $1;
         #prindd('got: '. $searchword) if $DEBUG;
-        return if floodCheck();
+        if(floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			prindd("Flood detected for $nick on channel $target");
+			return;
+		}
         #prindd("sähkökatkot request from $nick on channel $target, search for: $searchword");
         $target_t = $target;
         $server_t = $serverrec;
         do_sahkokatkot($searchword);
         prindd("!sähkökatko request from $nick on channel $target, done");
     } elsif ($msg =~ /^!sähkökatko[t]?$/sgi || $msg =~ /^!sahkokatko[t]?$/sgi) {
-        return if floodCheck();
+        if(floodCheck() > 0) {
+			$serverrec->command("msg $target <flood>");
+			prindd("Flood detected for $nick on channel $target");
+			return;
+		}
         #prindd("sähkökatkot request from $nick on channel $target");
         $target_t = $target;
         $server_t = $serverrec;
