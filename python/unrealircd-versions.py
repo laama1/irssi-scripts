@@ -12,7 +12,8 @@ import sys
 
 # Configuration
 IRC_HOST = "irc.example.net"
-IRC_PORT = 6697
+#IRC_PORT = 6697
+IRC_PORT = 6667
 IRC_NICK = "VersionCheck"
 IRC_USER = "versioncheck"
 IRC_PASSWORD = None
@@ -25,12 +26,17 @@ class IRC:
     def __init__(self, host, port):
         raw = socket.create_connection((host, port), timeout=15)
 
-        ctx = ssl.create_default_context()
-        self.sock = ctx.wrap_socket(raw, server_hostname=host)
+        if port == 6697:
+            ctx = ssl.create_default_context()
+            self.sock = ctx.wrap_socket(raw, server_hostname=host)
+        else:
+            self.sock = raw
+
         self.sock.setblocking(False)
         self.buffer = b""
 
     def send(self, command):
+        print(f"[CLIENT] {command}")
         self.sock.sendall((command + "\r\n").encode())
 
     def readline(self, timeout=10):
@@ -62,6 +68,8 @@ class IRC:
     def receive(self, timeout=10):
         while True:
             line = self.readline(timeout)
+
+            print(f"[SERVER] {line}")
 
             if line.startswith("PING"):
                 self.send("PONG " + line[5:])
