@@ -1,5 +1,40 @@
 
 #!/usr/bin/env python3
+"""
+UnrealIRCd Version Checker Script
+
+DESCRIPTION:
+  This script connects to an IRC network and checks the UnrealIRCd version
+  running on each server. It compares each server's version against the
+  latest stable release and reports which servers are outdated.
+
+FUNCTIONALITY:
+  1. Fetches the latest stable UnrealIRCd version from the official repository
+  2. Connects to an IRC server using SSL
+  3. Discovers all servers on the network using the LINKS command
+  4. Queries each server for its UnrealIRCd version using the VERSION command
+  5. Compares versions and categorizes servers as:
+     - UP TO DATE: Running the latest stable version
+     - OUTDATED: Running an older version
+     - UNKNOWN: Version cannot be determined
+     - UNAVAILABLE: Server did not respond to VERSION query
+  6. Displays a summary with all results
+
+USAGE:
+  python3 unrealircd-versions.py [IRC_HOST]
+
+ARGUMENTS:
+  IRC_HOST (optional): The IRC server hostname to connect to
+                       Default: irc.example.net
+
+EXAMPLES:
+  python3 unrealircd-versions.py
+  python3 unrealircd-versions.py irc.your-server.net
+
+OUTPUT:
+  The script prints all communication with the server ([CLIENT] and [SERVER]
+  prefixes) followed by a detailed summary table of version check results.
+"""
 
 import socket
 import ssl
