@@ -8,6 +8,7 @@ import re
 import select
 import urllib.request
 import time
+import sys
 
 # Configuration
 IRC_HOST = "irc.example.net"
@@ -151,6 +152,12 @@ def get_server_version(irc, server):
 
 
 def main():
+    global IRC_HOST
+    
+    # Accept IRC_HOST as command-line argument
+    if len(sys.argv) > 1:
+        IRC_HOST = sys.argv[1]
+    
     latest = latest_version()
 
     print(f"Latest stable UnrealIRCd: {latest}\n")
