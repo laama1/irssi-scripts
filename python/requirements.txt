@@ -1,0 +1,5 @@
+dnspython
+geoip2
+openai
+requests
+youtube-transcript-api
